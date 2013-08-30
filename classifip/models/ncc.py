@@ -1,5 +1,6 @@
 from ..dataset.arff import ArffFile
 from ..representations.intervalsProbability import IntervalsProbability
+from ..representations.voting import Scores
 import numpy as np
 from math import exp
 
@@ -65,7 +66,7 @@ class NCC(object):
             
             
         
-    def evaluate(self,testdataset,ncc_epsilon=0.001,ncc_s_param=[2]):
+    def evaluate(self,testdataset,ncc_epsilon=0.001,ncc_s_param=[2],maxi=False):
         """evaluate the instances and return a list of probability intervals.
         
         :param testdataset: list of input features of instances to evaluate
@@ -74,11 +75,13 @@ class NCC(object):
             to avoid zero count issues
         :type ncc_espilon: float
         :param ncc_s_param: s parameters used in the IDM learning (settle
-        imprecision level)
+            imprecision level)
         :type ncc_s_param: list
-        :returns: for each value of ncc_s_param, a set of probability intervals
-        :rtype: lists of :class:`~classifip.representations.intervalsProbability.IntervalsProbability`
- 
+        :param maxi: specify whether the decision is maximality (default=false)
+        :type maxi: boolean
+        :returns: for each value of ncc_s_param, a set of probability intervals and or of scores
+        :rtype: lists of :class:`~classifip.representations.intervalsProbability.IntervalsProbability` or
+            lists of :class:`~classifip.representations.voting.Scores`
         .. note::
     
             * Probability intervals output
@@ -102,6 +105,10 @@ class NCC(object):
             for s_val in ncc_s_param:
                 #initializing probability interval argument
                 resulting_int=np.zeros((2,len(self.feature_values['class'])))
+                resulting_sc=np.zeros((len(self.feature_values['class']),2))
+                resulting_sc[:,0]=0.9
+                resulting_sc[:,1]=1.0
+                    
                 #computes product of lower/upper prob for each class
                 cl_index=0
                 for class_val in self.feature_values['class']:
@@ -141,12 +148,20 @@ class NCC(object):
                                        [f_val_index])/(num_items+s_val)
                                 u_num_mult=u_num_mult*((1-ncc_epsilon)*upper+
                                     ncc_epsilon/len(self.feature_count[count_string]))
+                        #check for maximality
+                        if l_denom-l_num_mult>0.:
+                            resulting_sc[self.feature_values['class'].index(other_cl),0]=0.
+                            resulting_sc[self.feature_values['class'].index(other_cl),1]=0.1
+                        #update numerator/denominator for probability interval computation
                         u_numerator+=u_num_mult
                         l_numerator+=l_num_mult
                         resulting_int[0,cl_index]=u_denom/(u_denom+u_numerator)
                         resulting_int[1,cl_index]=l_denom/(l_denom+l_numerator)
                     cl_index+=1
-                result=IntervalsProbability(resulting_int)
+                if maxi==False:
+                    result=IntervalsProbability(resulting_int)
+                else:
+                    result=Scores(resulting_sc)
                 answers.append(result)
             final.append(answers)
         
