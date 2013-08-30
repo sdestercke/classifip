@@ -51,6 +51,10 @@ class IPKNNBR(object):
         
         :param learndataset: learning instances
         :type learndataset: :class:`~classifip.dataset.arff.ArffFile`
+        :param nblabels: number of labels
+        :type nblabels: integer
+        :param knnbr_normalise: normalise input features
+        :type knnbr_normalise: boolean
         """
         self.__init__()
         learndataset=learndata.make_clone()
@@ -113,8 +117,8 @@ class IPKNNBR(object):
         :type knnbr_epsilon: float
         :param knnbr_nbneigh: values of number of neighbours to use
         :type knnbr_nbneigh: list of int
-        :returns: for each value of knnbr_nbneigh, a set of probability intervals
-        :rtype: lists of :class:`~classifip.representations.intervalsProbability.IntervalsProbability`
+        :returns: for each value of knnbr_nbneigh, a set of scores for each label
+        :rtype: lists of :class:`~classifip.representations.voting.Scores`
         
         """
         final=[]

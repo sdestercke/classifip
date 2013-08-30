@@ -1,10 +1,10 @@
 from ..dataset.arff import ArffFile
-from ..representations.intervalsProbability import IntervalsProbability
+from ..representations.voting import Scores
 import numpy as np
 from math import exp
 
 class NCCBR(object):
-    """NCC implements the naive credal classification method using the IDM for
+    """NCCBR implements the naive credal classification method using the IDM for
     multilabel classification with binary relevance.
     
     If data are all precise, it returns
@@ -29,30 +29,43 @@ class NCCBR(object):
         
         # both feature names and feature values contains the class (assumed to be the last)
         self.feature_names=[]
+        self.label_names=[]
         self.feature_values=dict()
         self.feature_count=dict()
-        self.label_count=[]
+        self.nblabels=0
+        self.trainingsize=0
+        self.labelcounts=[]
         
-    def learn(self,learndataset):
-        """learn the NCC, mainly storing counts of feature/class pairs
+    def learn(self,learndataset,nblabels):
+        """learn the NCC for each label, mainly storing counts of feature/label pairs
         
         :param learndataset: learning instances
         :type learndataset: :class:`~classifip.dataset.arff.ArffFile`
+        :param nblabels: number of labels
+        :type nblabels: integer
         """
         self.__init__()
+        self.nblabels=nblabels
+        self.trainingsize=len(learndataset.data)
         #Initializing the counts
-        self.feature_names=learndataset.attributes[:]
+        self.feature_names=learndataset.attributes[:-self.nblabels]
+        self.label_names=learndataset.attributes[-self.nblabels:]
         self.feature_values=learndataset.attribute_data.copy()
-        for class_value in learndataset.attribute_data['class']:
-            subset=[row for row in learndataset.data if row[-1]==class_value]
-            self.label_count.append(len(subset))
-            for feature in learndataset.attributes[:-1]:
-                count_vector=[]
+        for label_value in self.label_names:
+            label_set_one=learndataset.select_col_vals(label_value,['1'])
+            self.labelcounts.append(len(label_set_one.data))
+            label_set_zero=learndataset.select_col_vals(label_value,['0'])
+            for feature in self.feature_names:
+                count_vector_one=[]
+                count_vector_zero=[]
                 feature_index=learndataset.attributes.index(feature)
                 for feature_value in learndataset.attribute_data[feature]:                   
-                    nb_items=[row[feature_index] for row in subset].count(feature_value)
-                    count_vector.append(nb_items)
-                self.feature_count[class_value+'|'+feature]=count_vector
+                    nb_items_one=[row[feature_index] for row in label_set_one.data].count(feature_value)
+                    count_vector_one.append(nb_items_one)
+                    nb_items_zero=[row[feature_index] for row in label_set_zero.data].count(feature_value)
+                    count_vector_zero.append(nb_items_zero)
+                self.feature_count[label_value+'|in|'+feature]=count_vector_one
+                self.feature_count[label_value+'|out|'+feature]=count_vector_zero
                 
             
             
@@ -68,77 +81,69 @@ class NCCBR(object):
         :param ncc_s_param: s parameters used in the IDM learning (settle
         imprecision level)
         :type ncc_s_param: list
-        :returns: for each value of ncc_s_param, a set of probability intervals
-        :rtype: lists of :class:`~classifip.representations.intervalsProbability.IntervalsProbability`
+        :returns: for each value of ncc_s_param, a set of scores for each label
+        :rtype: lists of :class:`~classifip.representations.voting.Scores`
  
         .. note::
     
-            * Probability intervals output
-                as the function returns a probability interval, interval dominance
-                is exact but maximality is not.
-            
             * Precise prior
                 prior class probabilities are assumed to be precise to speed up
                 computations. The impact of the result is small, unless
                 the number of class example in the training set is close to s or lower.
+        
+        .. warning::
+    
+            * zero float division can happen if too many input features
+            
+        .. todo::
+        
+            * solve the zero division problem
             
         """
         final=[]
         
-        #computing class proportions
-        class_ct=[float(n) for n in self.label_count]
-        class_prop=[n/sum(class_ct) for n in class_ct]
+        #computing label proportions
+        label_prop=[n/self.trainingsize for n in self.labelcounts]
         
         for item in testdataset:
             answers=[]
             for s_val in ncc_s_param:
-                #initializing probability interval argument
-                resulting_int=np.zeros((2,len(self.feature_values['class'])))
+                #initializing scores
+                resulting_score=np.zeros((self.nblabels,2))
                 #computes product of lower/upper prob for each class
-                cl_index=0
-                for class_val in self.feature_values['class']:
-                    u_numerator=0
-                    l_numerator=0
-                    u_denom=class_prop[cl_index]
-                    l_denom=class_prop[cl_index]
+                for j in range(self.nblabels):
+                    u_numerator=1-label_prop[j]
+                    l_numerator=1-label_prop[j]
+                    u_denom=label_prop[j]
+                    l_denom=label_prop[j]
                     for feature in self.feature_names:
-                        if feature != 'class':
-                            f_index=self.feature_names.index(feature)
-                            f_val_index=self.feature_values[feature].index(item[f_index])
-                            count_string=class_val+'|'+feature
-                            num_items=float(sum(self.feature_count[count_string]))
-                            lower=(self.feature_count[count_string][f_val_index]/
-                                   (num_items+s_val))
-                            l_denom=l_denom*((1-ncc_epsilon)*lower+
+                        #computation of denominator (label=1)
+                        f_index=self.feature_names.index(feature)
+                        f_val_index=self.feature_values[feature].index(item[f_index])
+                        count_string=self.label_names[j]+'|in|'+feature
+                        num_items=float(sum(self.feature_count[count_string]))
+                        lower=(self.feature_count[count_string][f_val_index]/
+                                (num_items+s_val))
+                        l_denom=l_denom*((1-ncc_epsilon)*lower+
                                 ncc_epsilon/len(self.feature_count[count_string]))
-                            upper=((self.feature_count[count_string]
-                                    [f_val_index]+s_val)/(num_items+s_val))
-                            u_denom=u_denom*((1-ncc_epsilon)*upper+
+                        upper=((self.feature_count[count_string][f_val_index]+s_val)/(num_items+s_val))
+                        u_denom=u_denom*((1-ncc_epsilon)*upper+
                                 ncc_epsilon/len(self.feature_count[count_string]))
-                            
-                    for other_cl in set(self.feature_values['class'])-set([class_val]):
-                        u_num_mult=class_prop[self.feature_values['class'].index(other_cl)]
-                        l_num_mult=class_prop[self.feature_values['class'].index(other_cl)]
-                        for feature in self.feature_names:
-                            if feature != 'class':
-                                f_index=self.feature_names.index(feature)
-                                f_val_index=self.feature_values[feature].index(item[f_index])
-                                count_string=other_cl+'|'+feature
-                                num_items=float(sum(self.feature_count[count_string]))
-                                lower=((self.feature_count[count_string]
-                                        [f_val_index]+s_val)/(num_items+s_val))
-                                l_num_mult=l_num_mult*((1-ncc_epsilon)*lower+
-                                    ncc_epsilon/len(self.feature_count[count_string]))
-                                upper=(self.feature_count[count_string]
-                                       [f_val_index])/(num_items+s_val)
-                                u_num_mult=u_num_mult*((1-ncc_epsilon)*upper+
-                                    ncc_epsilon/len(self.feature_count[count_string]))
-                        u_numerator+=u_num_mult
-                        l_numerator+=l_num_mult
-                        resulting_int[0,cl_index]=u_denom/(u_denom+u_numerator)
-                        resulting_int[1,cl_index]=l_denom/(l_denom+l_numerator)
-                    cl_index+=1
-                result=IntervalsProbability(resulting_int)
+                        
+                        #computation of numerator (label=0)
+                        count_string_num=self.label_names[j]+'|out|'+feature
+                        num_items=float(sum(self.feature_count[count_string]))
+                        lower=((self.feature_count[count_string]
+                                [f_val_index]+s_val)/(num_items+s_val))
+                        l_numerator=l_numerator*((1-ncc_epsilon)*lower+
+                                ncc_epsilon/len(self.feature_count[count_string]))
+                        upper=(self.feature_count[count_string]
+                                [f_val_index])/(num_items+s_val)
+                        u_numerator=u_numerator*((1-ncc_epsilon)*upper+
+                                ncc_epsilon/len(self.feature_count[count_string]))
+                    resulting_score[j,0]=u_denom/(u_denom+u_numerator)
+                    resulting_score[j,1]=l_denom/(l_denom+l_numerator)
+                result=Scores(resulting_score)
                 answers.append(result)
             final.append(answers)
         

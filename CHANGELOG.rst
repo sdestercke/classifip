@@ -1,3 +1,9 @@
+Version 0.1.6
+^^^^^^^^^^^^^
+
+* added binary relevance NCC algorithm
+* added new missing data instanciation to pairpip (missing label)
+
 Version 0.1.5
 ^^^^^^^^^^^^^
 

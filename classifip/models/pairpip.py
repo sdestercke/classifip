@@ -139,8 +139,8 @@ class PairPIP(object):
         learndata=[row[0:len(row)-1] for row in learndataset.data]
         data_array=np.array(learndata).astype(float)
         if pipp_normalise == True:
-            self.normal.append(True)
             span=data_array.max(axis=0)-data_array.min(axis=0)
+            self.normal.append(True)
             self.normal.append(span)
             self.normal.append(data_array.min(axis=0))
             data_array=(data_array-data_array.min(axis=0))/span
@@ -211,7 +211,7 @@ class PairPIP(object):
                 for k in range(len(self.labels)):
                     for l in range(k)+range(k+1,len(self.labels)):
             #if no samples for a given comparison, simply use majority
-                        if result[k,l]+result[l,k] != 0.:
+                        if result[k,l]+result[l,k] > 0.:
                             score_val[k,:]+=get_binomial_int(result[k,l]
                                         +result[l,k], result[k,l],conf_val)
                         else:
@@ -222,12 +222,16 @@ class PairPIP(object):
         
         return final
     
-    def remove_pref(self,percentage,seed=None):
+    def remove_pref(self,percentage,seed=None,remove_type=2):
         """remove a given percentage of (pairwise) preferences from
         the data set used in the learning phase
         
         :param percentage: percentage of missing data 
         :type percentage: float
+        :param seed: random seed (to remove same preferences in repeated exp.)
+        :type seed: integer
+        :param remove_type: removal process (1:pairwise pref, 2:labelwise)
+        :type param: integer
         """
         if percentage<0.0:
             raise Exception('Negative percentage.')
@@ -236,9 +240,16 @@ class PairPIP(object):
         if seed != None:
             np.random.seed(seed)
         for i in range(len(self.truerankings)):
-            randmiss=np.random.rand(len(self.labels),len(self.labels))
-            boolmiss=randmiss>percentage
-            self.truerankings[i]=dok_matrix(self.truerankings[i].multiply(boolmiss))
+            if remove_type == 1:
+                randmiss=np.random.rand(len(self.labels),len(self.labels))
+                boolmiss=randmiss>percentage
+                self.truerankings[i]=dok_matrix(self.truerankings[i].multiply(boolmiss))
+            if remove_type == 2:
+                for j in range(len(self.labels)):
+                    if np.random.random() <= percentage:
+                        self.truerankings[i][j,:]=0.0
+                        self.truerankings[i][:,j]=0.0
+                
         
         
         
