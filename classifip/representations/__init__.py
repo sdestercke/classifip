@@ -1,1 +1,1 @@
-from . import intervalsProbability, voting, credalset
+from . import intervalsProbability, voting, credalset, genPbox

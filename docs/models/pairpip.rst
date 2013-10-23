@@ -1,5 +1,5 @@
 .. module:: classifip.models.pairpip
-    :synopsis: labelranking with pariwise likelihood-based scores
+    :synopsis: labelranking with pairwise likelihood-based scores
 .. moduleauthor:: Sebastien Destercke <sebastien.destercke@hds.utc.fr> 
 
 PairPIP

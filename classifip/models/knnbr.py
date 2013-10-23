@@ -23,6 +23,8 @@ class IPKNNBR(object):
     :type av_dist: list of floats
     :param classes: list of label names
     :types classes: list of strings
+    :param nblabels: number of labels
+    :type nblabels: integer
     
     .. note::
     

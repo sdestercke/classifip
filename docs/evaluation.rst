@@ -5,7 +5,7 @@
 evaluation module
 =================
 
-evaluation module includes basic tools to handle evluations such as cross-fold
+evaluation module includes basic tools to handle evaluations such as cross-fold
 validation.
 
 .. autofunction:: k_fold_cross_validation

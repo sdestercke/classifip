@@ -1,3 +1,7 @@
+.. module:: classifip.models
+
+.. _models-doc:
+
 models module
 =============
 
