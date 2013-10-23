@@ -1,3 +1,8 @@
+Version 0.1.7
+^^^^^^^^^^^^^
+
+* added discretization method in dataset module
+
 Version 0.1.6
 ^^^^^^^^^^^^^
 

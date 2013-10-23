@@ -13,7 +13,7 @@ Operating System :: OS Independent"""
 
 setup(
     name='classifip',
-    version='0.1.6',
+    version='0.1.7',
     author='Sebastien Destercke',
     author_email='sebastien.destercke@hds.utc.fr',
     packages=find_packages(),

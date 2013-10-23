@@ -18,11 +18,12 @@ models package
 evaluation package
 ^^^^^^^^^^^^^^^^^^
 
-* add simple division learning/testing evaluation method
 * add classifiers comparison (Demstar paper)
 
 representations package
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 * add transformation and approximations between different formats
-* add belief functions and possibility distributions
+* add belief functions
+* add possibility distributions
+* add generalized p-boxes
