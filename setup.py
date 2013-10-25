@@ -7,6 +7,7 @@ Intended Audience :: Developers
 Intended Audience :: End Users/Desktop
 Intended Audience :: Science/Research
 Topic :: Scientific/Engineering :: Artificial Intelligence
+Topic :: Scientific/Engineering :: Mathematics
 Programming Language :: Python
 Programming Language :: Python :: 2
 Operating System :: OS Independent"""

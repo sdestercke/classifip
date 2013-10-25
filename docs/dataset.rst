@@ -1,5 +1,8 @@
 .. module:: classifip.dataset
 
+.. moduleauthor:: Sebastien Destercke <sebastien.destercke@hds.utc.fr> 
+.. moduleauthor:: Gen Yang <gen.yang@hds.utc.fr> 
+
 .. _dataset-doc:
 
 dataset module

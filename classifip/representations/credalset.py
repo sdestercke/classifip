@@ -308,6 +308,42 @@ class CredalSet(object):
             if sol < maxlower:
                 intervaldom_classe[i]=0
         return intervaldom_classe
+    
+    def getlowerexp(self,obj):
+        """Compute the lower expectation of the given function
+        
+        :param obj: values of the function whose lower expectation is to be computed
+        :param type: :class:`~numpy.array`
+        :return: the lower expectation value
+        :rtype: float
+        """
+
+        if obj.__class__.__name__!='ndarray':
+            raise Exception('Expecting a numpy array as argument')
+        if obj.size != self.nbDecision:
+            raise Exception('Number of values in obj incompatible with the frame size')
+
+        solution = solvers.lp(matrix(-objective),
+                              matrix(self.const[:,0:self.nbDecision].copy()),
+                              matrix(self.const[:,self.nbDecision].copy()),
+                              A=matrix(1.,(1,self.nbDecision)),b=matrix(1.))
+        sol=dot(solution['x'],matrix(objective))
+        
+        return sol
+    
+    def getupperexp(self,obj):
+        """Compute the upper expectation of the given function
+        
+        :param obj: values of the function whose upper expectation is to be computed
+        :param type: :class:`~numpy.array`
+        :return: the upper expectation value
+        :rtype: float
+        """
+        
+        objneg=-obj
+        lowexp=self.getlowerexp(-obj)
+        
+        return -lowexp
 
     def __str__(self):
         """Print the current contraints

@@ -170,12 +170,8 @@ class IntervalsProbability(object):
         """
         if self.isreachable()==0:
             self.setreachableprobability()
-        maximality_classe=np.ones(self.nbDecision)
-        for i in range(self.nbDecision):
-            for j in range(self.nbDecision):
-                if i != j and maximality_classe[i] == 1 and maximality_classe[j] == 1:
-                    if -self.lproba[0,j]+self.lproba[1,i] > 0:
-                        maximality_classe[j]=0
+        #use the fact that with no specified costs, maximality=interval_dom with this model
+        maximality_classe=self.nc_intervaldom_decision()
         return maximality_classe
     
     def nc_intervaldom_decision(self):
