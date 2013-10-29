@@ -18,8 +18,8 @@ class GenPbox(object):
     >>> print(GenPbox)
                      y0    y1    y2 
                --------------------
-    upper bound | 0.500 0.500 0.500`
-    lower bound | 0.100 0.100 0.100
+    upper bound | 0.500 0.700 1.000`
+    lower bound | 0.300 0.500 1.000
     
     .. todo::
     
@@ -76,18 +76,21 @@ class GenPbox(object):
             raise Exception('Expecting a numpy array as argument')
         if subset.size != self.nbDecision:
             raise Exception('Subset incompatible with the frame size')
-        lowerProbability=0
+        lowerprobability=0
         start=0
         for i in range(self.nbDecision):
-            if start==0 and subset[i]==1:
+            if start==0 and subset[i]==1 and i==0:
+                up=0
+                start=1
+            if start==0 and subset[i]==1 and i!=0:
                 up=self.lproba[0,i-1]
-                start==1
+                start=1
             if start==1 and subset[i]==0:
-                lowerProbability=lowerprobability+max(0,self.lproba[1,i-1]-up)
-                start==0
+                lowerprobability=lowerprobability+max(0,self.lproba[1,i-1]-up)
+                start=0
             if start==1 and i==self.nbDecision-1:
-                lowerProbability=lowerprobability+max(0,self.lproba[1,i]-up)
-        return lowerProbability
+                lowerprobability=lowerprobability+max(0,self.lproba[1,i]-up)
+        return lowerprobability
 
     def getupperprobability(self,subset):
         """Compute upper probability of an event expressed in binary code. 
@@ -103,6 +106,7 @@ class GenPbox(object):
             raise Exception('Expecting a numpy array as argument')
         if subset.size != self.nbDecision:
             raise Exception('Subset incompatible with the frame size')
+        subset=1-subset
         compsub=np.array([fabs(i) for i in subset]).astype(int)
         upperProbability=1-self.getlowerprobability(compsub)
         return upperProbability
@@ -118,9 +122,14 @@ class GenPbox(object):
         decision=0
         currentval=0
         for i in range(self.nbDecision):
-            if max(0,self.lproba[1,i]-self.lproba[0,i-1]) > currentval:
-                currentval=max(0,self.lproba[1,i]-self.lproba[0,i-1])
-                decision=i
+            if i==0:
+                if max(0,self.lproba[1,i]-0) > currentval:
+                    currentval=max(0,self.lproba[1,i]-self.lproba[0,i-1])
+                    decision=i
+            else:
+                if max(0,self.lproba[1,i]-self.lproba[0,i-1]) > currentval:
+                    currentval=max(0,self.lproba[1,i]-self.lproba[0,i-1])
+                    decision=i
         return decision
         
     def nc_maximax_decision(self):
@@ -134,9 +143,14 @@ class GenPbox(object):
         decision=0
         currentval=0
         for i in range(self.nbDecision):
-            if self.lproba[0,i]-self.lproba[1,i-1] > currentval:
-                currentval=self.lproba[0,i]-self.lproba[1,i-1]
-                decision=i
+            if i==0:
+                if self.lproba[0,i]-self.lproba[1,i-1] > currentval:
+                    currentval=self.lproba[0,i]-self.lproba[1,i-1]
+                    decision=i
+            else:
+                if self.lproba[0,i]-0 > currentval:
+                    currentval=self.lproba[0,i]-self.lproba[1,i-1]
+                    decision=i
         return decision
         
     def nc_hurwicz_decision(self,alpha):
@@ -178,14 +192,22 @@ class GenPbox(object):
         :rtype: :class:`~numpy.array`
         
         """
-        if self.isreachable()==0:
-            self.setreachableprobability()
         intervaldom_classe=np.ones(self.nbDecision)
         maxlower=0
         for i in range(self.nbDecision):
-            if max(0,self.lproba[1,i]-self.lproba[0,i-1]) > maxlower:
-                maxlower=max(0,self.lproba[1,i]-self.lproba[0,i-1])
+            if i==0:
+                if max(0,self.lproba[1,i]-0) > maxlower:
+                    maxlower=max(0,self.lproba[1,i]-0)
+            else:
+                if max(0,self.lproba[1,i]-self.lproba[0,i-1]) > maxlower:
+                    maxlower=max(0,self.lproba[1,i]-self.lproba[0,i-1])
+            print i
+            print maxlower
         for i in range(self.nbDecision):
+            if i==0:
+                if self.lproba[0,i]-0 < maxlower:
+                        intervaldom_classe[i]=0
+            else:
                 if self.lproba[0,i]-self.lproba[1,i-1]  < maxlower:
                         intervaldom_classe[i]=0
         return intervaldom_classe

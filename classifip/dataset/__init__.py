@@ -8,7 +8,8 @@ from Orange.data.discretization import DiscretizeTable as DiscTable
 def discretize(infilename,outfilename,discmet,numint=4,selfeat=None):
     """
     Discretize features of data sets according to specified method. Necessitate
-    Orange Python module to perform the discretization. 
+    Orange Python module to perform the discretization. Only discretize all continuous
+    features of classification datasets.
     
     :param infilename: name of the input file (expecting an arff file)
     :type infilename: string
@@ -18,31 +19,21 @@ def discretize(infilename,outfilename,discmet,numint=4,selfeat=None):
     :type discmet: function
     :param numint: number of intervals
     :type numint: integer
-    :param feature: specify a feature name if not all must be discretized
-    :type feature: string
     """
     
     data = OTable(infilename)
-    
-    if selfeat==None:
-        if discmet==OEnt:
-            data_ent = DiscTable(data,method=discmet())
-        else:
-            data_ent = DiscTable(data,method=discmet(numberOfIntervals=numint))
+
+    if discmet==OEnt:
+        data_ent = DiscTable(data,method=discmet())
     else:
-        if discmet==OEnt:
-            data_ent = DiscTable(data,method=discmet(),
-                                 feature=data.domain[data.domain.index(selfeat)])
-        else:
-            data_ent = DiscTable(data,method=discmet(numberOfIntervals=numint),
-                                 feature=data.domain[data.domain.index(selfeat)])
+        data_ent = DiscTable(data,method=discmet(numberOfIntervals=numint))
+
     # Manipulation of the discretized data
     for attr in data_ent.domain.attributes :
         #Reset renamed attributes name to original ones
         if (attr.name[0:2] == "D_"):
             attr.name = attr.name[2:]
-        #Replace ',' occurring in interval-valued data instances by ';' 
-        attr.values = [val.replace(',',";") for val in attr.values]
+            attr.values = [val.replace(',',";") for val in attr.values]
     
     # save the discretized data
     data_ent.save(outfilename)
