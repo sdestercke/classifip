@@ -11,7 +11,7 @@ dataset module
 dataset module includes the tools necessary to read/write data file (currently
 only WEKA arff format is available).
 
-.. autofunction:: discretize
+.. autofunction:: discretize_ent
 
 .. todo:: 
     Build an extension of arff accepting various uncertainty representations

@@ -2,8 +2,8 @@
     :synopsis: generalized p-box model
 .. moduleauthor:: Sebastien Destercke <sebastien.destercke@hds.utc.fr> 
 
-Scores
-------
+Generalised p-boxes
+-------------------
 
 This representation corresponds to lower/upper bounds given on nested events
 coming from a pre-ordered space. 

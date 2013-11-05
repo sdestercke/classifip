@@ -19,6 +19,10 @@ def k_fold_cross_validation(data, K, randomise = False, random_seed=None, struct
 	:type structured: boolean 
 	:returns: iterable over training/evluation pairs
 	:rtype: list of :class:`~classifip.dataset.arff.ArffFile`
+	
+	..todo::
+	
+	    * implement the structured k-fold validation
 	"""
         if randomise:
             import random

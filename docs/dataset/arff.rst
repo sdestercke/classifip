@@ -8,3 +8,12 @@ ArffFile
 
 .. autoclass:: ArffFile
    :members:
+
+References
+^^^^^^^^^^
+
+.. [#fayyad1993]
+
+   Usama Fayyad, Keki Irani. "Multi-interval discretization of
+   continuous-valued attributes for classification learning". International
+   Joint Conference on Artificial Intelligence 1022-1027 (1993).

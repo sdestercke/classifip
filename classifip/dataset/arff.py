@@ -212,7 +212,7 @@ class ArffFile(object):
 	
 	..todo::
 	
-	    encode the method of [#fayyad1993]_ in this function (rather than using Orange)
+	    * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
 	
 	"""
 	datasave=np.array(self.data)
@@ -325,7 +325,7 @@ class ArffFile(object):
 		        self.attribute_data[feature]=newname
 	        self.data=datasave.tolist()
 	
-	if discmet=='ent'
+	if discmet=='ent':
 	    print "sorry, not implemented, please use discretize_ent function of classifip.datasets"
 
 	    
