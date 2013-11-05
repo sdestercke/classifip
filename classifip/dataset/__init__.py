@@ -1,32 +1,23 @@
 from . import arff
 from Orange.data import Table as OTable
 from Orange.feature.discretization import Entropy as OEnt
-from Orange.feature.discretization import EqualFreq as OEFreq
-from Orange.feature.discretization import EqualWidth as OEWidth
 from Orange.data.discretization import DiscretizeTable as DiscTable
 
-def discretize(infilename,outfilename,discmet,numint=4,selfeat=None):
+def discretize_ent(infilename,outfilename):
     """
-    Discretize features of data sets according to specified method. Necessitate
-    Orange Python module to perform the discretization. Only discretize all continuous
-    features of classification datasets.
+    Discretize features of data sets according to the MDL method proposed by
+    [#fayyad1993]_. Necessitate Orange Python module to perform the
+    discretization. Only discretize all continuous features of classification datasets.
     
     :param infilename: name of the input file (expecting an arff file)
     :type infilename: string
     :param outfilename: name of the output file
     :type outfilename: string
-    :param discmet: discretization method
-    :type discmet: function
-    :param numint: number of intervals
-    :type numint: integer
     """
     
     data = OTable(infilename)
 
-    if discmet==OEnt:
-        data_ent = DiscTable(data,method=discmet())
-    else:
-        data_ent = DiscTable(data,method=discmet(numberOfIntervals=numint))
+    data_ent = DiscTable(data,method=OEnt)
 
     # Manipulation of the discretized data
     for attr in data_ent.domain.attributes :

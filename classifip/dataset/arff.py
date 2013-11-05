@@ -210,6 +210,10 @@ class ArffFile(object):
 	:param selfeat: name of a particular feature to discretize, if None discretize all
 	:type numint: string
 	
+	..todo::
+	
+	    encode the method of [#fayyad1993]_ in this function (rather than using Orange)
+	
 	"""
 	datasave=np.array(self.data)
 	numitem=datasave.shape[0]
@@ -223,14 +227,14 @@ class ArffFile(object):
 		cutpoint=[]
 		newname=[]
 		for i in range(numint):
-		    cutpoint.append(datasave[(numitem/(numint-i))-1,indexfeat])
+		    cutpoint.append(datasave[((i+1)*(numitem/(numint)))-1,indexfeat])
 		for i in range(numint):
 		    if i==0:
 			newname.append('<='+cutpoint[i])
 		    elif i==(numint-1):
-		        newname.append('>'+cutpoint[i])
+		        newname.append('>'+cutpoint[i-1])
 		    else:
-			newname.append('('+cutpoint[i]+';'+cutpoint[i+1]+']')
+			newname.append('('+cutpoint[i-1]+';'+cutpoint[i]+']')
 		for i in range(numint):
 		    if i==0:
 			datasave[(datasave[:,indexfeat]<=cutpoint[i]),indexfeat]=newname[i]
@@ -247,24 +251,83 @@ class ArffFile(object):
 		        datasave=datasave[np.argsort(datasave[:,i])]
 		        cutpoint=[]
 		        newname=[]
-		    for j in range(numint):
-		        cutpoint.append(datasave[(numitem/(numint-j))-1,i])
-		    for j in range(numint):
-		        if j==0:
-			    newname.append('<='+cutpoint[j])
-		        elif j==(numint-1):
-		            newname.append('>'+cutpoint[j])
-		        else:
-			    newname.append('('+cutpoint[j]+';'+cutpoint[j+1]+']')
-		    for j in range(numint):
-		        if j==0:
-			    datasave[(datasave[:,i]<=cutpoint[j]),i]=newname[j]
-		        else:
-			    datasave[(datasave[:,i]>cutpoint[j-1]) &
-			        (datasave[:,i]<=cutpoint[j]),i]=newname[j]
+		        for j in range(numint):
+		            cutpoint.append(datasave[((j+1)*(numitem/(numint)))-1,i])
+		        for j in range(numint):
+		            if j==0:
+			        newname.append('<='+cutpoint[j])
+		            elif j==(numint-1):
+		                newname.append('>'+cutpoint[j-1])
+		            else:
+			        newname.append('('+cutpoint[j-1]+';'+cutpoint[j]+']')
+		        for j in range(numint):
+		            if j==0:
+			        datasave[(datasave[:,i]<=cutpoint[j]),i]=newname[j]
+		            else:
+			        datasave[(datasave[:,i]>cutpoint[j-1]) &
+			            (datasave[:,i]<=cutpoint[j]),i]=newname[j]
+		        self.attribute_types[feature]='nominal'
+		        self.attribute_data[feature]=newname
 	        self.data=datasave.tolist()
-	        self.attribute_types[selfeat]='nominal'
+		
+	if discmet=='eqwidth':
+	    if selfeat!=None:
+                if self.attribute_types[selfeat]!='numeric':
+		    raise NameError("Selected feature not numeric.")
+		indexfeat=self.attributes.index(selfeat)
+		datasave=datasave[np.argsort(datasave[:,indexfeat])]
+		cutpoint=[]
+		newname=[]
+		totalwidth=(datasave[-1,indexfeat].astype(float)-
+			    datasave[0,indexfeat].astype(float))
+		for i in range(numint):
+		    cutpoint.append((datasave[0,indexfeat].astype(float))+(i+1)*totalwidth/numint)
+		for i in range(numint):
+		    if i==0:
+			newname.append('<='+str(cutpoint[i]))
+		    elif i==(numint-1):
+		        newname.append('>'+str(cutpoint[i-1]))
+		    else:
+			newname.append('('+str(cutpoint[i-1])+';'+str(cutpoint[i])+']')
+		for i in range(numint):
+		    if i==0:
+			datasave[(datasave[:,indexfeat]<=cutpoint[i]),indexfeat]=newname[i]
+		    else:
+			datasave[(datasave[:,indexfeat]>cutpoint[i-1]) &
+			    (datasave[:,indexfeat]<=cutpoint[i]),indexfeat]=newname[i]
+		self.data=datasave.tolist()
+		self.attribute_types[selfeat]='nominal'
 		self.attribute_data[selfeat]=newname
+	    else:
+		for i in range(len(self.attributes)):
+		    feature=self.attributes[i]
+		    if self.attribute_types[feature]=='numeric':
+		        datasave=datasave[np.argsort(datasave[:,i])]
+		        cutpoint=[]
+		        newname=[]
+			totalwidth=(datasave[-1,i].astype(float)-datasave[0,i].astype(float))
+		        for j in range(numint):
+		            cutpoint.append((datasave[0,i].astype(float))+(j+1)*totalwidth/numint)
+		        for j in range(numint):
+		            if j==0:
+			        newname.append('<='+str(cutpoint[j]))
+		            elif j==(numint-1):
+		                newname.append('>'+str(cutpoint[j-1]))
+		            else:
+			        newname.append('('+str(cutpoint[j-1])+';'+str(cutpoint[j])+']')
+		        for j in range(numint):
+		            if j==0:
+			        datasave[(datasave[:,i]<=str(cutpoint[j])),i]=newname[j]
+		            else:
+			        datasave[(datasave[:,i]>str(cutpoint[j-1])) &
+			            (datasave[:,i]<=str(cutpoint[j])),i]=newname[j]
+		        self.attribute_types[feature]='nominal'
+		        self.attribute_data[feature]=newname
+	        self.data=datasave.tolist()
+	
+	if discmet=='ent'
+	    print "sorry, not implemented, please use discretize_ent function of classifip.datasets"
+
 	    
 
     @staticmethod
