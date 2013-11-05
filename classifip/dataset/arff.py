@@ -31,6 +31,7 @@
 
 
 import re, sys
+import numpy as np
 
 class ArffFile(object):
     """class to read and write arff data structures
@@ -189,6 +190,82 @@ class ArffFile(object):
 	cloned.comment=self.comment[:]
 	
 	return cloned
+    
+    def discretize(self,discmet,numint=4,selfeat=None):
+	"""Discretize selected features (if none, then discretize all numeric
+	ones) according to specified method and number of intervals.
+	
+	if discmet='eqfreq', discretization is done so that each interval have
+	equal frequencies in the data set
+	
+	if discmet='eqwidth', discretization is done so that each interval has
+	equal length, according to maximum and minimum of data set
+	
+	if discmet='ent', the method of [#fayyad1993]_
+	
+	:param discmet: discretization method. Can be either 'ent','eqfreq' or 'eqwidth'
+	:type discmet: string
+	:param numint: number of intervals into which divide attributes
+	:type numint: integer
+	:param selfeat: name of a particular feature to discretize, if None discretize all
+	:type numint: string
+	
+	"""
+	datasave=np.array(self.data)
+	numitem=datasave.shape[0]
+	
+	if discmet=='eqfreq':
+	    if selfeat!=None:
+                if self.attribute_types[selfeat]!='numeric':
+		    raise NameError("Selected feature not numeric.")
+		indexfeat=self.attributes.index(selfeat)
+		datasave=datasave[np.argsort(datasave[:,indexfeat])]
+		cutpoint=[]
+		newname=[]
+		for i in range(numint):
+		    cutpoint.append(datasave[(numitem/(numint-i))-1,indexfeat])
+		for i in range(numint):
+		    if i==0:
+			newname.append('<='+cutpoint[i])
+		    elif i==(numint-1):
+		        newname.append('>'+cutpoint[i])
+		    else:
+			newname.append('('+cutpoint[i]+';'+cutpoint[i+1]+']')
+		for i in range(numint):
+		    if i==0:
+			datasave[(datasave[:,indexfeat]<=cutpoint[i]),indexfeat]=newname[i]
+		    else:
+			datasave[(datasave[:,indexfeat]>cutpoint[i-1]) &
+			    (datasave[:,indexfeat]<=cutpoint[i]),indexfeat]=newname[i]
+		self.data=datasave.tolist()
+		self.attribute_types[selfeat]='nominal'
+		self.attribute_data[selfeat]=newname
+	    else:
+		for i in range(len(self.attributes)):
+		    feature=self.attributes[i]
+		    if self.attribute_types[feature]=='numeric':
+		        datasave=datasave[np.argsort(datasave[:,i])]
+		        cutpoint=[]
+		        newname=[]
+		    for j in range(numint):
+		        cutpoint.append(datasave[(numitem/(numint-j))-1,i])
+		    for j in range(numint):
+		        if j==0:
+			    newname.append('<='+cutpoint[j])
+		        elif j==(numint-1):
+		            newname.append('>'+cutpoint[j])
+		        else:
+			    newname.append('('+cutpoint[j]+';'+cutpoint[j+1]+']')
+		    for j in range(numint):
+		        if j==0:
+			    datasave[(datasave[:,i]<=cutpoint[j]),i]=newname[j]
+		        else:
+			    datasave[(datasave[:,i]>cutpoint[j-1]) &
+			        (datasave[:,i]<=cutpoint[j]),i]=newname[j]
+	        self.data=datasave.tolist()
+	        self.attribute_types[selfeat]='nominal'
+		self.attribute_data[selfeat]=newname
+	    
 
     @staticmethod
     def parse(s):

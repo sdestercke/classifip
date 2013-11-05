@@ -14,3 +14,4 @@ comes with a set of prediction rules, both precise (maximax, maximin, ...) and i
    representations/probint
    representations/voting
    representations/credalset
+   representations/genpbox
