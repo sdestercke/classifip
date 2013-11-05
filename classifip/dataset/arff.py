@@ -215,7 +215,7 @@ class ArffFile(object):
 	    * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
 	
 	"""
-	datasave=np.array(self.data)
+	datasave=np.array(self.data).astype('|S8')
 	numitem=datasave.shape[0]
 	
 	if discmet=='eqfreq':
@@ -230,11 +230,11 @@ class ArffFile(object):
 		    cutpoint.append(datasave[((i+1)*(numitem/(numint)))-1,indexfeat])
 		for i in range(numint):
 		    if i==0:
-			newname.append('<='+cutpoint[i])
+			newname.append('<='+str(cutpoint[i]))
 		    elif i==(numint-1):
-		        newname.append('>'+cutpoint[i-1])
+		        newname.append('>'+str(cutpoint[i-1]))
 		    else:
-			newname.append('('+cutpoint[i-1]+';'+cutpoint[i]+']')
+			newname.append('('+str(cutpoint[i-1])+';'+str(cutpoint[i])+']')
 		for i in range(numint):
 		    if i==0:
 			datasave[(datasave[:,indexfeat]<=cutpoint[i]),indexfeat]=newname[i]
@@ -255,11 +255,11 @@ class ArffFile(object):
 		            cutpoint.append(datasave[((j+1)*(numitem/(numint)))-1,i])
 		        for j in range(numint):
 		            if j==0:
-			        newname.append('<='+cutpoint[j])
+			        newname.append('<='+str(cutpoint[j]))
 		            elif j==(numint-1):
-		                newname.append('>'+cutpoint[j-1])
+		                newname.append('>'+str(cutpoint[j-1]))
 		            else:
-			        newname.append('('+cutpoint[j-1]+';'+cutpoint[j]+']')
+			        newname.append('('+str(cutpoint[j-1])+';'+str(cutpoint[j])+']')
 		        for j in range(numint):
 		            if j==0:
 			        datasave[(datasave[:,i]<=cutpoint[j]),i]=newname[j]
@@ -291,10 +291,10 @@ class ArffFile(object):
 			newname.append('('+str(cutpoint[i-1])+';'+str(cutpoint[i])+']')
 		for i in range(numint):
 		    if i==0:
-			datasave[(datasave[:,indexfeat]<=cutpoint[i]),indexfeat]=newname[i]
+			datasave[(datasave[:,indexfeat].astype(float)<=cutpoint[i]),indexfeat]=newname[i]
 		    else:
-			datasave[(datasave[:,indexfeat]>cutpoint[i-1]) &
-			    (datasave[:,indexfeat]<=cutpoint[i]),indexfeat]=newname[i]
+			datasave[(datasave[:,indexfeat].astype(float) >cutpoint[i-1]) &
+			    (datasave[:,indexfeat].astype(float) <=cutpoint[i]),indexfeat]=newname[i]
 		self.data=datasave.tolist()
 		self.attribute_types[selfeat]='nominal'
 		self.attribute_data[selfeat]=newname
@@ -317,10 +317,10 @@ class ArffFile(object):
 			        newname.append('('+str(cutpoint[j-1])+';'+str(cutpoint[j])+']')
 		        for j in range(numint):
 		            if j==0:
-			        datasave[(datasave[:,i]<=str(cutpoint[j])),i]=newname[j]
+			        datasave[(datasave[:,i].astype(float)<=cutpoint[j]),i]=newname[j]
 		            else:
-			        datasave[(datasave[:,i]>str(cutpoint[j-1])) &
-			            (datasave[:,i]<=str(cutpoint[j])),i]=newname[j]
+			        datasave[(datasave[:,i].astype(float)>cutpoint[j-1]) &
+			            (datasave[:,i].astype(float)<=cutpoint[j]),i]=newname[j]
 		        self.attribute_types[feature]='nominal'
 		        self.attribute_data[feature]=newname
 	        self.data=datasave.tolist()
