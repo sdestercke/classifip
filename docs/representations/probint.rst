@@ -3,8 +3,8 @@
 .. moduleauthor:: Sebastien Destercke <sebastien.destercke@hds.utc.fr> 
 .. moduleauthor:: Violaine Antoine <violaine.antoine@univ-savoie.fr>
 
-IntervalsProbability
---------------------
+Intervals Probability
+---------------------
 
 This representation that corresponds to probabilistic bounds on singletons has been extensively studied in [#Camposetal2012]_
 

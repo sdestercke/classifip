@@ -201,8 +201,6 @@ class GenPbox(object):
             else:
                 if max(0,self.lproba[1,i]-self.lproba[0,i-1]) > maxlower:
                     maxlower=max(0,self.lproba[1,i]-self.lproba[0,i-1])
-            print i
-            print maxlower
         for i in range(self.nbDecision):
             if i==0:
                 if self.lproba[0,i]-0 < maxlower:

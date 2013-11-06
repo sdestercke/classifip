@@ -32,6 +32,7 @@
 
 import re, sys
 import numpy as np
+import copy
 
 class ArffFile(object):
     """class to read and write arff data structures
@@ -184,10 +185,10 @@ class ArffFile(object):
 	
 	cloned.attribute_data=self.attribute_data.copy()
 	cloned.attribute_types=self.attribute_types.copy()
-        cloned.data = self.data[:]
+        cloned.data = copy.deepcopy(self.data)
 	cloned.relation=self.relation
-	cloned.attributes=self.attributes[:]
-	cloned.comment=self.comment[:]
+	cloned.attributes=copy.deepcopy(self.attributes)
+	cloned.comment=copy.deepcopy(self.comment)
 	
 	return cloned
     
