@@ -17,7 +17,7 @@ def discretize_ent(infilename,outfilename):
     
     data = OTable(infilename)
 
-    data_ent = DiscTable(data,method=OEnt)
+    data_ent = DiscTable(data,method=OEnt())
 
     # Manipulation of the discretized data
     for attr in data_ent.domain.attributes :
