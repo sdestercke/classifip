@@ -70,7 +70,7 @@ class NCC(object):
         """evaluate the instances and return a list of probability intervals.
         
         :param testdataset: list of input features of instances to evaluate
-        :type dataset: list
+        :type testdataset: list
         :param ncc_epsilon: espilon issued from [#corani2010]_ (should be > 0)
             to avoid zero count issues
         :type ncc_espilon: float
