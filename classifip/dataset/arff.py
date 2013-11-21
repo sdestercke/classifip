@@ -30,7 +30,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-import re, sys
+import re
 
 class ArffFile(object):
     """class to read and write arff data structures
@@ -93,8 +93,8 @@ class ArffFile(object):
         
         :param filename: the name of the file containing data
         :type filename: string
-	"""
-	
+        """
+        
         #reinitialize the object
         self.__init__()
         #fill in the object
@@ -111,26 +111,26 @@ class ArffFile(object):
 
     def select_class(self, select):
         """return an ARFF object where only some classes are selected
-	
+        
         :param select: the names of the classes to retain
         :type select: list
-	:return: a new ArffFile structure containing only selected classes
-	:rtype: :class:`~classifip.dataset.arff.ArffFile`
-	
-	.. warning::
-	
+        :return: a new ArffFile structure containing only selected classes
+        :rtype: :class:`~classifip.dataset.arff.ArffFile`
+        
+        .. warning::
+        
             should not be used with files containing ranks
-	"""
-	if 'class' not in self.attribute_data.keys():
-	    raise NameError("Cannot find a class attribute.")
-	if set(select) - set(self.attribute_data['class'])!=set([]):
-	    raise NameError("Specified classes not a subset of existing ones!")
-	selection=ArffFile()
-	#construct list with sets of indices matching class names
-	#assume the class is the last provided item
-	indices=[i for i,val in enumerate(self.data) if val[-1] in select]
-	#data corresponding to provided class
-	selected_data=[self.data[i] for i in indices]
+        """
+        if 'class' not in self.attribute_data.keys():
+            raise NameError("Cannot find a class attribute.")
+        if set(select) - set(self.attribute_data['class'])!=set([]):
+            raise NameError("Specified classes not a subset of existing ones!")
+        selection=ArffFile()
+        #construct list with sets of indices matching class names
+        #assume the class is the last provided item
+        indices=[i for i,val in enumerate(self.data) if val[-1] in select]
+        #data corresponding to provided class
+        selected_data=[self.data[i] for i in indices]
         
         selection.attribute_data=self.attribute_data.copy()
         selection.attribute_types=self.attribute_types.copy()
@@ -138,57 +138,158 @@ class ArffFile(object):
         selection.data = selected_data
         selection.relation=self.relation
         selection.attributes=self.attributes[:]
-	selection.comment=self.comment[:]
+        selection.comment=self.comment[:]
 
-	return selection
+        return selection
     
-    def select_col_vals(self,column,select):
-	"""return an ARFF File where only some rows are selected in data
-	
-	:param select: the values to retain
-	:type select: list
-	:param column: name of the attribute
-	:type column: string
-	:return: a new ArffFile structure containing only selected values in the column
-	:rtype: :class:`~classifip.dataset.arff.ArffFile`
-	"""
-	
-	if column not in self.attribute_data.keys():
-	    raise NameError("Cannot find specified column.")
-	selection=ArffFile()
-	col_ind=self.attributes.index(column)
-	#construct list with sets of indices matching infos
-	indices=[i for i,val in enumerate(self.data) if val[col_ind] in select]
-	
-	selected_data=[self.data[i] for i in indices]
-	
-	selection.attribute_data=self.attribute_data.copy()
+    
+    def select_class_bi(self, positive, negative):
+        """return an ARFF object where only some classes are selected in order
+        to form a dataset for a binary classification problem.
+        
+        :param select: the names of the classes to retain
+        :type select: list
+                
+        :param positive: classes values to be considered as 'positive' in the binary
+        classfication problem
+        :type positive:list
+        
+        :param positive: classes values to be considered as 'positive' in the binary
+        classfication problem
+        :type positive:list
+        
+        :returns: the dictionary ('positive'/'negative') of selected data's 
+        indices and a new ArffFile structure containing only selected classes
+        :rtype: list of strings, :class:`~classifip.dataset.arff.ArffFile`
+        
+        .. warning::
+        
+            should not be used with files containing ranks
+        """
+        if 'class' not in self.attribute_data.keys():
+            raise NameError("Cannot find a class attribute.")
+        if set(positive) - set(self.attribute_data['class'])!=set([]):
+            raise NameError("Specified 'positive' classes not a subset of existing ones!")
+        
+        if set(negative) - set(self.attribute_data['class'])!=set([]):
+            raise NameError("Specified 'negative' classes not a subset of existing ones!")
+        
+        selection=ArffFile()
+        #initiate the variable for the output data
+        selected_data=[] 
+        
+        
+        #construct list with sets of indices matching class names
+        #assume the class is the last provided item
+        #and form data corresponding to provided class
+        for i,val in enumerate(self.data) :
+            if val[-1] in positive :
+                buff = self.data[i][:]
+                buff[-1] = 'positive'
+                selected_data.append(buff)
+
+            elif val[-1] in negative:
+                buff = self.data[i][:]
+                buff[-1] = 'negative'
+                selected_data.append(buff)
+
+
+        
+        selection.attribute_data=self.attribute_data.copy()
         selection.attribute_types=self.attribute_types.copy()
-	if self.attribute_types[column]=='nominal':
-	    selection.attribute_data[column]=select
+        selection.attribute_data['class']=['positive','negative']
         selection.data = selected_data
         selection.relation=self.relation
         selection.attributes=self.attributes[:]
-	selection.comment=self.comment[:]
-	
-	return selection 
+        selection.comment=self.comment[:]
+
+        return selection
+    
+    
+    def occurrences(self):
+        """
+        Computing the occurrences of each class values
+        
+        :return: dictionary of occurrences for class values
+        :rtype: dict
+        """
+        occurrences = {}
+        for item in self.data:
+            class_value = item[-1]
+            if occurrences.has_key(class_value): 
+                occurrences[class_value] += 1
+            else :
+                occurrences[class_value] = 1
+        return occurrences
+    
+    def select_col_vals(self,column,select):
+        """return an ARFF File where only some rows are selected in data
+        
+        :param select: the values to retain
+        :type select: list
+        :param column: name of the attribute
+        :type column: string
+        :return: a new ArffFile structure containing only selected values in the column
+        :rtype: :class:`~classifip.dataset.arff.ArffFile`
+        """
+        
+        if column not in self.attribute_data.keys():
+            raise NameError("Cannot find specified column.")
+        selection=ArffFile()
+        col_ind=self.attributes.index(column)
+        #construct list with sets of indices matching infos
+        indices=[i for i,val in enumerate(self.data) if val[col_ind] in select]
+        
+        selected_data=[self.data[i] for i in indices]
+        
+        selection.attribute_data=self.attribute_data.copy()
+        selection.attribute_types=self.attribute_types.copy()
+        if self.attribute_types[column]=='nominal':
+            selection.attribute_data[column]=select
+        selection.data = selected_data
+        selection.relation=self.relation
+        selection.attributes=self.attributes[:]
+        selection.comment=self.comment[:]
+        
+        return selection 
+    
+    def remove_col(self,column):
+        """return an ARFF File where the the column specified is removed
+        
+        :param column: name of the attribute
+        :type column: string
+        :return: a new ArffFile structure excluding the specified column
+        :rtype: :class:`~classifip.dataset.arff.ArffFile`
+        """
+        if column not in self.attribute_data.keys():
+            raise NameError("Cannot find specified column.")
+        
+        selection=self
+        col_ind=self.attributes.index(column)
+        del selection.attributes[col_ind]
+        del selection.attribute_types[column]
+        del selection.attribute_data[column]
+        selection.data = [row[0:col_ind] + row[(col_ind+1):] for row in self.data]
+        
+        return selection
+        
 
     def make_clone(self):
-	"""Make a copy of the current object
-	
-	:return: a copy
-	:rtype: :class:`~classifip.dataset.arff.ArffFile`	
-	"""
-	cloned=ArffFile()
-	
-	cloned.attribute_data=self.attribute_data.copy()
-	cloned.attribute_types=self.attribute_types.copy()
+        """Make a copy of the current object
+        
+        :return: a copy
+        :rtype: :class:`~classifip.dataset.arff.ArffFile`        
+        """
+        cloned=ArffFile()
+        
+        cloned.attribute_data=self.attribute_data.copy()
+        cloned.attribute_types=self.attribute_types.copy()
         cloned.data = self.data[:]
-	cloned.relation=self.relation
-	cloned.attributes=self.attributes[:]
-	cloned.comment=self.comment[:]
-	
-	return cloned
+        cloned.relation=self.relation
+        cloned.attributes=self.attributes[:]
+        cloned.comment=self.comment[:]
+        
+        return cloned
 
     @staticmethod
     def parse(s):
@@ -203,11 +304,11 @@ class ArffFile(object):
 
     def save(self, filename):
         """Save an arff structure to a file.
-	
+        
         :param filename: the name of the file where data are saved
-        :type filename: string	
-	
-	"""
+        :type filename: string        
+        
+        """
         o = open(filename, 'w')
         o.write(self.write())
         o.close()
@@ -226,9 +327,9 @@ class ArffFile(object):
             elif at == 'nominal':
                 o.append("@attribute " + self.esc(a) +
                          " {" + ','.join(self.attribute_data[a]) + "}")
-	    elif at == 'ranking':
-	        o.append("@attribute" + self.esc(a) + " ranking" +
-			 " {" + ','.join(self.attribute_data[a]) + "}")
+            elif at == 'ranking':
+                o.append("@attribute" + self.esc(a) + " ranking" +
+                         " {" + ','.join(self.attribute_data[a]) + "}")
             else:
                 raise NameError("Type " + at + " not supported for writing!")
         o.append("\n@data")
@@ -239,11 +340,11 @@ class ArffFile(object):
                 if at == 'numeric':
                     line.append(str(e))
                 elif at == 'string':
-                    line.append(esc(e))
+                    line.append(self.esc(e))
                 elif at == 'nominal':
                     line.append(e)
-		elif at == 'ranking':
-		    line.append(e)
+                elif at == 'ranking':
+                    line.append(e)
                 else:
                     raise "Type " + at + " not supported for writing!"
             o.append(','.join(line))
@@ -258,17 +359,17 @@ class ArffFile(object):
 
     def define_attribute(self, name, atype, data=None):
         """Define a new attribute.
-	
-	For nominal and ranking attributes, pass the possible values as data.	
-	
-	:param atype: 'numeric', 'string', 'ranking' and 'nominal'.
-	:type atype: string
-	:param name: name of the attribute
-	:type name: string
-	:param data: modalities/labels of the attribute
-	:type atype: list
-	"""
-	
+        
+        For nominal and ranking attributes, pass the possible values as data.        
+        
+        :param atype: 'numeric', 'string', 'ranking' and 'nominal'.
+        :type atype: string
+        :param name: name of the attribute
+        :type name: string
+        :param data: modalities/labels of the attribute
+        :type atype: list
+        """
+        
         self.attributes.append(name)
         self.attribute_types[name] = atype
         self.attribute_data[name] = data
@@ -300,7 +401,7 @@ class ArffFile(object):
     def __parse_attribute(self, l):
         p = re.compile(r'[a-zA-Z_-][a-zA-Z0-9_-]*|\{[^\}]+\}|\'[^\']+\'|\"[^\"]+\"')
         l = [s.strip() for s in p.findall(l)]
-        name = l[1]
+        name = l[1].replace("'","") # Modification : all ' in typename are removed
         atype = l[2]
         atypel = atype.lower()
         if (atypel == 'real' or
@@ -309,10 +410,10 @@ class ArffFile(object):
             self.define_attribute(name, 'numeric')
         elif atypel == 'string':
             self.define_attribute(name, 'string')
-	elif atypel == 'ranking':
-	    labelrow=l[3]
-	    labels = [s.strip () for s in labelrow[1:-1].split(',')]
-	    self.define_attribute(name, 'ranking', labels)
+        elif atypel == 'ranking':
+            labelrow=l[3]
+            labels = [s.strip () for s in labelrow[1:-1].split(',')]
+            self.define_attribute(name, 'ranking', labels)
         elif atype[0] == '{' and atype[-1] == '}':
             values = [s.strip () for s in atype[1:-1].split(',')]
             self.define_attribute(name, 'nominal', values)
@@ -339,16 +440,16 @@ class ArffFile(object):
                     return
             elif at == 'string':
                 datum.append(v)
-	    elif at == 'ranking':
-		for k in v.split('>'):
-		    if k not in self.attribute_data[n]:
-			self.__print_warning('incorrect label %s for ranking attribute %s' % (v, n))
-		datum.append(v)
+            elif at == 'ranking':
+                for k in v.split('>'):
+                    if k not in self.attribute_data[n]:
+                        self.__print_warning('incorrect label %s for ranking attribute %s' % (v, n))
+                datum.append(v)
             elif at == 'nominal':
                 if v in self.attribute_data[n]:
                     datum.append(v)
                 elif v == '?':
-                    datum.append(None)                     
+                    datum.append(None)                    
                 else:
                     self.__print_warning('incorrect value %s for nominal attribute %s' % (v, n))
                     return
@@ -387,6 +488,8 @@ d, 3
 """)
         a.dump()
 
-    a = ArffFile.load('../examples/diabetes.arff')
-
+    a = ArffFile()
+    a.load('../../diabetes.arff')
+    
     print a.write()
+    
