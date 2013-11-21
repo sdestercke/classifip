@@ -40,12 +40,12 @@ class ArffFile(object):
     An ARFF File object describes a data set consisting of a number
     of data points made up of attributes. The whole data set is called
     a 'relation'. Supported attributes are:
-
+    
     - 'numeric': floating point numbers
     - 'string': strings
     - 'nominal': taking one of a number of possible values
     - 'ranking': taking a ranking of labels (using the xarff format of WEKA-LR)
-
+    
     Not all features of ARFF files are supported yet. The most notable
     exceptions are:
 
@@ -79,7 +79,9 @@ class ArffFile(object):
     .. todo::
     
         * transform dump into __str__ method
+    
     """
+    
     def __init__(self):
         """Construct an empty ARFF structure."""
         self.relation = ''
@@ -89,14 +91,14 @@ class ArffFile(object):
         self.comment = []
         self.data = []
         pass
-
+    
     def load(self, filename):
         """Load an ARFF File from a file.
         
         :param filename: the name of the file containing data
         :type filename: string
-	"""
-	
+        """
+        
         #reinitialize the object
         self.__init__()
         #fill in the object
@@ -110,29 +112,29 @@ class ArffFile(object):
         self.comment = a.comment
         self.data = a.data
         o.close()
-
+        
     def select_class(self, select):
         """return an ARFF object where only some classes are selected
-	
+        
         :param select: the names of the classes to retain
         :type select: list
-	:return: a new ArffFile structure containing only selected classes
-	:rtype: :class:`~classifip.dataset.arff.ArffFile`
-	
-	.. warning::
-	
+        :return: a new ArffFile structure containing only selected classes
+        :rtype: :class:`~classifip.dataset.arff.ArffFile`
+        
+        .. warning::
+        
             should not be used with files containing ranks
-	"""
-	if 'class' not in self.attribute_data.keys():
-	    raise NameError("Cannot find a class attribute.")
-	if set(select) - set(self.attribute_data['class'])!=set([]):
-	    raise NameError("Specified classes not a subset of existing ones!")
-	selection=ArffFile()
-	#construct list with sets of indices matching class names
-	#assume the class is the last provided item
-	indices=[i for i,val in enumerate(self.data) if val[-1] in select]
-	#data corresponding to provided class
-	selected_data=[self.data[i] for i in indices]
+        """
+        if 'class' not in self.attribute_data.keys():
+            raise NameError("Cannot find a class attribute.")
+        if set(select) - set(self.attribute_data['class'])!=set([]):
+            raise NameError("Specified classes not a subset of existing ones!")
+        selection=ArffFile()
+        #construct list with sets of indices matching class names
+        #assume the class is the last provided item
+        indices=[i for i,val in enumerate(self.data) if val[-1] in select]
+        #data corresponding to provided class
+        selected_data=[self.data[i] for i in indices]
         
         selection.attribute_data=self.attribute_data.copy()
         selection.attribute_types=self.attribute_types.copy()
@@ -140,209 +142,209 @@ class ArffFile(object):
         selection.data = selected_data
         selection.relation=self.relation
         selection.attributes=self.attributes[:]
-	selection.comment=self.comment[:]
+        selection.comment=self.comment[:]
 
-	return selection
+        return selection
     
     def select_col_vals(self,column,select):
-	"""return an ARFF File where only some rows are selected in data
-	
-	:param select: the values to retain
-	:type select: list
-	:param column: name of the attribute
-	:type column: string
-	:return: a new ArffFile structure containing only selected values in the column
-	:rtype: :class:`~classifip.dataset.arff.ArffFile`
-	"""
-	
-	if column not in self.attribute_data.keys():
-	    raise NameError("Cannot find specified column.")
-	selection=ArffFile()
-	col_ind=self.attributes.index(column)
-	#construct list with sets of indices matching infos
-	indices=[i for i,val in enumerate(self.data) if val[col_ind] in select]
-	
-	selected_data=[self.data[i] for i in indices]
-	
-	selection.attribute_data=self.attribute_data.copy()
+        """return an ARFF File where only some rows are selected in data
+        
+        :param select: the values to retain
+        :type select: list
+        :param column: name of the attribute
+        :type column: string
+        :return: a new ArffFile structure containing only selected values in the column
+        :rtype: :class:`~classifip.dataset.arff.ArffFile`
+        """
+        
+        if column not in self.attribute_data.keys():
+            raise NameError("Cannot find specified column.")
+        selection=ArffFile()
+        col_ind=self.attributes.index(column)
+        #construct list with sets of indices matching infos
+        indices=[i for i,val in enumerate(self.data) if val[col_ind] in select]
+        
+        selected_data=[self.data[i] for i in indices]
+        
+        selection.attribute_data=self.attribute_data.copy()
         selection.attribute_types=self.attribute_types.copy()
-	if self.attribute_types[column]=='nominal':
-	    selection.attribute_data[column]=select
+        if self.attribute_types[column]=='nominal':
+            selection.attribute_data[column]=select
         selection.data = selected_data
         selection.relation=self.relation
         selection.attributes=self.attributes[:]
-	selection.comment=self.comment[:]
-	
-	return selection 
+        selection.comment=self.comment[:]
+        
+        return selection 
 
     def make_clone(self):
-	"""Make a copy of the current object
-	
-	:return: a copy
-	:rtype: :class:`~classifip.dataset.arff.ArffFile`	
-	"""
-	cloned=ArffFile()
-	
-	cloned.attribute_data=self.attribute_data.copy()
-	cloned.attribute_types=self.attribute_types.copy()
+        """Make a copy of the current object
+        
+        :return: a copy
+        :rtype: :class:`~classifip.dataset.arff.ArffFile`       
+        """
+        cloned=ArffFile()
+        
+        cloned.attribute_data=self.attribute_data.copy()
+        cloned.attribute_types=self.attribute_types.copy()
         cloned.data = copy.deepcopy(self.data)
-	cloned.relation=self.relation
-	cloned.attributes=copy.deepcopy(self.attributes)
-	cloned.comment=copy.deepcopy(self.comment)
-	
-	return cloned
+        cloned.relation=self.relation
+        cloned.attributes=copy.deepcopy(self.attributes)
+        cloned.comment=copy.deepcopy(self.comment)
+        
+        return cloned
     
     def discretize(self,discmet,numint=4,selfeat=None):
-	"""Discretize selected features (if none, then discretize all numeric
-	ones) according to specified method and number of intervals.
-	
-	if discmet='eqfreq', discretization is done so that each interval have
-	equal frequencies in the data set
-	
-	if discmet='eqwidth', discretization is done so that each interval has
-	equal length, according to maximum and minimum of data set
-	
-	if discmet='ent', the method of [#fayyad1993]_
-	
-	:param discmet: discretization method. Can be either 'ent','eqfreq' or 'eqwidth'
-	:type discmet: string
-	:param numint: number of intervals into which divide attributes
-	:type numint: integer
-	:param selfeat: name of a particular feature to discretize, if None discretize all
-	:type numint: string
-	
-	..todo::
-	
-	    * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
-	
-	"""
-	datasave=np.array(self.data).astype('|S20')
-	numitem=datasave.shape[0]
-	
-	if discmet=='eqfreq':
-	    if selfeat!=None:
+        """Discretize selected features (if none, then discretize all numeric
+        ones) according to specified method and number of intervals.
+        
+        if discmet='eqfreq', discretization is done so that each interval have
+        equal frequencies in the data set
+        
+        if discmet='eqwidth', discretization is done so that each interval has
+        equal length, according to maximum and minimum of data set
+        
+        if discmet='ent', the method of [#fayyad1993]_
+        
+        :param discmet: discretization method. Can be either 'ent','eqfreq' or 'eqwidth'
+        :type discmet: string
+        :param numint: number of intervals into which divide attributes
+        :type numint: integer
+        :param selfeat: name of a particular feature to discretize, if None discretize all
+        :type numint: string
+        
+        ..todo::
+        
+            * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
+        
+        """
+        datasave=np.array(self.data).astype('|S20')
+        numitem=datasave.shape[0]
+        
+        if discmet=='eqfreq':
+            if selfeat!=None:
                 if self.attribute_types[selfeat]!='numeric':
-		    raise NameError("Selected feature not numeric.")
-		indexfeat=self.attributes.index(selfeat)
-		datasave=datasave[np.argsort(datasave[:,indexfeat])]
-		floatdata=datasave[:,indexfeat].astype(float)
-		cutpoint=[]
-		newname=[]
-		for i in range(numint):
-		    cutpoint.append(datasave[((i+1)*(numitem/(numint)))-1,indexfeat])
-		for i in range(numint):
-		    if i==0:
-			newname.append('<='+cutpoint[i][0:min(len(cutpoint[i]),7)])
-		    elif i==(numint-1):
-		        newname.append('>'+cutpoint[i-1][0:min(len(cutpoint[i-1]),7)])
-		    else:
-			newname.append('('+cutpoint[i-1][0:min(len(cutpoint[i-1]),7)]+
-				       ';'+cutpoint[i][0:min(len(cutpoint[i]),7)]+']')
-		for i in range(numint):
+                    raise NameError("Selected feature not numeric.")
+                indexfeat=self.attributes.index(selfeat)
+                datasave=datasave[np.argsort(datasave[:,indexfeat])]
+                floatdata=datasave[:,indexfeat].astype(float)
+                cutpoint=[]
+                newname=[]
+                for i in range(numint):
+                    cutpoint.append(datasave[((i+1)*(numitem/(numint)))-1,indexfeat])
+                for i in range(numint):
                     if i==0:
-		        datasave[(floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
-		    elif i==(numint-1):
-			datasave[(floatdata>cutpoint[i-1].astype(float)),indexfeat]=newname[i]
-		    else:
-			datasave[(floatdata>cutpoint[i-1].astype(float)) &
-			    (floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
-		self.data=datasave.tolist()
-		self.attribute_types[selfeat]='nominal'
-		self.attribute_data[selfeat]=newname
-	    else:
-		for i in range(len(self.attributes)):
-		    feature=self.attributes[i]
-		    if self.attribute_types[feature]=='numeric':
-		        datasave=datasave[np.argsort(datasave[:,i])]
-			floatdata=datasave[:,i].astype(float)
-		        cutpoint=[]
-		        newname=[]
-		        for j in range(numint):
-		            cutpoint.append(datasave[((j+1)*(numitem/(numint)))-1,i])
-		        for j in range(numint):
-		            if j==0:
-			        newname.append('<='+cutpoint[j])
-		            elif j==(numint-1):
-		                newname.append('>'+cutpoint[j-1])
-		            else:
-			        newname.append('('+cutpoint[j-1]+';'+cutpoint[j]+']')
-		        for j in range(numint):
-		            if j==0:
-			        datasave[(floatdata<=cutpoint[j].astype(float)),i]=newname[j]
-		            elif j==(numint-1):
-			        datasave[(floatdata>cutpoint[j-1].astype(float)),i]=newname[j]
-		            else:
-			        datasave[(floatdata>cutpoint[j-1].astype(float)) &
-			            (floatdata<=cutpoint[j].astype(float)),i]=newname[j]
-		        self.attribute_types[feature]='nominal'
-		        self.attribute_data[feature]=newname
-	        self.data=datasave.tolist()
-		
-	if discmet=='eqwidth':
-	    if selfeat!=None:
+                        newname.append('<='+cutpoint[i][0:min(len(cutpoint[i]),7)])
+                    elif i==(numint-1):
+                        newname.append('>'+cutpoint[i-1][0:min(len(cutpoint[i-1]),7)])
+                    else:
+                        newname.append('('+cutpoint[i-1][0:min(len(cutpoint[i-1]),7)]+
+                                       ';'+cutpoint[i][0:min(len(cutpoint[i]),7)]+']')
+                for i in range(numint):
+                    if i==0:
+                        datasave[(floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
+                    elif i==(numint-1):
+                        datasave[(floatdata>cutpoint[i-1].astype(float)),indexfeat]=newname[i]
+                    else:
+                        datasave[(floatdata>cutpoint[i-1].astype(float)) &
+                            (floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
+                self.data=datasave.tolist()
+                self.attribute_types[selfeat]='nominal'
+                self.attribute_data[selfeat]=newname
+            else:
+                for i in range(len(self.attributes)):
+                    feature=self.attributes[i]
+                    if self.attribute_types[feature]=='numeric':
+                        datasave=datasave[np.argsort(datasave[:,i])]
+                        floatdata=datasave[:,i].astype(float)
+                        cutpoint=[]
+                        newname=[]
+                        for j in range(numint):
+                            cutpoint.append(datasave[((j+1)*(numitem/(numint)))-1,i])
+                        for j in range(numint):
+                            if j==0:
+                                newname.append('<='+cutpoint[j])
+                            elif j==(numint-1):
+                                newname.append('>'+cutpoint[j-1])
+                            else:
+                                newname.append('('+cutpoint[j-1]+';'+cutpoint[j]+']')
+                        for j in range(numint):
+                            if j==0:
+                                datasave[(floatdata<=cutpoint[j].astype(float)),i]=newname[j]
+                            elif j==(numint-1):
+                                datasave[(floatdata>cutpoint[j-1].astype(float)),i]=newname[j]
+                            else:
+                                datasave[(floatdata>cutpoint[j-1].astype(float)) &
+                                    (floatdata<=cutpoint[j].astype(float)),i]=newname[j]
+                        self.attribute_types[feature]='nominal'
+                        self.attribute_data[feature]=newname
+                self.data=datasave.tolist()
+                
+        if discmet=='eqwidth':
+            if selfeat!=None:
                 if self.attribute_types[selfeat]!='numeric':
-		    raise NameError("Selected feature not numeric.")
-		indexfeat=self.attributes.index(selfeat)
-		datasave=datasave[np.argsort(datasave[:,indexfeat])]
-		floatdata=datasave[:,indexfeat].astype(float)
-		cutpoint=[]
-		newname=[]
-		totalwidth=(datasave[-1,indexfeat].astype(float)-
-			    datasave[0,indexfeat].astype(float))
-		for i in range(numint):
-		    cutpoint.append((datasave[0,indexfeat].astype(float))+(i+1)*totalwidth/numint)
-		for i in range(numint):
-		    if i==0:
-			newname.append('<='+str(cutpoint[i]))
-		    elif i==(numint-1):
-		        newname.append('>'+str(cutpoint[i-1]))
-		    else:
-			newname.append('('+str(cutpoint[i-1])+';'+str(cutpoint[i])+']')
-		for i in range(numint):
-		    if i==0:
-			datasave[(floatdata<=cutpoint[i]),indexfeat]=newname[i]
-		    elif i==(numint-1):
-			datasave[(floatdata>cutpoint[i-1]),indexfeat]=newname[i]
-		    else:
-			datasave[(floatdata >cutpoint[i-1]) &
-			    (floatdata <=cutpoint[i]),indexfeat]=newname[i]
-		self.data=datasave.tolist()
-		self.attribute_types[selfeat]='nominal'
-		self.attribute_data[selfeat]=newname
-	    else:
-		for i in range(len(self.attributes)):
-		    feature=self.attributes[i]
-		    if self.attribute_types[feature]=='numeric':
-		        datasave=datasave[np.argsort(datasave[:,i])]
-			floatdata=datasave[:,i].astype(float)
-		        cutpoint=[]
-		        newname=[]
-			totalwidth=(floatdata[-1]-floatdata[0])
-		        for j in range(numint):
-		            cutpoint.append((datasave[0,i].astype(float))+(j+1)*totalwidth/numint)
-		        for j in range(numint):
-		            if j==0:
-			        newname.append('<='+str(cutpoint[j]))
-		            elif j==(numint-1):
-		                newname.append('>'+str(cutpoint[j-1]))
-		            else:
-			        newname.append('('+str(cutpoint[j-1])+';'+str(cutpoint[j])+']')
-		        for j in range(numint):
-		            if j==0:
-			        datasave[(floatdata<=cutpoint[j]),i]=newname[j]
-			    elif j==(numint-1):
-				datasave[(floatdata>cutpoint[j-1]),i]=newname[j]
-		            else:
-			        datasave[(floatdata>cutpoint[j-1]) &
-			            (floatdata<=cutpoint[j]),i]=newname[j]
-		        self.attribute_types[feature]='nominal'
-		        self.attribute_data[feature]=newname
-	        self.data=datasave.tolist()
-	
-	if discmet=='ent':
-	    print "sorry, not implemented, please use discretize_ent function of classifip.datasets"
+                    raise NameError("Selected feature not numeric.")
+                indexfeat=self.attributes.index(selfeat)
+                datasave=datasave[np.argsort(datasave[:,indexfeat])]
+                floatdata=datasave[:,indexfeat].astype(float)
+                cutpoint=[]
+                newname=[]
+                totalwidth=(datasave[-1,indexfeat].astype(float)-
+                            datasave[0,indexfeat].astype(float))
+                for i in range(numint):
+                    cutpoint.append((datasave[0,indexfeat].astype(float))+(i+1)*totalwidth/numint)
+                for i in range(numint):
+                    if i==0:
+                        newname.append('<='+str(cutpoint[i]))
+                    elif i==(numint-1):
+                        newname.append('>'+str(cutpoint[i-1]))
+                    else:
+                        newname.append('('+str(cutpoint[i-1])+';'+str(cutpoint[i])+']')
+                for i in range(numint):
+                    if i==0:
+                        datasave[(floatdata<=cutpoint[i]),indexfeat]=newname[i]
+                    elif i==(numint-1):
+                        datasave[(floatdata>cutpoint[i-1]),indexfeat]=newname[i]
+                    else:
+                        datasave[(floatdata >cutpoint[i-1]) &
+                            (floatdata <=cutpoint[i]),indexfeat]=newname[i]
+                self.data=datasave.tolist()
+                self.attribute_types[selfeat]='nominal'
+                self.attribute_data[selfeat]=newname
+            else:
+                for i in range(len(self.attributes)):
+                    feature=self.attributes[i]
+                    if self.attribute_types[feature]=='numeric':
+                        datasave=datasave[np.argsort(datasave[:,i])]
+                        floatdata=datasave[:,i].astype(float)
+                        cutpoint=[]
+                        newname=[]
+                        totalwidth=(floatdata[-1]-floatdata[0])
+                        for j in range(numint):
+                            cutpoint.append((datasave[0,i].astype(float))+(j+1)*totalwidth/numint)
+                        for j in range(numint):
+                            if j==0:
+                                newname.append('<='+str(cutpoint[j]))
+                            elif j==(numint-1):
+                                newname.append('>'+str(cutpoint[j-1]))
+                            else:
+                                newname.append('('+str(cutpoint[j-1])+';'+str(cutpoint[j])+']')
+                        for j in range(numint):
+                            if j==0:
+                                datasave[(floatdata<=cutpoint[j]),i]=newname[j]
+                            elif j==(numint-1):
+                                datasave[(floatdata>cutpoint[j-1]),i]=newname[j]
+                            else:
+                                datasave[(floatdata>cutpoint[j-1]) &
+                                    (floatdata<=cutpoint[j]),i]=newname[j]
+                        self.attribute_types[feature]='nominal'
+                        self.attribute_data[feature]=newname
+                self.data=datasave.tolist()
+        
+        if discmet=='ent':
+            print "sorry, not implemented, please use discretize_ent function of classifip.datasets"
 
-	    
+            
 
     @staticmethod
     def parse(s):
@@ -357,11 +359,11 @@ class ArffFile(object):
 
     def save(self, filename):
         """Save an arff structure to a file.
-	
+        
         :param filename: the name of the file where data are saved
-        :type filename: string	
-	
-	"""
+        :type filename: string  
+        
+        """
         o = open(filename, 'w')
         o.write(self.write())
         o.close()
@@ -380,9 +382,9 @@ class ArffFile(object):
             elif at == 'nominal':
                 o.append("@attribute " + self.esc(a) +
                          " {" + ','.join(self.attribute_data[a]) + "}")
-	    elif at == 'ranking':
-	        o.append("@attribute" + self.esc(a) + " ranking" +
-			 " {" + ','.join(self.attribute_data[a]) + "}")
+            elif at == 'ranking':
+                o.append("@attribute" + self.esc(a) + " ranking" +
+                         " {" + ','.join(self.attribute_data[a]) + "}")
             else:
                 raise NameError("Type " + at + " not supported for writing!")
         o.append("\n@data")
@@ -396,8 +398,8 @@ class ArffFile(object):
                     line.append(esc(e))
                 elif at == 'nominal':
                     line.append(e)
-		elif at == 'ranking':
-		    line.append(e)
+                elif at == 'ranking':
+                    line.append(e)
                 else:
                     raise "Type " + at + " not supported for writing!"
             o.append(','.join(line))
@@ -412,17 +414,17 @@ class ArffFile(object):
 
     def define_attribute(self, name, atype, data=None):
         """Define a new attribute.
-	
-	For nominal and ranking attributes, pass the possible values as data.	
-	
-	:param atype: 'numeric', 'string', 'ranking' and 'nominal'.
-	:type atype: string
-	:param name: name of the attribute
-	:type name: string
-	:param data: modalities/labels of the attribute
-	:type atype: list
-	"""
-	
+        
+        For nominal and ranking attributes, pass the possible values as data.   
+        
+        :param atype: 'numeric', 'string', 'ranking' and 'nominal'.
+        :type atype: string
+        :param name: name of the attribute
+        :type name: string
+        :param data: modalities/labels of the attribute
+        :type atype: list
+        """
+        
         self.attributes.append(name)
         self.attribute_types[name] = atype
         self.attribute_data[name] = data
@@ -463,10 +465,10 @@ class ArffFile(object):
             self.define_attribute(name, 'numeric')
         elif atypel == 'string':
             self.define_attribute(name, 'string')
-	elif atypel == 'ranking':
-	    labelrow=l[3]
-	    labels = [s.strip () for s in labelrow[1:-1].split(',')]
-	    self.define_attribute(name, 'ranking', labels)
+        elif atypel == 'ranking':
+            labelrow=l[3]
+            labels = [s.strip () for s in labelrow[1:-1].split(',')]
+            self.define_attribute(name, 'ranking', labels)
         elif atype[0] == '{' and atype[-1] == '}':
             values = [s.strip () for s in atype[1:-1].split(',')]
             self.define_attribute(name, 'nominal', values)
@@ -493,11 +495,11 @@ class ArffFile(object):
                     return
             elif at == 'string':
                 datum.append(v)
-	    elif at == 'ranking':
-		for k in v.split('>'):
-		    if k not in self.attribute_data[n]:
-			self.__print_warning('incorrect label %s for ranking attribute %s' % (v, n))
-		datum.append(v)
+            elif at == 'ranking':
+                for k in v.split('>'):
+                    if k not in self.attribute_data[n]:
+                        self.__print_warning('incorrect label %s for ranking attribute %s' % (v, n))
+                datum.append(v)
             elif at == 'nominal':
                 if v in self.attribute_data[n]:
                     datum.append(v)
