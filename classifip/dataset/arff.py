@@ -395,7 +395,7 @@ class ArffFile(object):
                 if at == 'numeric':
                     line.append(str(e))
                 elif at == 'string':
-                    line.append(esc(e))
+                    line.append(self.esc(e))
                 elif at == 'nominal':
                     line.append(e)
                 elif at == 'ranking':
@@ -456,7 +456,7 @@ class ArffFile(object):
     def __parse_attribute(self, l):
         p = re.compile(r'[a-zA-Z_-][a-zA-Z0-9_-]*|\{[^\}]+\}|\'[^\']+\'|\"[^\"]+\"')
         l = [s.strip() for s in p.findall(l)]
-        name = l[1]
+        name = l[1].replace("'","") # Modification : all ' in typename are removed
         atype = l[2]
         atypel = atype.lower()
         if (atypel == 'real' or
