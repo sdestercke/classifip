@@ -90,7 +90,7 @@ class IntervalsProbability(object):
         upperProbability=min(self.lproba[0,subset[:]==1].sum(),1-self.lproba[1,subset[:]==0].sum())
         return upperProbability
     
-    def getlowerexpectation(self,function):
+    def getlowerexp(self,function):
         """Compute the lower expectation of a given (bounded) function by using
         the Choquet integral
         
@@ -115,7 +115,7 @@ class IntervalsProbability(object):
             lowerexpe=lowerexpe+addedval*self.getlowerprobability(event)
         return lowerexpe
     
-    def getupperexpectation(self,function):
+    def getupperexp(self,function):
         """Compute the upper expectation of a given (bounded) function by using
         the Choquet integral
         

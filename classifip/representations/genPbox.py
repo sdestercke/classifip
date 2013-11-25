@@ -111,7 +111,7 @@ class GenPbox(object):
         upperProbability=1-self.getlowerprobability(compsub)
         return upperProbability
     
-    def getlowerexpectation(self,function):
+    def getlowerexp(self,function):
         """Compute the lower expectation of a given (bounded) function by using
         the Choquet integral
         
@@ -136,7 +136,7 @@ class GenPbox(object):
             lowerexpe=lowerexpe+addedval*self.getlowerprobability(event)
         return lowerexpe
     
-    def getupperexpectation(self,function):
+    def getupperexp(self,function):
         """Compute the upper expectation of a given (bounded) function by using
         the Choquet integral
         
