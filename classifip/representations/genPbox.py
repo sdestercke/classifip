@@ -76,7 +76,7 @@ class GenPbox(object):
             raise Exception('Expecting a numpy array as argument')
         if subset.size != self.nbDecision:
             raise Exception('Subset incompatible with the frame size')
-        lowerprobability=0
+        lowerprobability=0.
         start=0
         for i in range(self.nbDecision):
             if start==0 and subset[i]==1 and i==0:
@@ -110,6 +110,47 @@ class GenPbox(object):
         compsub=np.array([fabs(i) for i in subset]).astype(int)
         upperProbability=1-self.getlowerprobability(compsub)
         return upperProbability
+    
+    def getlowerexpectation(self,function):
+        """Compute the lower expectation of a given (bounded) function by using
+        the Choquet integral
+        
+        :param function: the function values
+        :param type: np.array
+        :returns: lower expectation value
+        :rtype: float
+        """
+        lowerexpe=0.
+        if function.__class__.__name__!='ndarray':
+            raise Exception('Expecting a numpy array as argument')
+        if function.size != self.nbDecision:
+            raise Exception('number of elements incompatible with the frame size')
+        function=function.astype(float)
+        sortedf=np.sort(function)
+        indexedf=np.argsort(function)
+        lowerexpe=lowerexpe+sortedf[0]
+        for i in range(self.nbDecision)[1:]:
+            addedval=sortedf[i]-sortedf[i-1]
+            event=np.zeros(self.nbDecision)
+            event[indexedf[i:]]=1
+            lowerexpe=lowerexpe+addedval*self.getlowerprobability(event)
+        return lowerexpe
+    
+    def getupperexpectation(self,function):
+        """Compute the upper expectation of a given (bounded) function by using
+        the Choquet integral
+        
+        :param function: the function values
+        :param type: np.array
+        :returns: upper expectation value
+        :rtype: float
+        """
+        if function.__class__.__name__!='ndarray':
+            raise Exception('Expecting a numpy array as argument')
+        if function.size != self.nbDecision:
+            raise Exception('number of elements incompatible with the frame size')
+        upperexpe=-self.getlowerexpectation(-function)
+        return upperexpe
             
     def nc_maximin_decision(self):
         """Return the maximin classification decision (nc: no costs)
