@@ -340,9 +340,7 @@ class CredalSet(object):
         :rtype: float
         """
         
-        objneg=-obj
         lowexp=self.getlowerexp(-obj)
-        
         return -lowexp
 
     def __str__(self):

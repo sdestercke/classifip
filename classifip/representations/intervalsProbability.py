@@ -89,6 +89,47 @@ class IntervalsProbability(object):
             self.setreachableprobability()
         upperProbability=min(self.lproba[0,subset[:]==1].sum(),1-self.lproba[1,subset[:]==0].sum())
         return upperProbability
+    
+    def getlowerexp(self,function):
+        """Compute the lower expectation of a given (bounded) function by using
+        the Choquet integral
+        
+        :param function: the function values
+        :param type: np.array
+        :returns: lower expectation value
+        :rtype: float
+        """
+        lowerexpe=0.
+        if function.__class__.__name__!='ndarray':
+            raise Exception('Expecting a numpy array as argument')
+        if function.size != self.nbDecision:
+            raise Exception('number of elements incompatible with the frame size')
+        function=function.astype(float)
+        sortedf=np.sort(function)
+        indexedf=np.argsort(function)
+        lowerexpe=lowerexpe+sortedf[0]
+        for i in range(self.nbDecision)[1:]:
+            addedval=sortedf[i]-sortedf[i-1]
+            event=np.zeros(self.nbDecision)
+            event[indexedf[i:]]=1
+            lowerexpe=lowerexpe+addedval*self.getlowerprobability(event)
+        return lowerexpe
+    
+    def getupperexp(self,function):
+        """Compute the upper expectation of a given (bounded) function by using
+        the Choquet integral
+        
+        :param function: the function values
+        :param type: np.array
+        :returns: upper expectation value
+        :rtype: float
+        """
+        if function.__class__.__name__!='ndarray':
+            raise Exception('Expecting a numpy array as argument')
+        if function.size != self.nbDecision:
+            raise Exception('number of elements incompatible with the frame size')
+        upperexpe=-self.getlowerexpectation(-function)
+        return upperexpe
 
     def isreachable(self):
         """Check if the probability intervals are reachable (are coherent)
