@@ -176,6 +176,26 @@ class ArffFile(object):
         selection.comment=self.comment[:]
         
         return selection 
+    
+    def remove_col(self,column):
+        """return an ARFF File where the the column specified is removed
+        
+        :param column: name of the attribute
+        :type column: string
+        :return: a new ArffFile structure excluding the specified column
+        :rtype: :class:`~classifip.dataset.arff.ArffFile`
+        """
+        if column not in self.attribute_data.keys():
+            raise NameError("Cannot find specified column.")
+        
+        selection=self
+        col_ind=self.attributes.index(column)
+        del selection.attributes[col_ind]
+        del selection.attribute_types[column]
+        del selection.attribute_data[column]
+        selection.data = [row[0:col_ind] + row[(col_ind+1):] for row in self.data]
+        
+        return selection
 
     def make_clone(self):
         """Make a copy of the current object
