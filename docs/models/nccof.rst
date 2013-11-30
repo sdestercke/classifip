@@ -2,8 +2,8 @@
     :synopsis: ordinal classification with gen p-boxes and binary decompostion
 .. moduleauthor:: Sebastien Destercke <sebastien.destercke@hds.utc.fr> 
 
-NCC
----
+NCCOF
+-----
 
 .. autoclass:: NCCOF
    :members:

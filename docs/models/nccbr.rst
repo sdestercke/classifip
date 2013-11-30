@@ -2,8 +2,8 @@
     :synopsis: multilabel binary relevance with naive credal classification
 .. moduleauthor:: Sebastien Destercke <sebastien.destercke@hds.utc.fr> 
 
-NCC
----
+NCCBR
+-----
 
 .. autoclass:: NCCBR
    :members:

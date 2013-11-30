@@ -88,7 +88,7 @@ class NCCBR(object):
     
             * Precise prior
                 prior class probabilities are assumed to be precise to speed up
-                computations. The impact of the result is small, unless
+                computations. The impact on the result is small, unless
                 the number of class example in the training set is close to s or lower.
         
         .. warning::
