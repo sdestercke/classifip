@@ -11,7 +11,7 @@ NCCOF
 References
 ^^^^^^^^^^
 
-.. [#frank2001_]
+.. [#frank2001]
 
    Frank, E., & Hall, M. (2001). A Simple Approach to Ordinal Classification. 
    Machine Learning: ECML 2001, 145-156.

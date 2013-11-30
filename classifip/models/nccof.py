@@ -6,8 +6,8 @@ from math import exp
 import copy
 
 class NCCOF(object):
-    """NCCOF implements an ordinal regression method using [#frank2001]_ binary
-    decomposition ideas with NCC as a base classifier. It returns a 
+    """NCCOF implements an ordinal regression method using binary
+    decomposition [#frank2001]_ ideas with NCC as a base classifier. It returns a 
     :class:`~classifip.representations.genPbox.GenPbox` as a result
     
     :param setncc: store the various features of the ncc 
