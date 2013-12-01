@@ -236,15 +236,15 @@ class ArffFile(object):
                 for i in range(numint):
                     if i==0:
                         string=str(cutpoint[i])
-                        newname.append('<='+string[0:max(len(string),7)])
+                        newname.append('<='+string[0:min(len(string),7)])
                     elif i==(numint-1):
                         string=str(cutpoint[i-1])
-                        newname.append('>'+string[0:max(len(string),7)])
+                        newname.append('>'+string[0:min(len(string),7)])
                     else:
                         string1=str(cutpoint[i-1])
                         string2=str(cutpoint[i])
-                        newname.append('('+string1[0:max(len(string1),7)]
-                                        +';'+string2[0:max(len(string2),7)]+']')
+                        newname.append('('+string1[0:min(len(string1),7)]
+                                        +';'+string2[0:min(len(string2),7)]+']')
                 for i in range(numint):
                     if i==0:
                         datasave[(floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
@@ -270,15 +270,15 @@ class ArffFile(object):
                         for j in range(numint):
                             if j==0:
                                 string=str(cutpoint[j])
-                                newname.append('<='+string[0:max(len(string),7)])
+                                newname.append('<='+string[0:min(len(string),7)])
                             elif j==(numint-1):
                                 string=str(cutpoint[j-1])
-                                newname.append('>'+string[0:max(len(string),7)])
+                                newname.append('>'+string[0:min(len(string),7)])
                             else:
                                 string1=str(cutpoint[j-1])
                                 string2=str(cutpoint[j])
-                                newname.append('('+string1[0:max(len(string1),7)]
-                                        +';'+string2[0:max(len(string2),7)]+']')
+                                newname.append('('+string1[0:min(len(string1),7)]
+                                        +';'+string2[0:min(len(string2),7)]+']')
                         for j in range(numint):
                             if j==0:
                                 datasave[(floatdata<=cutpoint[j].astype(float)),i]=newname[j]
@@ -305,15 +305,15 @@ class ArffFile(object):
                 for i in range(numint):
                     if i==0:
                         string=str(cutpoint[i])
-                        newname.append('<='+string[0:max(len(string),7)])
+                        newname.append('<='+string[0:min(len(string),7)])
                     elif i==(numint-1):
                         string=str(cutpoint[i-1])
-                        newname.append('>'+string[0:max(len(string),7)])
+                        newname.append('>'+string[0:min(len(string),7)])
                     else:
                         string1=str(cutpoint[i-1])
                         string2=str(cutpoint[i])
-                        newname.append('('+string1[0:max(len(string1),7)]
-                                        +';'+string2[0:max(len(string2),7)]+']')
+                        newname.append('('+string1[0:min(len(string1),7)]
+                                        +';'+string2[0:min(len(string2),7)]+']')
                 for i in range(numint):
                     if i==0:
                         datasave[(floatdata<=cutpoint[i]),indexfeat]=newname[i]
@@ -338,15 +338,15 @@ class ArffFile(object):
                         for j in range(numint):
                             if j==0:
                                 string=str(cutpoint[j])
-                                newname.append('<='+string[0:max(len(string),7)])
+                                newname.append('<='+string[0:min(len(string),7)])
                             elif j==(numint-1):
                                 string=str(cutpoint[j-1])
-                                newname.append('>'+string[0:max(len(string),7)])
+                                newname.append('>'+string[0:min(len(string),7)])
                             else:
                                 string1=str(cutpoint[j-1])
                                 string2=str(cutpoint[j])
-                                newname.append('('+string1[0:max(len(string1),7)]
-                                               +';'+string2[0:max(len(string2),7)]+']')
+                                newname.append('('+string1[0:min(len(string1),7)]
+                                               +';'+string2[0:min(len(string2),7)]+']')
                         for j in range(numint):
                             if j==0:
                                 datasave[(floatdata<=cutpoint[j]),i]=newname[j]
