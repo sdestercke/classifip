@@ -218,7 +218,7 @@ class ArffFile(object):
             * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
         
         """
-        datasave=np.array(self.data).astype('|S20')
+        datasave=np.array([map(str,x) for x in self.data]).astype('|S20')
         numitem=datasave.shape[0]
         
         if discmet=='eqfreq':
@@ -226,20 +226,25 @@ class ArffFile(object):
                 if self.attribute_types[selfeat]!='numeric':
                     raise NameError("Selected feature not numeric.")
                 indexfeat=self.attributes.index(selfeat)
-                datasave=datasave[np.argsort(datasave[:,indexfeat])]
                 floatdata=datasave[:,indexfeat].astype(float)
+                datasave=datasave[np.argsort(floatdata)]
+                floatdata=floatdata[np.argsort(floatdata)]
                 cutpoint=[]
                 newname=[]
                 for i in range(numint):
                     cutpoint.append(datasave[((i+1)*(numitem/(numint)))-1,indexfeat])
                 for i in range(numint):
                     if i==0:
-                        newname.append('<='+cutpoint[i][0:min(len(cutpoint[i]),7)])
+                        string=str(cutpoint[i])
+                        newname.append('<='+string[0:max(len(string),7)])
                     elif i==(numint-1):
-                        newname.append('>'+cutpoint[i-1][0:min(len(cutpoint[i-1]),7)])
+                        string=str(cutpoint[i-1])
+                        newname.append('>'+string[0:max(len(string),7)])
                     else:
-                        newname.append('('+cutpoint[i-1][0:min(len(cutpoint[i-1]),7)]+
-                                       ';'+cutpoint[i][0:min(len(cutpoint[i]),7)]+']')
+                        string1=str(cutpoint[i-1])
+                        string2=str(cutpoint[i])
+                        newname.append('('+string1[0:max(len(string1),7)]
+                                        +';'+string2[0:max(len(string2),7)]+']')
                 for i in range(numint):
                     if i==0:
                         datasave[(floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
@@ -255,19 +260,25 @@ class ArffFile(object):
                 for i in range(len(self.attributes)):
                     feature=self.attributes[i]
                     if self.attribute_types[feature]=='numeric':
-                        datasave=datasave[np.argsort(datasave[:,i])]
                         floatdata=datasave[:,i].astype(float)
+                        datasave=datasave[np.argsort(floatdata)]
+                        floatdata=floatdata[np.argsort(floatdata)]
                         cutpoint=[]
                         newname=[]
                         for j in range(numint):
                             cutpoint.append(datasave[((j+1)*(numitem/(numint)))-1,i])
                         for j in range(numint):
                             if j==0:
-                                newname.append('<='+cutpoint[j])
+                                string=str(cutpoint[j])
+                                newname.append('<='+string[0:max(len(string),7)])
                             elif j==(numint-1):
-                                newname.append('>'+cutpoint[j-1])
+                                string=str(cutpoint[j-1])
+                                newname.append('>'+string[0:max(len(string),7)])
                             else:
-                                newname.append('('+cutpoint[j-1]+';'+cutpoint[j]+']')
+                                string1=str(cutpoint[j-1])
+                                string2=str(cutpoint[j])
+                                newname.append('('+string1[0:max(len(string1),7)]
+                                        +';'+string2[0:max(len(string2),7)]+']')
                         for j in range(numint):
                             if j==0:
                                 datasave[(floatdata<=cutpoint[j].astype(float)),i]=newname[j]
@@ -285,21 +296,24 @@ class ArffFile(object):
                 if self.attribute_types[selfeat]!='numeric':
                     raise NameError("Selected feature not numeric.")
                 indexfeat=self.attributes.index(selfeat)
-                datasave=datasave[np.argsort(datasave[:,indexfeat])]
                 floatdata=datasave[:,indexfeat].astype(float)
                 cutpoint=[]
                 newname=[]
-                totalwidth=(datasave[-1,indexfeat].astype(float)-
-                            datasave[0,indexfeat].astype(float))
+                totalwidth=(floatdata.max()-floatdata.min())
                 for i in range(numint):
-                    cutpoint.append((datasave[0,indexfeat].astype(float))+(i+1)*totalwidth/numint)
+                    cutpoint.append(floatdata.min()+(i+1)*totalwidth/numint)
                 for i in range(numint):
                     if i==0:
-                        newname.append('<='+str(cutpoint[i]))
+                        string=str(cutpoint[i])
+                        newname.append('<='+string[0:max(len(string),7)])
                     elif i==(numint-1):
-                        newname.append('>'+str(cutpoint[i-1]))
+                        string=str(cutpoint[i-1])
+                        newname.append('>'+string[0:max(len(string),7)])
                     else:
-                        newname.append('('+str(cutpoint[i-1])+';'+str(cutpoint[i])+']')
+                        string1=str(cutpoint[i-1])
+                        string2=str(cutpoint[i])
+                        newname.append('('+string1[0:max(len(string1),7)]
+                                        +';'+string2[0:max(len(string2),7)]+']')
                 for i in range(numint):
                     if i==0:
                         datasave[(floatdata<=cutpoint[i]),indexfeat]=newname[i]
@@ -315,20 +329,24 @@ class ArffFile(object):
                 for i in range(len(self.attributes)):
                     feature=self.attributes[i]
                     if self.attribute_types[feature]=='numeric':
-                        datasave=datasave[np.argsort(datasave[:,i])]
                         floatdata=datasave[:,i].astype(float)
                         cutpoint=[]
                         newname=[]
-                        totalwidth=(floatdata[-1]-floatdata[0])
+                        totalwidth=(floatdata.max()-floatdata.min())
                         for j in range(numint):
-                            cutpoint.append((datasave[0,i].astype(float))+(j+1)*totalwidth/numint)
+                            cutpoint.append(floatdata.min()+(j+1)*totalwidth/numint)
                         for j in range(numint):
                             if j==0:
-                                newname.append('<='+str(cutpoint[j]))
+                                string=str(cutpoint[j])
+                                newname.append('<='+string[0:max(len(string),7)])
                             elif j==(numint-1):
-                                newname.append('>'+str(cutpoint[j-1]))
+                                string=str(cutpoint[j-1])
+                                newname.append('>'+string[0:max(len(string),7)])
                             else:
-                                newname.append('('+str(cutpoint[j-1])+';'+str(cutpoint[j])+']')
+                                string1=str(cutpoint[j-1])
+                                string2=str(cutpoint[j])
+                                newname.append('('+string1[0:max(len(string1),7)]
+                                               +';'+string2[0:max(len(string2),7)]+']')
                         for j in range(numint):
                             if j==0:
                                 datasave[(floatdata<=cutpoint[j]),i]=newname[j]
