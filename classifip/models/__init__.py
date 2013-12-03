@@ -1,1 +1,1 @@
-from . import knn, pairpip, ncc, likovo, knnbr, likbr, nccof
+from . import knn, pairpip, ncc, likovo, knnbr, nccof
