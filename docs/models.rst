@@ -17,4 +17,6 @@ models module includes the different classifiers. Most of them have two methods:
    models/ncc
    models/pairpip
    models/knnbr
+   models/nccof
+   models/nccbr
 
