@@ -108,7 +108,7 @@ class IPKNNBR(object):
             
             
         
-    def evaluate(self,testdataset,knnbr_beta=1.5,knnbr_epsilon=0.99,knnbr_nbneigh=[3]):
+    def evaluate(self,testdataset,knnbr_beta=1.5,knnbr_epsilon=0.99,knnbr_nbneigh=[3],missing=None):
         """evaluate the instances and return a list of probability intervals
         
         :param testdataset: list of input features of instances to evaluate
@@ -147,17 +147,19 @@ class IPKNNBR(object):
                 for j in range(self.nblabels):
                     up=0.
                     down=0.
+                    randmiss=np.random.random()
                     for k in range(len(query[0])):                 
                         label_in=int(self.truelabels[query[1][k]][j])
                         expon=-((query[0][k])**(self.beta))/self.av_dist[j][label_in]
-                        print expon
                         discount=(self.epsilon)*(exp(expon))
-                        print discount
-                        if label_in==1:
-                            up+=1
-                            down+=discount
+                        if missing==None or randmiss>=missing:    
+                            if label_in==1:
+                                up+=1
+                                down+=discount
+                            else:
+                                up+=1-discount
                         else:
-                            up+=1-discount
+                            up+=1
                     resulting_score[j,0]=down
                     resulting_score[j,1]=up
                 resulting_score=resulting_score/nb_val

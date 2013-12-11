@@ -141,8 +141,8 @@ class NCCBR(object):
                                 [f_val_index])/(num_items+s_val)
                         u_numerator=u_numerator*((1-ncc_epsilon)*upper+
                                 ncc_epsilon/len(self.feature_count[count_string]))
-                    resulting_score[j,0]=u_denom/(u_denom+u_numerator)
-                    resulting_score[j,1]=l_denom/(l_denom+l_numerator)
+                    resulting_score[j,1]=u_denom/(u_denom+u_numerator)
+                    resulting_score[j,0]=l_denom/(l_denom+l_numerator)
                 result=Scores(resulting_score)
                 answers.append(result)
             final.append(answers)
