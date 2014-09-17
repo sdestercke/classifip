@@ -147,11 +147,11 @@ class IPKNNBR(object):
                 for j in range(self.nblabels):
                     up=0.
                     down=0.
-                    randmiss=np.random.random()
                     for k in range(len(query[0])):                 
                         label_in=int(self.truelabels[query[1][k]][j])
                         expon=-((query[0][k])**(self.beta))/self.av_dist[j][label_in]
                         discount=(self.epsilon)*(exp(expon))
+                        randmiss=np.random.random()
                         if missing==None or randmiss>=missing:    
                             if label_in==1:
                                 up+=1
