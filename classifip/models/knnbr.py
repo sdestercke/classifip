@@ -108,7 +108,7 @@ class IPKNNBR(object):
             
             
         
-    def evaluate(self,testdataset,knnbr_beta=1.5,knnbr_epsilon=0.99,knnbr_nbneigh=[3],missing=None):
+    def evaluate(self,testdataset,knnbr_beta=1.5,knnbr_epsilon=0.99,knnbr_nbneigh=[3],missing=None,MAR=True):
         """evaluate the instances and return a list of probability intervals
         
         :param testdataset: list of input features of instances to evaluate
@@ -158,8 +158,7 @@ class IPKNNBR(object):
                                 down+=discount
                             else:
                                 up+=1-discount
-                        else:
-                            up+=1
+                        elif MAR==False: up+=1
                     resulting_score[j,0]=down
                     resulting_score[j,1]=up
                 resulting_score=resulting_score/nb_val
