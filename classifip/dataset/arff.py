@@ -392,6 +392,7 @@ class ArffFile(object):
         a.lineno = 1
         for l in s.splitlines():
             a.__parseline(l)
+            print(a.lineno)
             a.lineno += 1
         return a
 
@@ -484,7 +485,9 @@ class ArffFile(object):
             if ll.startswith('@data'):
                 self.state = 'data'
         elif self.state == 'data':
-            if len(l) > 0 and l[0] != '%':
+            if len(l) > 0 and l[0] == '{':
+                self.__parse_sparse_data(l)
+            elif len(l) > 0 and l[0] != '%':
                 self.__parse_data(l)
 
     def __parse_relation(self, l):
@@ -513,7 +516,50 @@ class ArffFile(object):
         else:
             self.__print_warning("unsupported type " + atype + " for attribute " + name + ".")
 
+    def __append_data(self, datum, idx_attrib, value):
+        at = self.attribute_types[self.attributes[idx_attrib]]
+        if at == 'numeric':
+            if re.match(r'[+-]?[0-9]+(?:\.[0-9]*(?:[eE]-?[0-9]+)?)?', value):
+                datum.append(float(value))
+            elif value == '?':
+                datum.append(float('nan'))
+            else:
+                self.__print_warning('non-numeric value %s for numeric attribute %s' % (value, self.attributes[idx_attrib]))
+                return
+        elif at == 'string':
+            datum.append(value)
+        elif at == 'ranking':
+            for k in value.split('>'):
+                if k not in self.attribute_data[self.attributes[idx_attrib]]:
+                    self.__print_warning('incorrect label %s for ranking attribute %s' % (value, self.attributes[idx_attrib]))
+            datum.append(value)
+        elif at == 'nominal':
+            if value in self.attribute_data[self.attributes[idx_attrib]]:
+                datum.append(value)
+            elif value == '?':
+                datum.append(None)                     
+            else:
+                self.__print_warning('incorrect value %s for nominal attribute %s' % (value, self.attributes[idx_attrib]))
 
+
+    def __parse_sparse_data(self, l):
+        pairs = [s.strip() for s in l.strip('{}').split(',')]
+        nonzero=[]
+        for u in pairs:
+            nonzero.append(tuple(u.split(' ')))
+        nonzero=sorted(nonzero, key =lambda x: int(x[0]))
+        i = 0
+        datum = []
+        for j in range(0,len(self.attributes)-1):
+            if i < len(nonzero) and int(nonzero[i][0]) == j:
+                self.__append_data(datum,j,nonzero[i][1])
+                i=i+1
+            else:
+                self.__append_data(datum,j,'0')
+        #print(datum)
+        #x=input("pause")
+        self.data.append(datum)
+        
     def __parse_data(self, l):
         l = [s.strip() for s in l.split(',')]
         if len(l) != len(self.attributes):
@@ -522,30 +568,31 @@ class ArffFile(object):
 
         datum = []
         for n, v in zip(self.attributes, l):
-            at = self.attribute_types[n]
-            if at == 'numeric':
-                if re.match(r'[+-]?[0-9]+(?:\.[0-9]*(?:[eE]-?[0-9]+)?)?', v):
-                    datum.append(float(v))
-                elif v == '?':
-                    datum.append(float('nan'))
-                else:
-                    self.__print_warning('non-numeric value %s for numeric attribute %s' % (v, n))
-                    return
-            elif at == 'string':
-                datum.append(v)
-            elif at == 'ranking':
-                for k in v.split('>'):
-                    if k not in self.attribute_data[n]:
-                        self.__print_warning('incorrect label %s for ranking attribute %s' % (v, n))
-                datum.append(v)
-            elif at == 'nominal':
-                if v in self.attribute_data[n]:
-                    datum.append(v)
-                elif v == '?':
-                    datum.append(None)                     
-                else:
-                    self.__print_warning('incorrect value %s for nominal attribute %s' % (v, n))
-                    return
+            self.__append_data(datum,n,v)
+            # at = self.attribute_types[n]
+            # if at == 'numeric':
+            #     if re.match(r'[+-]?[0-9]+(?:\.[0-9]*(?:[eE]-?[0-9]+)?)?', v):
+            #         datum.append(float(v))
+            #     elif v == '?':
+            #         datum.append(float('nan'))
+            #     else:
+            #         self.__print_warning('non-numeric value %s for numeric attribute %s' % (v, n))
+            #         return
+            # elif at == 'string':
+            #     datum.append(v)
+            # elif at == 'ranking':
+            #     for k in v.split('>'):
+            #         if k not in self.attribute_data[n]:
+            #             self.__print_warning('incorrect label %s for ranking attribute %s' % (v, n))
+            #     datum.append(v)
+            # elif at == 'nominal':
+            #     if v in self.attribute_data[n]:
+            #         datum.append(v)
+            #     elif v == '?':
+            #         datum.append(None)                     
+            #     else:
+            #         self.__print_warning('incorrect value %s for nominal attribute %s' % (v, n))
+            #         return
         self.data.append(datum)
 
     def __print_warning(self, msg):
@@ -581,6 +628,8 @@ d, 3
 """)
         a.dump()
 
-    a = ArffFile.load('../examples/diabetes.arff')
+#    a = ArffFile.load('../examples/diabetes.arff')
+    a = ArffFile()
+    a.load('/home/savourey/Bureau/eurlex-sm-fold1-test.arff')
 
     print a.write()
