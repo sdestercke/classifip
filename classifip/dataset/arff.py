@@ -392,7 +392,7 @@ class ArffFile(object):
         a.lineno = 1
         for l in s.splitlines():
             a.__parseline(l)
-            print(a.lineno)
+            #print(a.lineno)
             a.lineno += 1
         return a
 
@@ -550,7 +550,7 @@ class ArffFile(object):
         nonzero=sorted(nonzero, key =lambda x: int(x[0]))
         i = 0
         datum = []
-        for j in range(0,len(self.attributes)-1):
+        for j in range(0,len(self.attributes)):
             if i < len(nonzero) and int(nonzero[i][0]) == j:
                 self.__append_data(datum,self.attributes[j],nonzero[i][1])
                 i=i+1

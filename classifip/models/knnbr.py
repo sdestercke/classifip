@@ -81,9 +81,11 @@ class IPKNNBR(object):
         
         #Initialize average distance for every possible class
         for i in self.classes:
-            class_set=learndataset.select_col_vals(i,['1'])
+            class_set=learndataset.select_col_vals(i,['0'])
             values=[row[0:len(row)-nblabels] for row in class_set.data]
-            if len(values) > 1000:
+            if len(values) < 2:
+                class_distances=np.array([0.1,0.1])
+            elif len(values) > 1000:
                 valred=np.random.permutation(values)[0:1000]
                 class_distances=distance.cdist(valred,valred)
             else:
@@ -91,9 +93,11 @@ class IPKNNBR(object):
             averagein=class_distances.sum()/(len(class_distances)**2
                                            -len(class_distances))
             
-            class_set=learndataset.select_col_vals(i,['0'])
+            class_set=learndataset.select_col_vals(i,['1'])
             values=[row[0:len(row)-nblabels] for row in class_set.data]
-            if len(values) > 1000:
+            if len(values) < 2:
+                class_distances=np.array([0.1,0.1])
+            elif len(values) > 1000:
                 valred=np.random.permutation(values)[0:1000]
                 class_distances=distance.cdist(valred,valred)
             else:
