@@ -552,10 +552,10 @@ class ArffFile(object):
         datum = []
         for j in range(0,len(self.attributes)-1):
             if i < len(nonzero) and int(nonzero[i][0]) == j:
-                self.__append_data(datum,j,nonzero[i][1])
+                self.__append_data(datum,self.attributes[j],nonzero[i][1])
                 i=i+1
             else:
-                self.__append_data(datum,j,'0')
+                self.__append_data(datum,self.attributes[j],'0')
         #print(datum)
         #x=input("pause")
         self.data.append(datum)
