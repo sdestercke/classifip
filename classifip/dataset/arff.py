@@ -516,8 +516,8 @@ class ArffFile(object):
         else:
             self.__print_warning("unsupported type " + atype + " for attribute " + name + ".")
 
-    def __append_data(self, datum, idx_attrib, value):
-        at = self.attribute_types[self.attributes[idx_attrib]]
+    def __append_data(self, datum, attrib, value):
+        at = self.attribute_types[attrib]
         if at == 'numeric':
             if re.match(r'[+-]?[0-9]+(?:\.[0-9]*(?:[eE]-?[0-9]+)?)?', value):
                 datum.append(float(value))
@@ -530,11 +530,11 @@ class ArffFile(object):
             datum.append(value)
         elif at == 'ranking':
             for k in value.split('>'):
-                if k not in self.attribute_data[self.attributes[idx_attrib]]:
+                if k not in self.attribute_data[attrib]:
                     self.__print_warning('incorrect label %s for ranking attribute %s' % (value, self.attributes[idx_attrib]))
             datum.append(value)
         elif at == 'nominal':
-            if value in self.attribute_data[self.attributes[idx_attrib]]:
+            if value in self.attribute_data[attrib]:
                 datum.append(value)
             elif value == '?':
                 datum.append(None)                     
