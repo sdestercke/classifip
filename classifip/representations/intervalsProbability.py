@@ -1,6 +1,7 @@
 import numpy as np
+from credalset import CredalSet
 
-class IntervalsProbability(object):
+class IntervalsProbability(CredalSet):
     """Class of probability intervals: probabilistic bounds on singletons
     
     :param lproba: a 2xn array containing upper (1st row) and lower bounds

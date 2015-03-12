@@ -1,7 +1,8 @@
 import numpy as np
+from credalset import CredalSet
 from math import fabs
 
-class GenPbox(object):
+class GenPbox(CredalSet):
     """Class of (discrete) generalized p-box: probabilistic bounds on nested
     events of a pre-ordered space. Bounds should be monotically increasing with
     a (reached) maximum of one
