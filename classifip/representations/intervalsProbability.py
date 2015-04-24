@@ -41,7 +41,7 @@ class IntervalsProbability(CredalSet):
         if np.all(lproba[0] >=lproba[1]) != 1:
             raise Exception('Some upper bounds lower than lower bounds')
 
-   def isproper(self):
+    def isproper(self):
         """Check if probability intervals induce a non-empty probability set. 
         
         :returns: 0 (empty/incur sure loss) or 1 (non-empty/avoid sure loss).

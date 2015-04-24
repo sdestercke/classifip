@@ -26,17 +26,49 @@ class CredalSet(object):
         thresholds.
     
     >>> from classifip.representations import credalset
-    >>> Test=credalset.CredalSet(4)
     >>> from numpy import array
+    >>> Test=credalset.CredalSet(4)
     >>> Constraints=array([[-1.,1.,0.,0.,0.],[0.,-1.,1.,0.,0.],[0.,0.,-1.,1.,0]])
     >>> Test.addconstraints(Constraints)
     >>> Test.isproper()
     1
-    >>> subset=array([1.,0.,0.,1.])
-    >>> Test.getlowerprobability(subset)
-    0.33333333616905164
-    >>> Test.nc_maximax_decision()
+    >>> Test.isreachable()
+    1
+    >>> Test.addconstraints(array([[0.,1.,0.,0.,0.75]]))
+    >>> Test.isreachable()
     0
+    >>> Test.setreachableprobability()
+    0
+    >>> Test.isreachable()
+    1
+    >>> subset=array([1.,0.,0.,1.])
+    >>> subset2=array([0.,1.,1.,0.])
+    >>> Test.getlowerprobability(subset)
+    0.33333333201119253
+    >>> Test.getupperprobability(subset2)
+    0.6666666679888072
+    >>> Test.getmaximaxdecision()
+    0
+    >>> Test.getintervaldomdecision()
+    array([ 1.,  1.,  1.,  1.])
+    >>> Test.getmaximaldecision()
+    array([ 1.,  1.,  1.,  1.])
+    >>> Test.gethurwiczdecision(0.2)
+    0
+    >>> Test.getmaximindecision()
+    0
+    >>> Costs=array([[2.,3.3,0.,6.],[1.,5.,3.,2.],[4.,1.,4.,3.],[0.9,0.9,0.9,0.9]])
+    >>> Test.getmaximaxdecision(Costs)
+    2
+    >>> Test.getintervaldomdecision(Costs)
+    array([ 1.,  1.,  1.,  0.])
+    >>> Test.getmaximaldecision(Costs)
+    array([ 1.,  1.,  1.,  0.])
+    >>> Test.gethurwiczdecision(0.2,Costs)
+    2
+    >>> Test.getmaximindecision(Costs)
+    2
+
     """
     
     def __init__(self,spacesize):
