@@ -112,7 +112,7 @@ class GenPbox(CredalSet):
         upperProbability=1-self.getlowerprobability(compsub)
         return upperProbability
     
-    def getlowerexp(self,function):
+    def getlowerexpectation(self,function):
         """Compute the lower expectation of a given (bounded) function by using
         the Choquet integral
         
@@ -137,121 +137,6 @@ class GenPbox(CredalSet):
             lowerexpe=lowerexpe+addedval*self.getlowerprobability(event)
         return lowerexpe
     
-    def getupperexp(self,function):
-        """Compute the upper expectation of a given (bounded) function by using
-        the Choquet integral
-        
-        :param function: the function values
-        :param type: np.array
-        :returns: upper expectation value
-        :rtype: float
-        """
-        if function.__class__.__name__!='ndarray':
-            raise Exception('Expecting a numpy array as argument')
-        if function.size != self.nbDecision:
-            raise Exception('number of elements incompatible with the frame size')
-        upperexpe=-self.getlowerexpectation(-function)
-        return upperexpe
-            
-    def nc_maximin_decision(self):
-        """Return the maximin classification decision (nc: no costs)
-
-        :returns: the index of the maximin class
-        :rtype: integer
-        
-        """
-        
-        decision=0
-        currentval=0
-        for i in range(self.nbDecision):
-            if i==0:
-                if max(0,self.lproba[1,i]-0) > currentval:
-                    currentval=max(0,self.lproba[1,i]-self.lproba[0,i-1])
-                    decision=i
-            else:
-                if max(0,self.lproba[1,i]-self.lproba[0,i-1]) > currentval:
-                    currentval=max(0,self.lproba[1,i]-self.lproba[0,i-1])
-                    decision=i
-        return decision
-        
-    def nc_maximax_decision(self):
-        """Return the maximax classification decision (nc: no costs)
-        
-        :returns: the index of the maximax class
-        :rtype: integer
-        
-        """
-        
-        decision=0
-        currentval=0
-        for i in range(self.nbDecision):
-            if i==0:
-                if self.lproba[0,i]-self.lproba[1,i-1] > currentval:
-                    currentval=self.lproba[0,i]-self.lproba[1,i-1]
-                    decision=i
-            else:
-                if self.lproba[0,i]-0 > currentval:
-                    currentval=self.lproba[0,i]-self.lproba[1,i-1]
-                    decision=i
-        return decision
-        
-    def nc_hurwicz_decision(self,alpha):
-        """Return the maximax classification decision (nc: no costs)
-        
-        :param alpha: the optimism index :math:`\\alpha` between 1 (optimistic)
-            and 0 (pessimistic)
-        :param type: float
-        :return: the index of the hurwicz class
-        :rtype: integer
-        
-        """
-        
-        hurwicz=np.zeros(self.nbDecision)
-        for i in range(self.nbDecision):
-            subset=np.zeros(self.nbDecision)
-            subset[i]=1
-            hurwicz[i]=alpha*self.getupperprobability(subset)+(1-alpha)*self.getlowerprobability(subset)
-        return hurwicz.argmax()
-        
-    def nc_maximal_decision(self):
-        """Return the classification decisions using maximality (nc: no costs)
-        
-        :return: the set of optimal classes (under maximality) as a 1xn vector
-            where indices of optimal classes are set to one
-        :rtype: np.array
-        
-        """
-
-        #use the fact that with no specified costs, maximality=interval_dom with this model
-        maximality_classe=self.nc_intervaldom_decision()
-        return maximality_classe
-    
-    def nc_intervaldom_decision(self):
-        """Return the classification decisions using interval dominance (nc: no costs)
-        
-        :return: the set of optimal classes (under int. dom.) as a 1xn vector
-            where indices of optimal classes are set to one
-        :rtype: :class:`~numpy.array`
-        
-        """
-        intervaldom_classe=np.ones(self.nbDecision)
-        maxlower=0
-        for i in range(self.nbDecision):
-            if i==0:
-                if max(0,self.lproba[1,i]-0) > maxlower:
-                    maxlower=max(0,self.lproba[1,i]-0)
-            else:
-                if max(0,self.lproba[1,i]-self.lproba[0,i-1]) > maxlower:
-                    maxlower=max(0,self.lproba[1,i]-self.lproba[0,i-1])
-        for i in range(self.nbDecision):
-            if i==0:
-                if self.lproba[0,i]-0 < maxlower:
-                        intervaldom_classe[i]=0
-            else:
-                if self.lproba[0,i]-self.lproba[1,i-1]  < maxlower:
-                        intervaldom_classe[i]=0
-        return intervaldom_classe
-
     def __str__(self):
         """Print the current bounds 
         """  

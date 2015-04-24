@@ -41,7 +41,7 @@ class IntervalsProbability(CredalSet):
         if np.all(lproba[0] >=lproba[1]) != 1:
             raise Exception('Some upper bounds lower than lower bounds')
 
-    def isproper(self):
+   def isproper(self):
         """Check if probability intervals induce a non-empty probability set. 
         
         :returns: 0 (empty/incur sure loss) or 1 (non-empty/avoid sure loss).
@@ -91,7 +91,7 @@ class IntervalsProbability(CredalSet):
         upperProbability=min(self.lproba[0,subset[:]==1].sum(),1-self.lproba[1,subset[:]==0].sum())
         return upperProbability
     
-    def getlowerexp(self,function):
+    def getlowerexpectation(self,function):
         """Compute the lower expectation of a given (bounded) function by using
         the Choquet integral
         
@@ -115,22 +115,6 @@ class IntervalsProbability(CredalSet):
             event[indexedf[i:]]=1
             lowerexpe=lowerexpe+addedval*self.getlowerprobability(event)
         return lowerexpe
-    
-    def getupperexp(self,function):
-        """Compute the upper expectation of a given (bounded) function by using
-        the Choquet integral
-        
-        :param function: the function values
-        :param type: np.array
-        :returns: upper expectation value
-        :rtype: float
-        """
-        if function.__class__.__name__!='ndarray':
-            raise Exception('Expecting a numpy array as argument')
-        if function.size != self.nbDecision:
-            raise Exception('number of elements incompatible with the frame size')
-        upperexpe=-self.getlowerexpectation(-function)
-        return upperexpe
 
     def isreachable(self):
         """Check if the probability intervals are reachable (are coherent)
@@ -165,73 +149,6 @@ class IntervalsProbability(CredalSet):
         else:
             raise Exception('intervals inducing empty set: operation not possible')
             
-    def nc_maximin_decision(self):
-        """Return the maximin classification decision (nc: no costs)
-
-        :returns: the index of the maximin class
-        :rtype: integer
-        
-        """
-        if self.isreachable()==0:
-            self.setreachableprobability()
-        return self.lproba[1,:].argmax()
-        
-    def nc_maximax_decision(self):
-        """Return the maximax classification decision (nc: no costs)
-        
-        :returns: the index of the maximax class
-        :rtype: integer
-        
-        """
-        if self.isreachable()==0:
-            self.setreachableprobability()
-        return self.lproba[0,:].argmax()
-        
-    def nc_hurwicz_decision(self,alpha):
-        """Return the maximax classification decision (nc: no costs)
-        
-        :param alpha: the optimism index :math:`\\alpha` between 1 (optimistic)
-            and 0 (pessimistic)
-        :param type: float
-        :return: the index of the hurwicz class
-        :rtype: integer
-        
-        """
-        if self.isreachable()==0:
-            self.setreachableprobability()
-        hurwicz=alpha*self.lproba[0,:]+(1-alpha)*self.lproba[1,:]
-        return hurwicz.argmax()
-        
-    def nc_maximal_decision(self):
-        """Return the classification decisions using maximality (nc: no costs)
-        
-        :return: the set of optimal classes (under maximality) as a 1xn vector
-            where indices of optimal classes are set to one
-        :rtype: np.array
-        
-        """
-        if self.isreachable()==0:
-            self.setreachableprobability()
-        #use the fact that with no specified costs, maximality=interval_dom with this model
-        maximality_classe=self.nc_intervaldom_decision()
-        return maximality_classe
-    
-    def nc_intervaldom_decision(self):
-        """Return the classification decisions using interval dominance (nc: no costs)
-        
-        :return: the set of optimal classes (under int. dom.) as a 1xn vector
-            where indices of optimal classes are set to one
-        :rtype: :class:`~numpy.array`
-        
-        """
-        if self.isreachable()==0:
-            self.setreachableprobability()
-        intervaldom_classe=np.ones(self.nbDecision)
-        maxlower=self.lproba[1,:].max()
-        for i in range(self.nbDecision):
-                if self.lproba[0,i] < maxlower:
-                        intervaldom_classe[i]=0
-        return intervaldom_classe
 
     def __str__(self):
         """Print the current bounds 
