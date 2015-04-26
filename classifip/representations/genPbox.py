@@ -53,15 +53,37 @@ class GenPbox(CredalSet):
         :rtype: integer
         
         """
-    
-        #check that bounds are monotically increasing
+        #check inequality of bounds    
+        if all(x<=y for x, y in zip(self.lproba[1,:], self.lproba[0,:]))==False:
+            return 0
+        return 1
+
+    def isreachable(self):
+        """Check if generalized p-box is reachable (is coherent)
+        
+        :returns: 0 (not coherent/tight) or 1 (tight/coherent).
+        :rtype: integer
+        
+        """
+        #check that bounds are monotically increasing        
         if all(x<=y for x, y in zip(self.lproba[1,:], self.lproba[1,1:]))==False:
             return 0
         if all(x<=y for x, y in zip(self.lproba[0,:], self.lproba[0,1:]))==False:
             return 0
-        if all(x<=y for x, y in zip(self.lproba[1,:], self.lproba[0,:]))==False:
-            return 0
         return 1
+    
+    def setreachableprobability(self):
+        """Make the bounds reachable.
+        
+        """    
+        if self.isproper()==1:
+            for i in range(self.nbDecision-1):
+                if self.lproba[0,i] > self.lproba[0,i+1]:
+                    self.lproba[0,i+1]=self.lproba[0,i]
+                if self.lproba[1,i] > self.lproba[1,i+1]:
+                    self.lproba[1,i+1]=self.lproba[1,i]
+        else:
+            raise Exception('p-box inducing empty set: operation not possible')
 
     def getlowerprobability(self,subset):
         """Compute lower probability of an event expressed in binary code. 
