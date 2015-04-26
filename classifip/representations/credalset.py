@@ -384,4 +384,22 @@ class CredalSet(object):
     def __str__(self):
         """Print the current contraints
         """
-        return "TODOYOURSELF"
+        str3=""
+        i=0
+        for interval in range(self.nbDecision):
+            str3+="    y%d  " %i
+            i+=1
+        str3+=" |  Upper bound "
+        str3+="\n"
+        str3+="---------------------------------------------"
+        for j in range(self.nbDecision,self.const.shape[0]):
+            strconst=""
+            for k in range(self.nbDecision):
+                if self.const[j,k] < 0.:
+                    strconst+=" %.3f " % self.const[j,k]
+                if self.const[j,k] >= 0.:
+                    strconst+="  %.3f " % self.const[j,k]
+            strconst+=" |  %.3f " % self.const[j,self.nbDecision]
+            str3+="\n"
+            str3+=strconst
+        return str3

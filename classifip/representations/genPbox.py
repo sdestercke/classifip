@@ -16,11 +16,21 @@ class GenPbox(CredalSet):
     >>> ip=array([[0.5, 0.7, 1.], [0.3, 0.5, 1.]])
     >>> from classifip.representations.genPbox import GenPbox
     >>> pbox=GenPbox(ip)
-    >>> print(GenPbox)
+    >>> print(pbox)
                      y0    y1    y2 
                --------------------
     upper bound | 0.500 0.700 1.000`
     lower bound | 0.300 0.500 1.000
+    
+    >>> pbox.getlowerprobability(subset)
+    0.5
+    >>> pbox.getupperprobability(subset)
+    0.69999999999999996
+    >>> pbox.isreachable()
+    1
+    >>> obj=array([1.,2.,3.])
+    >>> pbox.getupperexpectation(obj)
+    2.2000000000000002
     
     .. todo::
     
