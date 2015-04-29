@@ -39,6 +39,18 @@ class IntervalsProbability(CredalSet):
     upper bound | 0.450 0.500 0.550
     lower bound | 0.050 0.100 0.150
     
+    >>> ip3=array([[0.7, 0.5, 0.2], [0.4, 0.2, 0.1]])
+    >>> intprob3=IntervalsProbability(ip3)
+    >>> intprob3.isreachable()
+    1
+    >>> intprob3.getmaximindecision()
+    0
+    >>> intprob3.getmaximaxdecision()
+    0
+    >>> intprob3.getintervaldomdecision()
+    array([ 1.,  1.,  0.])
+    >>> intprob3.getmaximaldecision()
+    array([ 1.,  1.,  0.])
     """
     
     def __init__(self,lproba):
