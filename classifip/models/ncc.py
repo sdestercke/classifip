@@ -84,10 +84,6 @@ class NCC(object):
         :rtype: lists of :class:`~classifip.representations.intervalsProbability.IntervalsProbability` or
             lists of :class:`~classifip.representations.voting.Scores`
         .. note::
-    
-            * Probability intervals output
-                as the function returns a probability interval, interval dominance
-                is exact but maximality is not.
             
             * Precise prior
                 prior class probabilities are assumed to be precise to speed up
