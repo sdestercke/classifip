@@ -120,3 +120,17 @@ class ProbaDis(CredalSet):
         str3+="\n"
         return str3
 
+    def __and__(self,other):
+        """Compute the intersection of two probabilities
+        """  
+        if self.proba==other.proba:
+            return ProbaDis(self.proba)
+        else:
+            raise Exception('empty intersection, unequal probabilities')
+        
+    def __add__(self,other):
+        """Compute the average of two probability intervals
+        """  
+        fusedproba=np.zeros(self.nbDecision)
+        fusedproba=np.mean([self.proba,other.proba],axis=0)
+        return ProbaDis(fusedproba)
