@@ -208,13 +208,17 @@ class CredalSet(object):
     def getmaximindecision(self,costs=None):
         """Return the maximin classification decision
 
+        :param costs: the cost matrix entered as an np array
+        :param type: np.array
         :returns: the index of the maximin class
         :rtype: integer
         
         """
-
         if costs is None:
             costs=np.identity(self.nbDecision)
+        
+        if costs.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in costs')
 
         if self.isreachable()==0:
             self.setreachableprobability()
@@ -231,13 +235,18 @@ class CredalSet(object):
         
     def getmaximaxdecision(self, costs=None):
         """Return the maximax classification decision
-        
+
+        :param costs: the cost matrix entered as an np array
+        :param type: np.array
         :returns: the index of the maximax class
         :rtype: integer
         
         """
         if costs is None:
             costs=np.identity(self.nbDecision)
+        
+        if costs.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in costs')
 
         if self.isreachable()==0:
             self.setreachableprobability()
@@ -254,7 +263,9 @@ class CredalSet(object):
         
     def gethurwiczdecision(self,alpha,costs=None):
         """Return the maximax classification decision
-        
+
+        :param costs: the cost matrix entered as an np array
+        :param type: np.array
         :param alpha: the optimism index :math:`\\alpha` between 1 (optimistic)
             and 0 (pessimistic)
         :param type: float
@@ -264,6 +275,9 @@ class CredalSet(object):
         """
         if costs is None:
             costs=np.identity(self.nbDecision)
+        
+        if costs.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in costs')
 
         if self.isreachable()==0:
             self.setreachableprobability()
@@ -283,6 +297,8 @@ class CredalSet(object):
     def getmaximaldecision(self, costs=None):
         """Return the classification decisions using maximality
         
+        :param costs: the cost matrix entered as an np array
+        :param type: np.array
         :return: the set of optimal classes (under maximality) as a 1xn vector
             where indices of optimal classes are set to one
         :rtype: np.array
@@ -290,6 +306,9 @@ class CredalSet(object):
         """
         if costs is None:
             costs=np.identity(self.nbDecision)
+        
+        if costs.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in costs')
             
         if self.isreachable()==0:
             self.setreachableprobability()
@@ -307,6 +326,8 @@ class CredalSet(object):
     def getintervaldomdecision(self, costs=None):
         """Return the classification decisions using interval dominance
         
+        :param costs: the cost matrix entered as an np array
+        :param type: np.array
         :return: the set of optimal classes (under int. dom.) as a 1xn vector
             where indices of optimal classes are set to one
         :rtype: :class:`~numpy.array`
@@ -314,7 +335,10 @@ class CredalSet(object):
         """
         if costs is None:
             costs=np.identity(self.nbDecision)
-
+        
+        if costs.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in costs')
+        
         if self.isreachable()==0:
             self.setreachableprobability()
         
