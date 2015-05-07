@@ -155,9 +155,9 @@ class NCC(object):
                         resulting_int[0,cl_index]=u_denom/(u_denom+u_numerator)
                         resulting_int[1,cl_index]=l_denom/(l_denom+l_numerator)
                     cl_index+=1
-                if maxi==False and s!=0:
+                if maxi==False and s_val!=0:
                     result=IntervalsProbability(resulting_int)
-                elif maxi==False and s==0:
+                elif maxi==False and s_val==0:
                     result=Probadis(resulting_int[0,:]/resulting_int[0,:].sum())
                 else:
                     result=Scores(resulting_sc)
