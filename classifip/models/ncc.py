@@ -158,7 +158,7 @@ class NCC(object):
                 if maxi==False and s_val!=0:
                     result=IntervalsProbability(resulting_int)
                 elif maxi==False and s_val==0:
-                    result=Probadis(resulting_int[0,:]/resulting_int[0,:].sum())
+                    result=ProbaDis(resulting_int[0,:]/resulting_int[0,:].sum())
                 else:
                     result=Scores(resulting_sc)
                 answers.append(result)
