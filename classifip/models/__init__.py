@@ -1,1 +1,1 @@
-from . import knn, pairpip, ncc, likovo, knnbr, nccof
+from . import knn, pairpip, ncc, likovo, knnbr, nccof, nestedDichotomies

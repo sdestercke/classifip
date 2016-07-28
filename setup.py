@@ -14,11 +14,11 @@ Operating System :: OS Independent"""
 
 setup(
     name='classifip',
-    version='0.1.7',
+    version='0.2.1',
     author='Sebastien Destercke',
     author_email='sebastien.destercke@hds.utc.fr',
     packages=find_packages(),
-    #['ClassifIP','ClassifIP.dataset', 'ClassifIP.evaluation', 'ClassifIP.models', 'ClassifIP.representations'],
+    #['Classifip','Classifip.dataset', 'Classifip.evaluation', 'Classifip.models', 'Classifip.representations'],
     url='http://pypi.python.org/pypi/classifip/',
     license="GNU General Public License (GPL)",
     platforms = "any",
