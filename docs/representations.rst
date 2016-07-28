@@ -15,3 +15,4 @@ comes with a set of prediction rules, both precise (maximax, maximin, ...) and i
    representations/voting
    representations/credalset
    representations/genpbox
+   representations/binarytree

@@ -19,4 +19,4 @@ models module includes the different classifiers. Most of them have two methods:
    models/knnbr
    models/nccof
    models/nccbr
-
+   models/nesteddichotomies
