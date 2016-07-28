@@ -103,8 +103,8 @@ class NCCBR(object):
         final=[]
         
         #computing label proportions
-        label_prop=[n/self.trainingsize for n in self.labelcounts]
-        
+        label_prop=[n/float(self.trainingsize) for n in self.labelcounts]
+        print label_prop
         for item in testdataset:
             answers=[]
             for s_val in ncc_s_param:
@@ -112,6 +112,7 @@ class NCCBR(object):
                 resulting_score=np.zeros((self.nblabels,2))
                 #computes product of lower/upper prob for each class
                 for j in range(self.nblabels):
+                    print j
                     u_numerator=1-label_prop[j]
                     l_numerator=1-label_prop[j]
                     u_denom=label_prop[j]
