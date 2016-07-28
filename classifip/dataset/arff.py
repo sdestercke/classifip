@@ -177,6 +177,59 @@ class ArffFile(object):
         
         return selection 
     
+    
+    def select_class_binary(self, positive, negative):
+        """return an ARFF object where only some classes are selected in order
+        to form a dataset for a binary classification problem.
+        
+        :param select: the names of the classes to retain
+        :type select: list
+                
+        :param positive: classes values to be considered as 'positive' in the binary
+        classification problem
+        :type positive:list
+        
+        :param positive: classes values to be considered as 'positive' in the binary
+        classification problem
+        :type positive:list
+        
+        :returns: a new ArffFile structure containing only selected classes
+        :rtype: list of strings, :class:`~classifip.dataset.arff.ArffFile`
+        
+
+        """
+        if 'class' not in self.attribute_data.keys():
+            raise NameError("Cannot find a class attribute.")
+        if set(positive) - set(self.attribute_data['class'])!=set([]):
+            raise NameError("Specified 'positive' classes not a subset of existing ones!")
+        
+        if set(negative) - set(self.attribute_data['class'])!=set([]):
+            raise NameError("Specified 'negative' classes not a subset of existing ones!")
+        
+        selection=copy.deepcopy(self)
+        #initiate the variable for the output data
+        selected_data=[]         
+        
+        #construct list with sets of indices matching class names
+        #assume the class is the last provided item
+        #and form data corresponding to provided class
+        for i,val in enumerate(self.data) :
+    
+            if val[-1] in positive :
+                buff = self.data[i][:]
+                buff[-1] = 'positive'
+                selected_data.append(buff)
+    
+            elif val[-1] in negative:
+                buff = self.data[i][:]
+                buff[-1] = 'negative'
+                selected_data.append(buff)
+    
+        selection.attribute_data['class']=['positive','negative']
+        selection.data = selected_data
+    
+        return selection
+    
     def remove_col(self,column):
         """return an ARFF File where the the column specified is removed
         
@@ -238,7 +291,7 @@ class ArffFile(object):
             * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
         
         """
-        datasave=np.array([map(str,x) for x in self.data]).astype('|S20')
+        datasave=np.array([map(str,x) for x in self.data]).astype('|S25')
         numitem=datasave.shape[0]
         
         if discmet=='eqfreq':
@@ -563,7 +616,7 @@ class ArffFile(object):
     def __parse_data(self, l):
         l = [s.strip() for s in l.split(',')]
         if len(l) != len(self.attributes):
-            self.__print_warning("contains wrong number of values")
+#             self.__print_warning("contains wrong number of values")
             return 
 
         datum = []
