@@ -231,7 +231,7 @@ class ArffFile(object):
         return selection
     
     def remove_col(self,column):
-        """return an ARFF File where the the column specified is removed
+        """return an ARFF File where the specified column is removed
         
         :param column: name of the attribute
         :type column: string
