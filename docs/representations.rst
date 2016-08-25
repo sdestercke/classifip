@@ -16,3 +16,4 @@ comes with a set of prediction rules, both precise (maximax, maximin, ...) and i
    representations/credalset
    representations/genpbox
    representations/binarytree
+   representations/linvac
