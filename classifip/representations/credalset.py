@@ -205,66 +205,66 @@ class CredalSet(object):
             raise Exception('intervals inducing empty set: operation not possible')
            
  
-    def getmaximindecision(self,costs=None):
+    def getmaximindecision(self,utilities=None):
         """Return the maximin classification decision
 
-        :param costs: the cost matrix entered as an np array
+        :param utilities: the utility matrix entered as an np array
         :param type: np.array
         :returns: the index of the maximin class
         :rtype: integer
         
         """
-        if costs is None:
-            costs=np.identity(self.nbDecision)
+        if utilities is None:
+            utilities=np.identity(self.nbDecision)
         
-        if costs.shape[1]!=self.nbDecision:
-            raise Exception('bad numbers of columns in costs')
+        if utilities.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in utilities')
 
         if self.isreachable()==0:
             self.setreachableprobability()
         
         optdec=0
         maxlprob=0.
-        for i in range(len(costs)):
-            objective=costs[i]
+        for i in range(len(utilities)):
+            objective=utilities[i]
             sol=self.getlowerexpectation(objective)
             if sol>maxlprob :
                 maxlprob=sol
                 optdec=i
         return optdec
         
-    def getmaximaxdecision(self, costs=None):
+    def getmaximaxdecision(self, utilities=None):
         """Return the maximax classification decision
 
-        :param costs: the cost matrix entered as an np array
+        :param utilities: the utility matrix entered as an np array
         :param type: np.array
         :returns: the index of the maximax class
         :rtype: integer
         
         """
-        if costs is None:
-            costs=np.identity(self.nbDecision)
+        if utilities is None:
+            utilities=np.identity(self.nbDecision)
         
-        if costs.shape[1]!=self.nbDecision:
-            raise Exception('bad numbers of columns in costs')
+        if utilities.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in utilities')
 
         if self.isreachable()==0:
             self.setreachableprobability()
         
         optdec=0
         maxuprob=0.
-        for i in range(len(costs)):
-            objective=costs[i]
+        for i in range(len(utilities)):
+            objective=utilities[i]
             sol=self.getupperexpectation(objective)
             if sol>maxuprob :
                 maxuprob=sol
                 optdec=i
         return optdec
         
-    def gethurwiczdecision(self,alpha,costs=None):
+    def gethurwiczdecision(self,alpha,utilities=None):
         """Return the maximax classification decision
 
-        :param costs: the cost matrix entered as an np array
+        :param utilities: the utility matrix entered as an np array
         :param type: np.array
         :param alpha: the optimism index :math:`\\alpha` between 1 (optimistic)
             and 0 (pessimistic)
@@ -273,19 +273,19 @@ class CredalSet(object):
         :rtype: integer
         
         """
-        if costs is None:
-            costs=np.identity(self.nbDecision)
+        if utilities is None:
+            utilities=np.identity(self.nbDecision)
         
-        if costs.shape[1]!=self.nbDecision:
-            raise Exception('bad numbers of columns in costs')
+        if utilities.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in utilities')
 
         if self.isreachable()==0:
             self.setreachableprobability()
         
         optdec=0
         maxhurw=0.
-        for i in range(len(costs)):
-            objective=costs[i]
+        for i in range(len(utilities)):
+            objective=utilities[i]
             usol=self.getupperexpectation(objective)
             lsol=self.getlowerexpectation(objective)
             hursol=(1-alpha)*lsol + alpha*usol 
@@ -294,63 +294,63 @@ class CredalSet(object):
                 optdec=i
         return optdec
     
-    def getmaximaldecision(self, costs=None):
+    def getmaximaldecision(self, utilities=None):
         """Return the classification decisions using maximality
         
-        :param costs: the cost matrix entered as an np array
+        :param utilities: the utility matrix entered as an np array
         :param type: np.array
         :return: the set of optimal classes (under maximality) as a 1xn vector
             where indices of optimal classes are set to one
         :rtype: np.array
         
         """
-        if costs is None:
-            costs=np.identity(self.nbDecision)
+        if utilities is None:
+            utilities=np.identity(self.nbDecision)
         
-        if costs.shape[1]!=self.nbDecision:
-            raise Exception('bad numbers of columns in costs')
+        if utilities.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in utilities')
             
         if self.isreachable()==0:
             self.setreachableprobability()
 
-        maximality_classe=np.ones(len(costs))
-        for i in range(len(costs)):
-            for j in range(i)+range(i+1,len(costs)):
+        maximality_classe=np.ones(len(utilities))
+        for i in range(len(utilities)):
+            for j in range(i)+range(i+1,len(utilities)):
                 if maximality_classe[i] == 1 and maximality_classe[j] == 1:
-                    objective=costs[i]-costs[j]
+                    objective=utilities[i]-utilities[j]
                     sol=self.getlowerexpectation(objective)
                     if sol > 0:
                         maximality_classe[j]=0
         return maximality_classe
     
-    def getintervaldomdecision(self, costs=None):
+    def getintervaldomdecision(self, utilities=None):
         """Return the classification decisions using interval dominance
         
-        :param costs: the cost matrix entered as an np array
+        :param utilities: the utility matrix entered as an np array
         :param type: np.array
         :return: the set of optimal classes (under int. dom.) as a 1xn vector
             where indices of optimal classes are set to one
         :rtype: :class:`~numpy.array`
         
         """
-        if costs is None:
-            costs=np.identity(self.nbDecision)
+        if utilities is None:
+            utilities=np.identity(self.nbDecision)
         
-        if costs.shape[1]!=self.nbDecision:
-            raise Exception('bad numbers of columns in costs')
+        if utilities.shape[1]!=self.nbDecision:
+            raise Exception('bad numbers of columns in utilities')
         
         if self.isreachable()==0:
             self.setreachableprobability()
         
-        intervaldom_classe=np.ones(len(costs))
+        intervaldom_classe=np.ones(len(utilities))
         maxlower=0.
-        for i in range(len(costs)):
-            objective=costs[i]
+        for i in range(len(utilities)):
+            objective=utilities[i]
             sol=self.getlowerexpectation(objective)
             if sol>maxlower :
                 maxlower=sol
-        for i in range(len(costs)):
-            objective=costs[i]
+        for i in range(len(utilities)):
+            objective=utilities[i]
             sol=self.getupperexpectation(objective)
             if sol < maxlower:
                 intervaldom_classe[i]=0
