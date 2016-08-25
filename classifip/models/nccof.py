@@ -40,12 +40,12 @@ class NCCOF(object):
             #Initializing the model
             model=ncc.NCC()
             datarep=ArffFile()
-	    datarep.attribute_data=learndataset.attribute_data.copy()
-	    datarep.attribute_types=learndataset.attribute_types.copy()
+            datarep.attribute_data=learndataset.attribute_data.copy()
+            datarep.attribute_types=learndataset.attribute_types.copy()
             datarep.data = copy.deepcopy(learndataset.data)
-	    datarep.relation=learndataset.relation
-	    datarep.attributes=copy.copy(learndataset.attributes)
-	    datarep.comment=copy.copy(learndataset.comment)
+            datarep.relation=learndataset.relation
+            datarep.attributes=copy.copy(learndataset.attributes)
+            datarep.comment=copy.copy(learndataset.comment)
             positiveclasses=classes[0:classes.index(class_value)+1]
             negativeclasses=classes[classes.index(class_value)+1:len(classes)]
             for number,instance in enumerate(datarep.data):

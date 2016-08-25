@@ -17,6 +17,7 @@ models package
 * add decision trees (+++)
 * add credal model averaging logistic regressions (+++)
 * add credal model averaging of networks (+++)
+* transform decomposition methods (binary relevance, Frank and all method) so that they accept any base classifier (++)
 
 evaluation package
 ^^^^^^^^^^^^^^^^^^
