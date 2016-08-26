@@ -27,7 +27,7 @@ class NCCBR(object):
         """Build an empty NCCBR structure
         """
         
-        # both feature names and feature values contains the class (assumed to be the last)
+
         self.feature_names=[]
         self.label_names=[]
         self.feature_values=dict()
@@ -70,7 +70,7 @@ class NCCBR(object):
             
             
         
-    def evaluate(self,testdataset,ncc_epsilon=0.001,ncc_s_param=[2]):
+    def evaluate(self,testdataset,ncc_epsilon=0.001,ncc_s_param=2):
         """evaluate the instances and return a list of probability intervals.
         
         :param testdataset: list of input features of instances to evaluate
@@ -78,7 +78,7 @@ class NCCBR(object):
         :param ncc_epsilon: espilon issued from [#corani2010]_ (should be > 0)
             to avoid zero count issues
         :type ncc_espilon: float
-        :param ncc_s_param: s parameters used in the IDM learning (settle
+        :param ncc_s_param: s parameter used in the IDM learning (settle
         imprecision level)
         :type ncc_s_param: list
         :returns: for each value of ncc_s_param, a set of scores for each label
@@ -106,45 +106,43 @@ class NCCBR(object):
         label_prop=[n/float(self.trainingsize) for n in self.labelcounts]
         for item in testdataset:
             answers=[]
-            for s_val in ncc_s_param:
-                #initializing scores
-                resulting_score=np.zeros((self.nblabels,2))
-                #computes product of lower/upper prob for each class
-                for j in range(self.nblabels):
-                    u_numerator=1-label_prop[j]
-                    l_numerator=1-label_prop[j]
-                    u_denom=label_prop[j]
-                    l_denom=label_prop[j]
-                    for feature in self.feature_names:
-                        #computation of denominator (label=1)
-                        f_index=self.feature_names.index(feature)
-                        f_val_index=self.feature_values[feature].index(item[f_index])
-                        count_string=self.label_names[j]+'|in|'+feature
-                        num_items=float(sum(self.feature_count[count_string]))
-                        lower=(self.feature_count[count_string][f_val_index]/
-                                (num_items+s_val))
-                        l_denom=l_denom*((1-ncc_epsilon)*lower+
-                                ncc_epsilon/len(self.feature_count[count_string]))
-                        upper=((self.feature_count[count_string][f_val_index]+s_val)/(num_items+s_val))
-                        u_denom=u_denom*((1-ncc_epsilon)*upper+
-                                ncc_epsilon/len(self.feature_count[count_string]))
-                        
-                        #computation of numerator (label=0)
-                        count_string_num=self.label_names[j]+'|out|'+feature
-                        num_items=float(sum(self.feature_count[count_string]))
-                        lower=((self.feature_count[count_string]
-                                [f_val_index]+s_val)/(num_items+s_val))
-                        l_numerator=l_numerator*((1-ncc_epsilon)*lower+
-                                ncc_epsilon/len(self.feature_count[count_string]))
-                        upper=(self.feature_count[count_string]
-                                [f_val_index])/(num_items+s_val)
-                        u_numerator=u_numerator*((1-ncc_epsilon)*upper+
-                                ncc_epsilon/len(self.feature_count[count_string]))
-                    resulting_score[j,1]=u_denom/(u_denom+u_numerator)
-                    resulting_score[j,0]=l_denom/(l_denom+l_numerator)
-                result=Scores(resulting_score)
-                answers.append(result)
-            final.append(answers)
+            #initializing scores
+            resulting_score=np.zeros((self.nblabels,2))
+            #computes product of lower/upper prob for each class
+            for j in range(self.nblabels):
+                u_numerator=1-label_prop[j]
+                l_numerator=1-label_prop[j]
+                u_denom=label_prop[j]
+                l_denom=label_prop[j]
+                for feature in self.feature_names:
+                    #computation of denominator (label=1)
+                    f_index=self.feature_names.index(feature)
+                    f_val_index=self.feature_values[feature].index(item[f_index])
+                    count_string=self.label_names[j]+'|in|'+feature
+                    num_items=float(sum(self.feature_count[count_string]))
+                    lower=(self.feature_count[count_string][f_val_index]/
+                            (num_items+ncc_s_param))
+                    l_denom=l_denom*((1-ncc_epsilon)*lower+
+                            ncc_epsilon/len(self.feature_count[count_string]))
+                    upper=((self.feature_count[count_string][f_val_index]+ncc_s_param)/(num_items+ncc_s_param))
+                    u_denom=u_denom*((1-ncc_epsilon)*upper+
+                            ncc_epsilon/len(self.feature_count[count_string]))
+                    
+                    #computation of numerator (label=0)
+                    count_string_num=self.label_names[j]+'|out|'+feature
+                    num_items=float(sum(self.feature_count[count_string]))
+                    lower=((self.feature_count[count_string]
+                            [f_val_index]+ncc_s_param)/(num_items+ncc_s_param))
+                    l_numerator=l_numerator*((1-ncc_epsilon)*lower+
+                            ncc_epsilon/len(self.feature_count[count_string]))
+                    upper=(self.feature_count[count_string]
+                            [f_val_index])/(num_items+ncc_s_param)
+                    u_numerator=u_numerator*((1-ncc_epsilon)*upper+
+                            ncc_epsilon/len(self.feature_count[count_string]))
+                resulting_score[j,1]=u_denom/(u_denom+u_numerator)
+                resulting_score[j,0]=l_denom/(l_denom+l_numerator)
+            result=Scores(resulting_score)
+            answers.append(result)
         
-        return final
+        return answers
         

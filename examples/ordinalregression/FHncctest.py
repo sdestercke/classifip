@@ -21,14 +21,14 @@ dataArff.load('LEV_eqfreq_dis.arff')
 model.learn(dataArff)
 
 # Evaluation : we can set the parameters native to the base classifier 
-test = model.evaluate([dataArff.data[2]],ncc_epsilon=0.001,ncc_s_param=[6])
+test = model.evaluate([dataArff.data[2]],ncc_epsilon=0.001,ncc_s_param=6)
 
-# The output is a list of BinaryTree, we can print each instance :
+# The output is a list of p-boxes, we can print each instance :
 print("P-box obtained for the tested instance \n")
-print test[0][0]
+print test[0]
 print("\nPrediction using maximality criterion with 0/1 costs \n")
-print test[0][0].getmaximaldecision()
+print test[0].getmaximaldecision()
 print("\nIndex of Prediction using maximin criterion with 0/1 costs \n")
-print test[0][0].getmaximindecision()
+print test[0].getmaximindecision()
 
 

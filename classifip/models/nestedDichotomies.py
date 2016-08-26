@@ -114,7 +114,7 @@ class NestedDichotomies(bt.BinaryTree):
             self.node.proba = self.classifier.evaluate(testdataset, **kwargs)
             out.nbDecision = self.nbDecision
             out.node.label = self.node.label 
-            out.node.proba = self.node.proba[0][0]
+            out.node.proba = self.node.proba[0]
             
             out.left = bt.BinaryTree(self.left.node)
             out.right = bt.BinaryTree(self.right.node)

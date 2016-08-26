@@ -63,7 +63,7 @@ class NCCOF(object):
             
             
         
-    def evaluate(self,testdataset,ncc_epsilon=0.001,ncc_s_param=[2]):
+    def evaluate(self,testdataset,ncc_epsilon=0.001,ncc_s_param=2):
         """evaluate the instances and return a list of generalized p-boxes.
         
         :param testdataset: list of input features of instances to evaluate
@@ -71,7 +71,7 @@ class NCCOF(object):
         :param ncc_epsilon: espilon issued from [#corani2010]_ (should be > 0)
             to avoid zero count issues
         :type ncc_espilon: float
-        :param ncc_s_param: s parameters used in the IDM learning (settle
+        :param ncc_s_param: s parameter used in the IDM learning (settle
         imprecision level)
         :type ncc_s_param: list
         :returns: for each value of ncc_s_param, a generalized p-box over the labels
@@ -97,44 +97,42 @@ class NCCOF(object):
         
         for item in testdataset:
             answers=[]
-            for s_val in ncc_s_param:
-                if s_val!=0:
-                    #initializing scores
-                    resulting_pbox=np.zeros((2,self.nblabels))
-                    #computes product of lower/upper prob for each class
-                    for j in range(self.nblabels-1):
-                        resulting_pbox[0,j]=self.setncc[j].evaluate([item],
-                            ncc_s_param=[s_val])[0][0].lproba[0,0]
-                        resulting_pbox[1,j]=self.setncc[j].evaluate([item],
-                            ncc_s_param=[s_val])[0][0].lproba[1,0]
-                    resulting_pbox[0,self.nblabels-1]=1.
-                    resulting_pbox[1,self.nblabels-1]=1.
-                    #repair p-boxes if they are inconsistent
-                    for j in range(self.nblabels-1):
-                        if resulting_pbox[0,j]>resulting_pbox[0,j+1]:
-                            resulting_pbox[0,j+1]=resulting_pbox[0,j]
-                        if resulting_pbox[1,(self.nblabels-1)-j]<resulting_pbox[1,(self.nblabels-1)-j-1]:
-                            resulting_pbox[1,(self.nblabels-1)-j-1]=resulting_pbox[1,(self.nblabels-1)-j]
-                    result=GenPbox(resulting_pbox)
-                if s_val==0:
-                    #initializing scores
-                    resulting_cum=np.zeros(self.nblabels)
-                    resulting_prob=np.zeros(self.nblabels)
-                    #computes prob of each label
-                    for j in range(self.nblabels-1):
-                        resulting_cum[j]=self.setncc[j].evaluate([item],
-                            ncc_s_param=[s_val])[0][0].proba[0]
-                    resulting_cum[self.nblabels-1]=1.
-                    #repair proba if they are inconsistent
-                    for j in range(self.nblabels-1):
-                        if resulting_cum[j]>resulting_cum[j+1]:
-                            resulting_cum[j+1]=resulting_cum[j]
-                    for j in range(1,self.nblabels):
-                        resulting_prob[j]=resulting_cum[j]-resulting_cum[j-1]
-                    resulting_prob[0]=resulting_cum[0]
-                    result=ProbaDis(resulting_prob)
-                answers.append(result)
-            final.append(answers)
+            if ncc_s_param!=0:
+                #initializing scores
+                resulting_pbox=np.zeros((2,self.nblabels))
+                #computes product of lower/upper prob for each class
+                for j in range(self.nblabels-1):
+                    resulting_pbox[0,j]=self.setncc[j].evaluate([item],
+                        ncc_s_param=ncc_s_param)[0].lproba[0,0]
+                    resulting_pbox[1,j]=self.setncc[j].evaluate([item],
+                        ncc_s_param=ncc_s_param)[0].lproba[1,0]
+                resulting_pbox[0,self.nblabels-1]=1.
+                resulting_pbox[1,self.nblabels-1]=1.
+                #repair p-boxes if they are inconsistent
+                for j in range(self.nblabels-1):
+                    if resulting_pbox[0,j]>resulting_pbox[0,j+1]:
+                        resulting_pbox[0,j+1]=resulting_pbox[0,j]
+                    if resulting_pbox[1,(self.nblabels-1)-j]<resulting_pbox[1,(self.nblabels-1)-j-1]:
+                        resulting_pbox[1,(self.nblabels-1)-j-1]=resulting_pbox[1,(self.nblabels-1)-j]
+                result=GenPbox(resulting_pbox)
+            if ncc_s_param==0:
+                #initializing scores
+                resulting_cum=np.zeros(self.nblabels)
+                resulting_prob=np.zeros(self.nblabels)
+                #computes prob of each label
+                for j in range(self.nblabels-1):
+                    resulting_cum[j]=self.setncc[j].evaluate([item],
+                        ncc_s_param=ncc_s_param)[0].proba[0]
+                resulting_cum[self.nblabels-1]=1.
+                #repair proba if they are inconsistent
+                for j in range(self.nblabels-1):
+                    if resulting_cum[j]>resulting_cum[j+1]:
+                        resulting_cum[j+1]=resulting_cum[j]
+                for j in range(1,self.nblabels):
+                    resulting_prob[j]=resulting_cum[j]-resulting_cum[j-1]
+                resulting_prob[0]=resulting_cum[0]
+                result=ProbaDis(resulting_prob)
+            answers.append(result)
         
-        return final
+        return answers
         

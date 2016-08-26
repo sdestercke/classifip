@@ -112,7 +112,7 @@ class IPKNNBR(object):
             
             
         
-    def evaluate(self,testdataset,knnbr_beta=1.5,knnbr_epsilon=0.99,knnbr_nbneigh=[3],missing=None,MAR=True):
+    def evaluate(self,testdataset,knnbr_beta=1.5,knnbr_epsilon=0.99,knnbr_nb_neigh=3,missing=None,MAR=True):
         """evaluate the instances and return a list of probability intervals
         
         :param testdataset: list of input features of instances to evaluate
@@ -139,36 +139,34 @@ class IPKNNBR(object):
         for i in dataset:
             answers=[]
             #scan all specified values of neighbours
-            for nb_val in knnbr_nbneigh:
-                query=self.tree.query(i,k=nb_val)
-                #ensure query returns list of array
-                if query[0].__class__.__name__!='ndarray':
-                    query=list(query)
-                    query[0]=[query[0]]
-                    query[1]=[query[1]]
-                #scan all labels and affect a score
-                resulting_score=np.zeros((self.nblabels,2))
-                for j in range(self.nblabels):
-                    up=0.
-                    down=0.
-                    for k in range(len(query[0])):                 
-                        label_in=int(self.truelabels[query[1][k]][j])
-                        expon=-((query[0][k])**(self.beta))/self.av_dist[j][label_in]
-                        discount=(self.epsilon)*(exp(expon))
-                        randmiss=np.random.random()
-                        if missing==None or randmiss>=missing:    
-                            if label_in==1:
-                                up+=1
-                                down+=discount
-                            else:
-                                up+=1-discount
-                        elif MAR==False: up+=1
-                    resulting_score[j,0]=down
-                    resulting_score[j,1]=up
-                resulting_score=resulting_score/nb_val
-                result=Scores(resulting_score)
-                answers.append(result)
-            final.append(answers)
+            query=self.tree.query(i,k=knnbr_nb_neigh)
+            #ensure query returns list of array
+            if query[0].__class__.__name__!='ndarray':
+                query=list(query)
+                query[0]=[query[0]]
+                query[1]=[query[1]]
+            #scan all labels and affect a score
+            resulting_score=np.zeros((self.nblabels,2))
+            for j in range(self.nblabels):
+                up=0.
+                down=0.
+                for k in range(len(query[0])):                 
+                    label_in=int(self.truelabels[query[1][k]][j])
+                    expon=-((query[0][k])**(self.beta))/self.av_dist[j][label_in]
+                    discount=(self.epsilon)*(exp(expon))
+                    randmiss=np.random.random()
+                    if missing==None or randmiss>=missing:    
+                        if label_in==1:
+                            up+=1
+                            down+=discount
+                        else:
+                            up+=1-discount
+                    elif MAR==False: up+=1
+                resulting_score[j,0]=down
+                resulting_score[j,1]=up
+            resulting_score=resulting_score/knnbr_nb_neigh
+            result=Scores(resulting_score)
+            answers.append(result)
         
-        return final
+        return answers
         

@@ -206,21 +206,19 @@ class PairPIP(object):
                 result=result+self.truerankings[self.tree.query(i)[1]]
             #compute the final scores from the sample matrix for each conf values
             answers=[]
-            for conf_val in pipp_confid:
-                score_val=np.zeros((len(self.labels),2))
-                for k in range(len(self.labels)):
-                    for l in range(k)+range(k+1,len(self.labels)):
-            #if no samples for a given comparison, simply use majority
-                        if result[k,l]+result[l,k] > 0.:
-                            score_val[k,:]+=get_binomial_int(result[k,l]
-                                        +result[l,k], result[k,l],conf_val)
-                        else:
-                            score_val[k,:]+=get_binomial_int(majority[k,l]
-                                        +majority[l,k], majority[k,l],conf_val)                            
-                answers.append(Scores(score_val))
-            final.append(answers)
+            score_val=np.zeros((len(self.labels),2))
+            for k in range(len(self.labels)):
+                for l in range(k)+range(k+1,len(self.labels)):
+        #if no samples for a given comparison, simply use majority
+                    if result[k,l]+result[l,k] > 0.:
+                        score_val[k,:]+=get_binomial_int(result[k,l]
+                                    +result[l,k], result[k,l],pipp_confid)
+                    else:
+                        score_val[k,:]+=get_binomial_int(majority[k,l]
+                                    +majority[l,k], majority[k,l],pipp_confid)                            
+            answers.append(Scores(score_val))
         
-        return final
+        return answers
     
     def remove_pref(self,percentage,seed=None,remove_type=2):
         """remove a given percentage of (pairwise) preferences from

@@ -518,7 +518,7 @@ class BinaryTree(credalset.CredalSet):
         if self.isreachable()==0:
             self.setreachableprobability()
             
-        return self.getupperexpectation(function=subset)
+        return self.getupperexpectation(obj=subset)
     
     def toIntervalsProbability(self):
         """
