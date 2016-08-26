@@ -174,7 +174,7 @@ class PairPIP(object):
         if pipp_radius != None:
             self.radius=pipp_radius
         dataset=np.array(testdataset).astype(float)
-        final=[]
+        answers=[]
 
         if self.normal[0] == True:
             dataset=(dataset-self.normal[2])/self.normal[1]
@@ -205,7 +205,6 @@ class PairPIP(object):
             else:
                 result=result+self.truerankings[self.tree.query(i)[1]]
             #compute the final scores from the sample matrix for each conf values
-            answers=[]
             score_val=np.zeros((len(self.labels),2))
             for k in range(len(self.labels)):
                 for l in range(k)+range(k+1,len(self.labels)):

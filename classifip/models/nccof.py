@@ -93,10 +93,9 @@ class NCCOF(object):
             * solve the zero division problem
             
         """
-        final=[]
-        
+        answers=[]       
         for item in testdataset:
-            answers=[]
+
             if ncc_s_param!=0:
                 #initializing scores
                 resulting_pbox=np.zeros((2,self.nblabels))

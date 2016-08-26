@@ -91,14 +91,13 @@ class NCC(object):
                 the number of class example in the training set is close to s or lower.
             
         """
-        final=[]
         
         #computing class proportions
         class_ct=[float(n) for n in self.label_count]
         class_prop=[n/sum(class_ct) for n in class_ct]
-        
+        answers=[]      
         for item in testdataset:
-            answers=[]
+
             #initializing probability interval argument
             resulting_int=np.zeros((2,len(self.feature_values['class'])))
             resulting_sc=np.zeros((len(self.feature_values['class']),2))

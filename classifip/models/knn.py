@@ -91,9 +91,9 @@ class IPKNN(object):
         final=[]
         self.beta=knn_beta
         self.epsilon=knn_epsilon
-        
+        answers=[]        
         for i in testdataset:
-            answers=[]
+
             resulting_int=np.zeros((2,len(self.classes)))
             query=self.tree.query(i,knn_nb_neigh)
             #ensure query returns list of array

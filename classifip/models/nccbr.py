@@ -100,12 +100,11 @@ class NCCBR(object):
             * solve the zero division problem
             
         """
-        final=[]
-        
         #computing label proportions
         label_prop=[n/float(self.trainingsize) for n in self.labelcounts]
+        answers=[]
         for item in testdataset:
-            answers=[]
+ 
             #initializing scores
             resulting_score=np.zeros((self.nblabels,2))
             #computes product of lower/upper prob for each class

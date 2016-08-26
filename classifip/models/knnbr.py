@@ -135,9 +135,9 @@ class IPKNNBR(object):
         if self.normal[0] == True:
             dataset=(dataset-self.normal[2])/self.normal[1]
 
-        
+        answers=[]       
         for i in dataset:
-            answers=[]
+
             #scan all specified values of neighbours
             query=self.tree.query(i,k=knnbr_nb_neigh)
             #ensure query returns list of array
