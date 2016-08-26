@@ -7,13 +7,13 @@ About how to use the Naive Credal Classifier Binary Relevance.
 
 '''
 
-print("Example of multilabel prediciton with NCC BR - data set yeast, training part \n")
+print("Example of multilabel prediciton with NCC BR - data set yeast \n")
 
 print("Data loading \n")
 from classifip.dataset import arff
 
 data=arff.ArffFile()
-data.load("yeast-train.arff")
+data.load("yeast.arff")
 dataset='yeast'
 nblab=14
 
