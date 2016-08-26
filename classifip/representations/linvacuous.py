@@ -36,8 +36,8 @@ class LinVac(CredalSet):
     def __init__(self,proba,epsilon):
         """Instanciate proba values and epsilon
         
-        :param lproba: a 1xn array containing upper (1st row) and lower bounds
-        :type lproba: :class:`~numpy.array`
+        :param proba: a 1xn array containing upper (1st row) and lower bounds
+        :type proba: :class:`~numpy.array`
         """
         if proba.__class__.__name__ != 'ndarray':
             raise Exception('Expecting a numpy array as argument')
@@ -95,7 +95,7 @@ class LinVac(CredalSet):
         if subset.size != self.nbDecision:
             raise Exception('Subset incompatible with the frame size')
         if self.isproper()==0:
-            raise Exception('Not a well-defined probability')
+            raise Exception('Not a well-defined linear vacuous model')
         if np.all(subset):
             return 1
         else:

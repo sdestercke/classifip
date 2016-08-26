@@ -30,9 +30,8 @@ representations package
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 * add transformation and approximations between different formats (+++)
-* add belief functions (+++)
 * add possibility distributions (+++)
 * add comparative probabilities on singletons (+++)
-* add neighbourhood models: linear-vacuous, PMM, … (++)
+* add neighbourhood models: PMM, denisity-ratio (++)
 * for each model, add extreme point extraction method (+++)
 * for each model, implement directly combination method (conjunctive, disjunctive)

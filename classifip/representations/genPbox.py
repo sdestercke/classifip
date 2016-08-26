@@ -22,6 +22,7 @@ class GenPbox(CredalSet):
     upper bound | 0.500 0.700 1.000`
     lower bound | 0.300 0.500 1.000
     
+    >>> subset=array([1.,1.,0.])
     >>> pbox.getlowerprobability(subset)
     0.5
     >>> pbox.getupperprobability(subset)

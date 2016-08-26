@@ -4,7 +4,7 @@ representations module
 ======================
 
 Representation module contains representation tools usually returned by learning tasks
-to make a prediction, includng imprecise probability representations. Each representation
+to make a prediction, including imprecise probability representations. Each representation
 comes with a set of prediction rules, both precise (maximax, maximin, ...) and imprecise
 (interval dominance, maximality, ...)
 
@@ -17,3 +17,4 @@ comes with a set of prediction rules, both precise (maximax, maximin, ...) and i
    representations/genpbox
    representations/binarytree
    representations/linvac
+   representations/belfun

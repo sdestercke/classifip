@@ -15,8 +15,8 @@ class ProbaDis(CredalSet):
     def __init__(self,proba):
         """Instanciate proba values
         
-        :param lproba: a 1xn array containing upper (1st row) and lower bounds
-        :type lproba: :class:`~numpy.array`
+        :param proba: a 1xn array containing upper (1st row) and lower bounds
+        :type proba: :class:`~numpy.array`
         """
         if proba.__class__.__name__ != 'ndarray':
             raise Exception('Expecting a numpy array as argument')
