@@ -1,3 +1,9 @@
+Version 0.2.1
+^^^^^^^^^^^^^
+
+* added nested dichotomies and binary trees
+* added new representations (linear vacuous / belief functions)
+
 Version 0.1.7
 ^^^^^^^^^^^^^
 

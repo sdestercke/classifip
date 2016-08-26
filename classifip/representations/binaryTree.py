@@ -37,7 +37,7 @@ class BinaryTree(credalset.CredalSet):
     >>> print left,right
     ['a']
      ['b', 'c']
-     
+    
     >>> left_subtree = bt.BinaryTree(node=left)
     >>> right_subtree = bt.BinaryTree(node=right)
     
@@ -429,13 +429,13 @@ class BinaryTree(credalset.CredalSet):
 
     
     def getlowerexpectation(self,function):
-        """Compute the lower expectation of a given (bounded) cost function
+        """Compute the lower expectation of a given function
         
-        :param function: the cost function vector, defining the cost of each class
+        :param function: values of the function
         :type function: :class:`~numpy.ndarray`
         
-        :returns: lower expectation matrix for all data instances
-        :rtype: :class:`~numpy.ndarray`
+        :return: the lower expectation value
+        :rtype: float
          
         """
         if self.isreachable()==0:
@@ -477,18 +477,6 @@ class BinaryTree(credalset.CredalSet):
             return expInf
             
         return lowerExp(self)
-        
-    def getupperexpectation(self,function):
-        """Compute the upper expectation of the given function
-        
-        :param funciton: values of the function whose upper expectation is to be computed
-        :type funciton: :class:`~numpy.array`
-        :return: the upper expectation value
-        :rtype: float
-        """
-        
-        lowexp=self.getlowerexpectation(-function)
-        return -lowexp
     
     def getlowerprobability(self, subset):
         """Compute lower probability of an event expressed in binary code. 

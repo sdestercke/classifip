@@ -18,16 +18,14 @@ class BelFun(CredalSet):
     >>> mass=np.array([0.1,0.3,0.45,0.1,0.05])
     >>> test=bel.BelFun(mass,sets)
     >>> print test
-
     Mass value |  Focal set 
-    ----------------------------- 
+    -----------|----------------- 
        0.100   |  [ 0.  0.  1.]
        0.300   |  [ 1.  0.  1.]
        0.450   |  [ 1.  1.  0.]
        0.100   |  [ 1.  0.  0.]
        0.050   |  [ 1.  1.  1.]
-    -----------------------------
-
+    -----------|-----------------
     >>> test.getlowerprobability(np.array([1.,0.,1.]))
     0.5
     >>> test.getlowerexpectation(np.array([-2,-1,6]))
@@ -146,11 +144,11 @@ class BelFun(CredalSet):
         """
         str3="\n"
         str3+="Mass value |  Focal set \n"
-        str3+="----------------------------- \n"
+        str3+="-----------|----------------- \n"
         for j in range(np.shape(self.focals)[0]):
             str3+="   %.3f   |  " %self.mass[j]
             str3+= np.array_str(self.focals[j])
             str3+="\n"
-        str3+="-----------------------------"
+        str3+="-----------|-----------------"
         str3+="\n"
         return str3

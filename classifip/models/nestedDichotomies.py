@@ -61,7 +61,7 @@ class NestedDichotomies(bt.BinaryTree):
         Learn the underlying binary classification problem associated with the 
         current node of the dichotomy tree, and store the models in the Nested 
         Dichotomy tree.
-
+        
         (See :func:`~classifip.models.nestedDichotomies.learn` for the detail of parameters)
         """
         

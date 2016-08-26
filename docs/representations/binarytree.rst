@@ -7,7 +7,7 @@ BinaryTree
 
 This representation corresponds to a probabilistic binary tree. 
 
-.. autoclass:: CredalSet
+.. autoclass:: BinaryTree
    :members:
 
 References
