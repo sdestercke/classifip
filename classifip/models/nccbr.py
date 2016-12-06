@@ -113,9 +113,8 @@ class NCCBR(object):
                 l_numerator=1-label_prop[j]
                 u_denom=label_prop[j]
                 l_denom=label_prop[j]
-                for feature in self.feature_names:
+                for f_index, feature in enumerate(self.feature_names):
                     #computation of denominator (label=1)
-                    f_index=self.feature_names.index(feature)
                     f_val_index=self.feature_values[feature].index(item[f_index])
                     count_string=self.label_names[j]+'|in|'+feature
                     num_items=float(sum(self.feature_count[count_string]))

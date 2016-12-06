@@ -111,9 +111,8 @@ class NCC(object):
                 l_numerator=0
                 u_denom=class_prop[cl_index]
                 l_denom=class_prop[cl_index]
-                for feature in self.feature_names:
+                for f_index, feature in enumerate(self.feature_names):
                     if feature != 'class':
-                        f_index=self.feature_names.index(feature)
                         f_val_index=self.feature_values[feature].index(item[f_index])
                         count_string=class_val+'|'+feature
                         num_items=float(sum(self.feature_count[count_string]))

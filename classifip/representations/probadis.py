@@ -10,6 +10,14 @@ class ProbaDis(CredalSet):
     :type proba: :class:`~numpy.array`
     :param nbDecision: number of elements of the space
     :type nbDecision: integer
+    
+    >>> from classifip.representations import probadis
+    >>> from numpy import array
+    >>> distrib=array([0.15,0.1,0.4,0.35])
+    >>> Test=probadis.ProbaDis(distrib)
+    >>> subset=array([1.,0.,0.,1.])
+    >>> Test.getlowerprobability(subset)
+    0.5
     """
     
     def __init__(self,proba):
@@ -20,7 +28,7 @@ class ProbaDis(CredalSet):
         """
         if proba.__class__.__name__ != 'ndarray':
             raise Exception('Expecting a numpy array as argument')
-        self.proba=proba
+        self.proba=proba.copy()
         self.nbDecision=proba.size
         if fabs(proba.sum()-1.) > 1e-7:
             raise Exception('proba weights do not sum to one')
@@ -101,6 +109,102 @@ class ProbaDis(CredalSet):
             raise Exception('Not a well-defined probability')
         function=function.astype(float)
         return np.dot(self.proba,function)
+    
+    def getDelCozmulti(self,beta=1.):
+        """
+        Making set-valued predictions using the method based on the article 
+        "Learning nondeterministic classifiers" of J. Del Coz and A. Bahamonde.
+    
+        The posterior probabilities computed by a base learner is required as parameter.
+
+        The algorithm optimizes the output to a set of classes basing on these posterior 
+        probabilities and the F-beta measure.
+        
+        :param beta: parameter for the F_beta loss used for the loss minimization procedure,
+            by default, the F1 measure is used
+        :type beta: int
+        
+        :return: the set of optimal classes (under Del Coz rule) as a 1xn vector
+            where indices of optimal classes are set to one
+        :rtype: :class:`~numpy.array`
+        """
+        
+        # get the descending ordering of porbabilities
+        proba_ordered = np.argsort(-np.array(self.proba))
+        ret = np.zeros(self.nbDecision)
+        
+        #initialization of optimization
+        i=1
+        loss = 1.
+        loss_buffer = 1. - (1.+beta*beta)/(beta*beta+i) * sum([self.proba[ind] for ind in proba_ordered[0:i]])
+        while (i<self.nbDecision) and (loss_buffer < loss):
+            i += 1
+            loss = loss_buffer
+            loss_buffer = 1. - (1.+beta*beta)/(beta*beta+i) * sum([self.proba[ind] for ind in proba_ordered[0:i]])
+                
+        if loss_buffer >= loss:
+            for ind in proba_ordered[0:(i-1)]: 
+                ret[ind] = 1. 
+        else :    
+            for ind in range(0,self.nbDecision):
+                ret[ind] = 1.        
+        return ret
+    
+    def getDelCozordinal(self,beta=1.):
+        """
+        Making interval-valued predictions using the method based on the article 
+        "Learning to Predict One or More Ranks in Ordinal Regression Tasks" of J. Del Coz.
+    
+        The posterior probabilities computed by a base learner is required as a parameter.
+        The algorithm optimizes the output to a set of classes basing on these posterior probabilities.
+        
+        :param beta: parameter for the F_beta loss used for the loss minimization procedure,
+            by default, the F1 measure is used
+        :type beta: int
+        
+        :return: the set of optimal classes (under Del Coz rule) as a 1xn vector
+            where indices of optimal classes are set to one
+        :rtype: :class:`~numpy.array`
+        """
+        
+        ret = np.zeros(self.nbDecision)
+
+        max_proba = np.zeros((self.nbDecision,2)) 
+            
+        # we start by finding out the max probabilities when the length of the interval is fixed
+        # i is the length of class intervals
+        for i in range(1,self.nbDecision+1):
+                
+        # j is the j-th class 
+            for j in range(0,self.nbDecision - i +1) :
+                    buffer_proba = sum(self.proba[j:(j+i)])
+
+                    if buffer_proba > max_proba[i-1][1] :
+                        max_proba[i-1][0] = j #starting class
+                        max_proba[i-1][1] = buffer_proba # new highest probability of the intervals of length i starting at j
+        # when the length of the interval is nbclass, i.e. we take the whole class, and the proba is 1        
+        # max_proba[nbclass-1][0] = 0 
+        # max_proba[nbclass-1][1] = 1.
+        
+        # now we minimize the F_beta loss depending on the length i of the class
+        # i is the length of class intervals
+        min_loss = 1.
+        min_i = 1
+        for i in range(1,self.nbDecision):
+            buffer_min = 1. - (1.+beta*beta)/(beta*beta+i) * max_proba[i-1][1]
+
+            if buffer_min < min_loss :
+                min_loss = buffer_min
+                min_i = i
+        
+        # we predict every class situated in the interval defined previously with min_i and max_proba[0]
+        start_indice = int(max_proba[min_i-1][0]) 
+        for indice in range(start_indice,start_indice+min_i):
+            ret[indice] = 1.
+            
+            
+        return ret
+        
     
     def __str__(self):
         """Print the current bounds 
