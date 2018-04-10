@@ -35,10 +35,10 @@ test[0].printProba()
 print("\n")
 # that we can convert to an interval-valued probabilities
 print("Transformation to probability intervals \n")
-print test[0].toIntervalsProbability()
+print(test[0].toIntervalsProbability())
 print("\n")
 # The decision is taken by computing lower expectation, see the examples of CredalSet
 print("Prediction using maximality \n")
-print test[0].getmaximaldecision()
+print(test[0].getmaximaldecision())
 
 

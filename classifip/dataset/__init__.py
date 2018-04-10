@@ -1,7 +1,7 @@
 from . import arff
 from Orange.data import Table as OTable
-from Orange.feature.discretization import Entropy as OEnt
-from Orange.data.discretization import DiscretizeTable as DiscTable
+from Orange.preprocess import Discretize as Disc
+#from Orange.data.discretization import DiscretizeTable as DiscTable
 
 def discretize_ent(infilename,outfilename):
     """
@@ -16,8 +16,10 @@ def discretize_ent(infilename,outfilename):
     """
     
     data = OTable(infilename)
+    disc=Disc()
+    disc.method=EntropyMDL()
 
-    data_ent = DiscTable(data,method=OEnt())
+    data_ent = disc(data)
 
     # Manipulation of the discretized data
     for attr in data_ent.domain.attributes :

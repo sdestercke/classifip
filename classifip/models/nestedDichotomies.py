@@ -194,7 +194,7 @@ class NestedDichotomies(bt.BinaryTree):
         def regular(codes):
             psum=0
             length=0
-            while psum <> -1: #a regular prefix code is weighted to -1
+            while psum != -1: #a regular prefix code is weighted to -1
                 if length >= len(codes) : raise Exception('Bad encoding',codes)
                 if codes[length] =='0':
                     psum += 1
@@ -207,9 +207,9 @@ class NestedDichotomies(bt.BinaryTree):
         
         #this internal function transforms recursively a Lukasiewicz code into tree
         def genTree(tree,codes,labels_node): 
-            if codes <> '1':
+            if codes != '1':
                 length_left = regular(codes[1:]) #the length of the bitcodes of the left child
-                if codes[0] <> '0':
+                if codes[0] != '0':
                     raise Exception('Bad tree-coding bit codes', codes)
                 else:
                     # build the left child-node

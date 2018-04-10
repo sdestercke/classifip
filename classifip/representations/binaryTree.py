@@ -292,14 +292,14 @@ class BinaryTree(credalset.CredalSet):
             raise Exception("The given root node already has child")
         
         if probas is not None:
-            if len(probas) <> codes.count('0'):
+            if len(probas) != codes.count('0'):
                 raise Exception('Wrong number of probas provided, needed ', codes.count('0'))
         
         #Find where ends the first (and minimal) regular prefix bit codes
         def regular(codes):
             psum=0
             length=0
-            while psum <> -1: #a regular prefix code is weighted to -1
+            while psum != -1: #a regular prefix code is weighted to -1
                 if length >= len(codes) : raise Exception('Bad encoding',codes)
                 if codes[length] =='0':
                     psum += 1
@@ -312,9 +312,9 @@ class BinaryTree(credalset.CredalSet):
         
         #this internal function transforms recursively a Lukasiewicz code into tree
         def genTree(tree,codes,proba_nodes=None): 
-            if codes <> '1':
+            if codes != '1':
                 length_left = regular(codes[1:]) #the length of the bitcodes of the left child
-                if codes[0] <> '0':
+                if codes[0] != '0':
                     raise Exception('Bad tree-coding bit codes', codes)
                 elif proba_nodes is None:
                     # build the left child-node
@@ -444,7 +444,7 @@ class BinaryTree(credalset.CredalSet):
         class_values = self.node.label            
         nb_class = len(class_values)
         
-        if function.shape <> (nb_class,):
+        if function.shape != (nb_class,):
             raise Exception('Size of cost vector is not correct:',function.shape)
         cost = function
         
@@ -604,16 +604,16 @@ class BinaryTree(credalset.CredalSet):
         '''
         
         if _p == 0 :
-            print self.node.label
+            print(self.node.label)
             
         _p += 1
         
         if self.left is not None:
-            print "    " * _p + str(self.left.node.label)
+            print("    " * _p + str(self.left.node.label))
             self.left.printTree(_p) 
         
         if self.right is not None:
-            print "    " * _p + str(self.right.node.label)
+            print("    " * _p + str(self.right.node.label))
             self.right.printTree(_p) 
     
     def printProba(self):
@@ -625,11 +625,11 @@ class BinaryTree(credalset.CredalSet):
             str_buf1 = "[%.3f, %.3f]" % (tree.node.proba.lproba[1,0],tree.node.proba.lproba[0,0])
             str_buf2 = "[%.3f, %.3f]" % (tree.node.proba.lproba[1,1],tree.node.proba.lproba[0,1])
             if _p == 0 :
-                print tree.left.node.label, tree.right.node.label
-                print str_buf1, str_buf2
+                print(tree.left.node.label, tree.right.node.label)
+                print(str_buf1, str_buf2)
             else : 
-                print "    " * _p + str(tree.left.node.label) + str(tree.right.node.label)
-                print "    " * _p + str_buf1, str_buf2
+                print("    " * _p + str(tree.left.node.label) + str(tree.right.node.label))
+                print("    " * _p + str_buf1, str_buf2)
             _p += 1
             
             if tree.left.node.proba is not None:

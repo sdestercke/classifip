@@ -42,31 +42,31 @@ class Scores(object):
     def isproper(self):
         """coherence with generic representation class
         """
-        print "Not an IP representation, no proper properties"
+        print("Not an IP representation, no proper properties")
         return 1
 
     def getlowerprobability(self,subset):
         """coherence with generic representation class
         """
-        print "Not an IP representaiton, cannot compute lower prob."
+        print("Not an IP representaiton, cannot compute lower prob.")
         return 0
 
     def getupperprobability(self,subset):
         """coherence with generic representation class
         """
-        print "Not an IP representaiton, cannot compute upper prob."
+        print("Not an IP representaiton, cannot compute upper prob.")
         return 1
         
     def isreachable(self):
         """coherence with generic representation class
         """        
-        print "Not an IP representaiton, no reachability property"
+        print("Not an IP representaiton, no reachability property")
         return 1
 
     def setreachableprobability(self):
         """coherence with generic representation class
         """   
-        print "Not an IP representaiton, cannot make reachable"        
+        print("Not an IP representaiton, cannot make reachable")        
             
     def nc_maximin_decision(self):
         """Return the maximin classification decision (nc: no costs)
@@ -101,7 +101,7 @@ class Scores(object):
     def nc_maximal_decision(self):
         """coherence with generic representation class
         """  
-        print "Not an IP representaiton, cannot compute maximality"
+        print("Not an IP representaiton, cannot compute maximality")
         return 1
     
     def nc_intervaldom_decision(self):

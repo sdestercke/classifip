@@ -433,7 +433,7 @@ class ArffFile(object):
                 self.data=datasave.tolist()
         
         if discmet=='ent':
-            print "sorry, not implemented, please use discretize_ent function of classifip.datasets"
+            print("sorry, not implemented, please use discretize_ent function of classifip.datasets")
 
             
 
@@ -649,20 +649,20 @@ class ArffFile(object):
         self.data.append(datum)
 
     def __print_warning(self, msg):
-        print ('Warning (line %d): ' % self.lineno) + msg
+        print(('Warning (line %d): ' % self.lineno) + msg)
 
     def dump(self):
         """Print an overview of the ARFF file."""
-        print "Relation " + self.relation
-        print "  With attributes"
+        print("Relation " + self.relation)
+        print("  With attributes")
         for n in self.attributes:
             if self.attribute_types[n] != 'nominal':
-                print "    %s of type %s" % (n, self.attribute_types[n])
+                print("    %s of type %s" % (n, self.attribute_types[n]))
             else:
-                print ("    " + n + " of type nominal with values " +
+                print("    " + n + " of type nominal with values " +
                        ', '.join(self.attribute_data[n]))
         for d in self.data:
-            print d
+            print(d)
     
 
 
@@ -685,4 +685,4 @@ d, 3
     a = ArffFile()
     a.load('/home/savourey/Bureau/eurlex-sm-fold1-test.arff')
 
-    print a.write()
+    print(a.write())

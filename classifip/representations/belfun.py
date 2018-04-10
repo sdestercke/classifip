@@ -1,5 +1,5 @@
 import numpy as np
-from credalset import CredalSet
+from classifip.representations.credalset import CredalSet
 from math import fabs
 
 class BelFun(CredalSet):

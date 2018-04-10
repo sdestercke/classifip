@@ -315,7 +315,7 @@ class CredalSet(object):
 
         maximality_classe=np.ones(len(utilities))
         for i in range(len(utilities)):
-            for j in range(i)+range(i+1,len(utilities)):
+            for j in list(range(i))+list(range(i+1,len(utilities))):
                 if maximality_classe[i] == 1 and maximality_classe[j] == 1:
                     objective=utilities[i]-utilities[j]
                     sol=self.getlowerexpectation(objective)
