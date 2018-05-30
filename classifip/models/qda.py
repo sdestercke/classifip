@@ -27,7 +27,7 @@ class Plots:
     def plot_cov_ellipse(points, nstd=1, col='r'):
         # Compute mean
         pos = [float(sum(l)) / len(l) for l in zip(*points)]
-        # Compute covariance
+        # Compute covariancec
         cov = np.cov(points, rowvar=False)
         # Descomposition Spectral
         Plots.plot_ellipse(pos, cov, nstd, col)
@@ -75,8 +75,9 @@ class DiscriminantAnalysis(Imprecise, metaclass=abc.ABCMeta):
 
 
 class LinearDiscriminant(DiscriminantAnalysis):
-
     def __init__(self, X, y, ell=20):
+        # Starting matlab envirement
+        self.__eng = matlab.engine.start_matlab()
         """
         ell : be careful with negative ll_upper interval, it needs max(0 , ll_upper)
         :param ell:
@@ -85,13 +86,11 @@ class LinearDiscriminant(DiscriminantAnalysis):
         self._n, self._p = X.shape
         assert self._n == len(y), "Size X and y is not equals."
         self._y = np.array(y) if type(y) is list else y
-        self.__eng = matlab.engine.start_matlab()
-        self._mean = self.sample_mean(X)
-        self._cov = self.sample_covariance(X)
-        self._inv_cov = inv(self._cov)
-        self._det_cov = det(self._cov)
-        self._mean_lower = (-ell + self._n * self._mean) / self._n
-        self._mean_upper = (ell + self._n * self._mean) / self._n
+        self._data = pd.concat([pd.DataFrame(X), pd.Series(y, dtype="category")], axis=1)
+        # create columns names
+        self._columns = ["x" + i for i in map(str, range(self._p))]
+        self._columns.extend('y')
+        self._data.columns = self._columns
         self._ell = ell
 
     def fit_estimators(self):
@@ -100,28 +99,152 @@ class LinearDiscriminant(DiscriminantAnalysis):
     def costFx(self, x, query):
         return 0.5 * (x.T @ self._inv_cov @ x) + query.T @ self._inv_cov @ x
 
-    def inference(self, query, method="quadratic"):
-        q = query.T @ self._inv_cov
-        upper = self.__upper_probability(q)
-        lower = self.__lower_probability(q)
-        print(upper, lower, "shape")
-        print("upper prob:", self.__compute_probability(upper, query))
-        print("lower prob:", self.__compute_probability(lower, query))
+    def __mean(self, clazz):
+        return self._data[self._data.y == clazz].iloc[:, :-1].mean()
 
-    def __compute_probability(self, mean, query):
-        _exp = -0.5 * (query - mean).T @ self._inv_cov @ (query - mean)
-        _const = np.power(self._det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
+    def __cov(self, clazz):
+        return self._data[self._data.y == clazz].iloc[:, :-1].cov()
+
+    def inference(self, query, method="quadratic"):
+        means, inv_cov, det_cov = dict(), dict(), dict()
+        bounds = dict((clazz, dict()) for clazz in self._data.y.cat.categories.tolist())
+
+        def __mean(_self, clazz):
+            if clazz not in means:
+                mean_clazz = _self.__mean(clazz)
+                means[clazz] = mean_clazz
+            return means[clazz]
+
+        def __inv(_self, clazz):
+            if clazz not in inv_cov:
+                cov_clazz = _self.__cov(clazz)
+                inv_cov[clazz] = inv(cov_clazz)
+                det_cov[clazz] = det(cov_clazz)
+            return inv_cov[clazz], det_cov[clazz]
+
+        def __get_bounds(clazz, bound="lower"):
+            print(bounds, bound, clazz)
+            return bounds[clazz][bound] if bound in bounds[clazz] else None
+
+        def __put_bounds(probability, clazz, bound="lower"):
+            bounds[clazz][bound] = probability
+
+        def pairwise_comparison(_self, query, clazz_up, clazz_down, mean_up, mean_down,
+                                inv_up, inv_down, det_up, det_down, n, ell):
+
+            if __get_bounds(clazz_up) is None:
+                q = query.T @ inv_up
+                _mean_lower = (-ell + n * mean_up) / n
+                _mean_upper = (ell + n * mean_up) / n
+                fit_lower = _self.__lower_probability(inv_up, q, _mean_lower, _mean_upper)
+                prob_lower = _self.__compute_probability(fit_lower, inv_up, det_up, query)
+                __put_bounds(prob_lower, clazz_up)
+            else:
+                prob_lower = __get_bounds(clazz_up)
+
+            if __get_bounds(clazz_down, "upper") is None:
+                q = query.T @ inv_down
+                _mean_lower = (-ell + n * mean_down) / n
+                _mean_upper = (ell + n * mean_down) / n
+                fit_upper = _self.__upper_probability(inv_down, q, _mean_lower, _mean_upper)
+                prob_upper = _self.__compute_probability(fit_upper, inv_down, det_down, query)
+                __put_bounds(prob_upper, clazz_down, "upper")
+            else:
+                prob_upper = __get_bounds(clazz_down, "upper")
+
+            return prob_lower / prob_upper
+
+        class Node:
+            def __init__(self, clazz):
+                self._clazz = clazz if type(clazz) == list() else [clazz]
+
+            @property
+            def clazz(self):
+                return self._clazz
+
+            def append(self, new_clazz):
+                self._clazz.append(new_clazz)
+
+            def selection(self):
+                return np.random.choice(self._clazz, 1)[0]
+
+            def __hash__(self):
+                print(hash("_".join(str(x) for x in self._clazz)))
+                return hash("_".join(str(x) for x in self._clazz))
+
+        # First Step (computing clusters partial ordering)
+        clusters = [{Node(clazz): []} for clazz in self._data.y.cat.categories.tolist()]
+        while len(clusters) > 1:
+            new_clusters = []
+            while len(clusters) > 0:
+                if len(clusters) > 1:
+                    index = np.random.choice(len(clusters), 2, replace=False)
+                    y1_compound = np.random.choice([*clusters[index[0]]], 1)[0]
+                    y2_compound = np.random.choice([*clusters[index[1]]], 1)[0]
+                    y1, y2 = y1_compound.selection(), y2_compound.selection()
+                    mean_y1 = __mean(self, y1)
+                    mean_y2 = __mean(self, y2)
+                    inv_y1, det_y1 = __inv(self, y1)
+                    inv_y2, det_y2 = __inv(self, y2)
+                    inference = pairwise_comparison(self, query, y1, y2, mean_y1, mean_y2,
+                                                    inv_y1, inv_y2, det_y1, det_y2, self._n, self._ell)
+                    new_cluster = clusters[index[0]]
+                    new_cluster.update(clusters[index[1]])
+                    if inference > 1:
+                        new_cluster[y1_compound].append(y2_compound)
+                    else:
+                        inference = pairwise_comparison(self, query, y2, y1, mean_y2, mean_y1,
+                                                        inv_y2, inv_y1, det_y2, det_y1, self._n, self._ell)
+                        if inference > 1:
+                            new_cluster[y2_compound].append(y1_compound)
+                        else:
+                            children = set(new_cluster[y1_compound])
+                            children.update(new_cluster[y2_compound])
+                            del new_cluster[y1_compound]
+                            del new_cluster[y2_compound]
+                            compound = y1_compound.clazz
+                            compound.append(y2_compound.clazz)
+                            new_cluster[Node(compound)] = children
+                    new_clusters.append(new_cluster)
+                else:
+                    index = [0]
+                    new_clusters.append(clusters[index[0]])
+                [clusters.pop(idx) for idx in sorted(index, reverse=True)]
+            clusters = new_clusters
+
+        # Second step find connected components (transitive nodes)
+        graph = clusters[0]
+        components = dict()
+        visited = set()
+        from collections import deque
+        stack = deque(graph.keys())
+        while not stack.empty():
+            if node is not visited:
+                node = stack.pop()
+                visited.add(node)
+                components[node] = dict()
+                for neighbor in graph[node]:
+                    stack.append(neighbor)
+
+        # for node, children in :
+        #     if len(children) > 0:
+        #         seen.add(node)
+        #         components.append(node)
+        #
+        #         while not stack.empty():
+        #             child = stack.pop()
+
+
+    def __compute_probability(self, mean, inv_cov, det_cov, query):
+        _exp = -0.5 * (query - mean).T @ inv_cov @ (query - mean)
+        _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
         return _const * np.exp(_exp)
 
-    def __upper_probability(self, q, method="quadratic"):
+    def __upper_probability(self, Q, q, mean_lower, mean_upper, method="quadratic"):
         if method == "quadratic":
-            solution = self.__min_convex_qp(self._inv_cov, q,
-                                            self._mean_lower,
-                                            self._mean_upper, self._p)
+            solution = self.__min_convex_qp(Q, q, mean_lower, mean_upper, self._p)
         elif method == "nonlinear":
-            solution = self.__min_convex_cp(self._inv_cov, q,
-                                            self._mean_lower,
-                                            self._mean_upper, self._p)
+            solution = self.__min_convex_cp(Q, q, mean_lower, mean_upper, self._p)
         else:
             raise Exception("Yet doesn't exist optimisation implemented")
 
@@ -163,11 +286,11 @@ class LinearDiscriminant(DiscriminantAnalysis):
         h = matrix([ll_upper, -ll_lower])
         return solvers.cp(cOptFx, G=G, h=h)
 
-    def __lower_probability(self, q):
-        Q = matlab.double((-1*self._inv_cov).tolist())
-        q = matlab.double((-1*q).tolist())
-        LB = matlab.double(self._mean_lower.tolist())
-        UB = matlab.double(self._mean_upper.tolist())
+    def __lower_probability(self, Q, q, mean_lower, mean_upper):
+        Q = matlab.double((-1 * Q).tolist())
+        q = matlab.double((-1 * q).tolist())
+        LB = matlab.double(mean_lower.tolist())
+        UB = matlab.double(mean_upper.tolist())
         A = matlab.double([])
         b = matlab.double([])
         Aeq = matlab.double([])
@@ -194,19 +317,18 @@ class LinearDiscriminant(DiscriminantAnalysis):
 
 ## Testing
 current_dir = os.getcwd()
-data = os.path.join(current_dir, "/Users/salmuz/Dropbox/PhD/code/idle-kaggle/resources/classifier_easer.csv")
+root_path = "/Users/salmuz/Dropbox/PhD/code/idle-kaggle/resources/classifier_easer.csv"
+# root_path = "/Volumes/Data/DBSalmuz/Dropbox/PhD/code/idle-kaggle/resources/classifier_easer.csv"
+data = os.path.join(current_dir, root_path)
 df_train = pd.read_csv(data)
 
 pos_train = df_train[df_train.y == 1]
 neg_train = df_train[df_train.y == 0]
-X = pos_train.loc[:, ['x1', 'x2']].as_matrix()
-y = pos_train.y.tolist()
+X = df_train.loc[:, ['x1', 'x2']].values
+y = df_train.y.tolist()
 lqa = LinearDiscriminant(X, y, ell=.5)
 query = np.array([2, -2])
 lqa.inference(query)
-# print(lqa.mean, lqa.cov)
-# query = np.array([2, -2])
-# lqa.inference(query)
 # Plots.plot2D_classification(X, y)
 # Plots.plot_cov_ellipse(X)
 # plt.show()
