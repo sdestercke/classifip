@@ -315,6 +315,13 @@ class LinearDiscriminant(DiscriminantAnalysis):
         print("s:", self._mean)
         return 'Wahaha!'
 
+    def data_test(d):
+        e_mean = np.random.normal(size=d)
+        e_cov = normal(d, d)
+        e_cov = e_cov.T * e_cov
+        query = np.random.normal(size=d)
+        return e_mean, e_cov, query
+
     @property
     def cov(self):
         return self._cov
