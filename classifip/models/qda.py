@@ -1,5 +1,4 @@
 import abc
-import os
 
 import matlab.engine
 import numpy as np
@@ -11,8 +10,10 @@ from numpy.linalg import inv, det
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
     def __init__(self, init_matlab=False):
         # Starting matlab environment
-        if init_matlab: self._eng = matlab.engine.start_matlab()
-        else: self._eng = None
+        if init_matlab:
+            self._eng = matlab.engine.start_matlab()
+        else:
+            self._eng = None
         self._N, self._p = None, None
         self._data = None
         self._clazz = None
@@ -88,7 +89,6 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             self._mean_lower[clazz] = (-self.ell + nb_by_clazz * mean) / nb_by_clazz
             self._mean_upper[clazz] = (self.ell + nb_by_clazz * mean) / nb_by_clazz
 
-
     def evaluate(self, query, method="quadratic"):
         bounds = dict((clazz, dict()) for clazz in self._clazz)
 
@@ -121,16 +121,10 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             lower.append(p_inf)
             upper.append(p_up)
 
-
         inference = np.divide(lower, upper[::-1])
         answers = self._clazz[(inference > 1)]
         print("inf/sup:", np.divide(lower, upper[::-1]))
-        #from classifip.representations.intervalsProbability import IntervalsProbability
-        #answers.append(IntervalsProbability(np.row_stack((upper, lower))))
-        # if len(answers) == 2:
-        #     val = np.divide(lower, upper[::-1])
-        #     answers = [self._clazz[val.argmax(axis=0)]]
-        return answers, bounds, inference[(inference >1)]
+        return answers, bounds
 
     def __compute_probability(self, mean, inv_cov, det_cov, query):
         _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
@@ -143,7 +137,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             ell_lower = matrix(lower, (d, 1))
             ell_upper = matrix(upper, (d, 1))
             P = matrix(A)
-            q = matrix(-1*q)
+            q = matrix(-1 * q)
             I = matrix(0.0, (d, d))
             I[::d + 1] = 1
             G = matrix([I, -I])
@@ -206,6 +200,12 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             probabilities[clazz] = self.__compute_probability(means[clazz], inv, det, query)
         return means, cov, probabilities
 
+    def __repr__(self):
+        print("lower:", self._mean_lower)
+        print("upper:", self._mean_upper)
+        print("group cov", self.__cov_group_sample())
+        return "WADA!!"
+
     ## Plotting for 2D data
 
     def __check_data_available(self):
@@ -214,17 +214,20 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         y = self._data.y.tolist()
         if X is None: raise ValueError("It needs to learn one sample training")
 
-        n_row, n_col = X.shape
-        if n_col != 2: raise ValueError("Dimension in X matrix aren't corrected form.")
+        n_row, _ = X.shape
         if not isinstance(y, list): raise ValueError("Y isn't corrected form.")
         if n_row != len(y): raise ValueError("The number of column is not same in (X,y)")
-        return X, y
+        return X, np.array(y)
 
-    def plot2D_classification(self, query=None, colors={0: 'red', 1: 'blue'}):
+    def plot2D_classification(self, query=None):
 
         X, y = self.__check_data_available()
+        n_row, n_col = X.shape
 
         import matplotlib.pyplot as plt
+
+        c_map = plt.cm.get_cmap("hsv", self._nb_clazz + 1)
+        colors = dict((self._clazz[idx], c_map(idx)) for idx in range(0, self._nb_clazz))
 
         def plot_constraints(lower, upper):
             plt.plot([lower[0], lower[0], upper[0], upper[0], lower[0]],
@@ -233,60 +236,74 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
 
         def plot2D_scatter(X, y):
             color_by_instance = [colors[c] for c in y]
-            plt.scatter(X[:, 0], X[:, 1], c=color_by_instance, marker='+')
+            plt.scatter(X[:, 0], X[:, 1], marker='+', c=color_by_instance)
+
+        if n_col == 2:
+            for clazz in self._clazz:
+                mean_lower = self._mean_lower[clazz]
+                mean_upper = self._mean_upper[clazz]
+                plot_constraints(mean_lower, mean_upper)
+
+            if query is not None:
+                ml_mean, ml_cov, ml_prob = self.fit_max_likelihood(query)
+                plt.plot([query[0]], [query[1]], marker='h', markersize=5, color="black")
+                _, _bounds = self.evaluate(query)
+                for clazz in self._clazz:
+                    plt.plot([ml_mean[clazz][0]], [ml_mean[clazz][1]], marker='o', markersize=5, color=colors[clazz])
+                    _, est_mean_lower = _bounds[clazz]['inf']
+                    _, est_mean_upper = _bounds[clazz]['sup']
+                    plt.plot([est_mean_lower[0]], [est_mean_lower[1]], marker='x', markersize=4, color="black")
+                    plt.plot([est_mean_upper[0]], [est_mean_upper[1]], marker='x', markersize=4, color="black")
+        elif n_col > 2:
+            if query is not None:
+                inference, _ = self.evaluate(query)
+                X = np.vstack([X, query])
+                y = np.append(y, inference[0])
+
+            from sklearn.manifold import Isomap
+            iso = Isomap(n_components=2)
+            projection = iso.fit_transform(X)
+            X = np.c_[projection[:, 0], projection[:, 1]]
+
+            if query is not None:
+                color_instance = colors[inference[0]] if len(inference) == 1 else 'black'
+                plt.plot([X[n_row, 0]], [X[n_row, 1]], color='red', marker='o', mfc=color_instance)
+        else:
+            raise Exception("Not implemented for one feature yet.")
 
         plot2D_scatter(X, y)
-        for clazz in self._clazz:
-            mean_lower = self._mean_lower[clazz]
-            mean_upper = self._mean_upper[clazz]
-            plot_constraints(mean_lower, mean_upper)
-
-        if query is not None:
-            ml_mean, ml_cov, ml_prob = self.fit_max_likelihood(query)
-            plt.plot([query[0]], [query[1]], marker='h', markersize=5, color="black")
-            _, _bounds = self.evaluate(query)
-            for clazz in self._clazz:
-                plt.plot([ml_mean[clazz][0]], [ml_mean[clazz][1]], marker='o', markersize=5, color=colors[clazz])
-                _, est_mean_lower = _bounds[clazz]['inf']
-                _, est_mean_upper = _bounds[clazz]['sup']
-                plt.plot([est_mean_lower[0]], [est_mean_lower[1]], marker='x', markersize=4, color="black")
-                plt.plot([est_mean_upper[0]], [est_mean_upper[1]], marker='x', markersize=4, color="black")
-
         plt.show()
 
-    def plot2D_decision_boundary(self, colors={0: 'red', 1: 'blue'}, h = .5):
+    def plot2D_decision_boundary(self, h=.5):
 
         X, y = self.__check_data_available()
 
+        _, n_col = X.shape
+
+        if n_col > 2: raise Exception("Not implemented for n-dimension yet.")
+
         import matplotlib.pyplot as plt
 
-        def plot2D_scatter(X, y):
-            color_by_instance = [colors[c] for c in y]
-            plt.scatter(X[:, 0], X[:, 1], c=color_by_instance, marker='+')
-
-        plot2D_scatter(X, y)
         x_min, x_max = X[:, 0].min() - .5, X[:, 0].max() + .5
         y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
         xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-        z = np.array([])
-        NO_CLASS = 999
-        for query in np.c_[xx.ravel(), yy.ravel()]:
-            answer, _, inf = self.evaluate(query)
-            if len(answer) == 0:
-                z = np.append(z, NO_CLASS)
-            elif len(answer) == 1:
-                z = np.append(z, inf[0])
-            else:
-                raise Exception("There are a error of prediction.")
 
+        z = np.array([])
+        clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(self._clazz, 1))
+        NO_CLASS_COMPARABLE = -1
+        for query in np.c_[xx.ravel(), yy.ravel()]:
+            answer, _ = self.evaluate(query)
+            if len(answer) == 0:
+                z = np.append(z, NO_CLASS_COMPARABLE)
+            elif len(answer) == 1:
+                z = np.append(z, clazz_by_index[answer[0]])
+            else:
+                raise Exception("There are a error of imprecise inference!!")
+
+        y_colors = [clazz_by_index[clazz] for clazz in y]
         z = z.reshape(xx.shape)
-        from matplotlib.colors import ListedColormap
-        # cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA', '#AAAAFF'])
-        plt.pcolormesh(xx, yy, z, cmap=cmap_light)
-        plt.pcolormesh(xx, yy, z, shading="gouraud")
-        plot2D_scatter(X, y)
-        # np.savetxt('z_values.txt', z, fmt='%d')
-        # np.savetxt('xy_values.txt', np.c_[xx.ravel(), yy.ravel()], fmt='%d')
+        plt.contourf(xx, yy, z, alpha=0.4)
+        plt.scatter(X[:, 0], X[:, 1], c=y_colors, s=20, edgecolor='k')
         plt.show()
 
     ## Testing Optimal force brute
@@ -314,54 +331,6 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             print("box", mean_lower, mean_upper)
             self.__brute_force_search(clazz, query, mean_lower, mean_upper, inv, det, self._p)
 
-    def testing_plot(self, h = .05, colors={0: 'red', 1: 'blue'}):
-
-        X, y = self.__check_data_available()
-
-        def plot2D_scatter(X, y):
-            color_by_instance = [colors[c] for c in y]
-            plt.scatter(X[:, 0], X[:, 1], c=color_by_instance, marker='+')
-
-        x_min, x_max = X[:, 0].min() - .5, X[:, 0].max() + .5
-        y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
-        xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-        z = np.loadtxt('z_values.txt')
-        import matplotlib.pyplot as plt
-        from matplotlib.colors import ListedColormap
-        cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA', '#AAAAFF'])
-        print(z.shape, xx.shape)
-
-        # plt.pcolormesh(xx, yy, z, cmap=cmap_light)
-        plt.contourf(xx, yy, z)
-        plot2D_scatter(X, y)
-        # plt.imshow(z, interpolation='nearest', origin='lower', extent=[0,1.5,0,3.78], aspect='auto')
-
-        # print(z, xy[:,1])
-        plt.show()
-
-
-## Testing
-current_dir = os.getcwd()
-root_path = "/Users/salmuz/Dropbox/PhD/code/idle-kaggle/resources/classifier_easer_.csv"
-# root_path = "/Volumes/Data/DBSalmuz/Dropbox/PhD/code/idle-kaggle/resources/classifier_easer.csv"
-data = os.path.join(current_dir, root_path)
-df_train = pd.read_csv(data)
-X = df_train.loc[:, ['x1', 'x2']].values
-y = df_train.y.tolist()
-lqa = LinearDiscriminant(ell=5, init_matlab=False)
-lqa.learn(X, y)
-lqa.testing_plot()
-# query = np.array([0.830031, 0.108776])
-# query = np.array([2, 2])
-# answer, _ = lqa.evaluate(query)
-# print(answer, _)
-# lqa.supremum_bf(query)
-# print(lqa.fit_max_likelihood(query))
-# lqa.plot2D_classification(query)
-# lqa.plot2D_decision_boundary()
-# Plots.plot2D_classification(X, y)
-# Plots.plot_cov_ellipse(X)
-# plt.show()
 # def testingLargeDim(n, d):
 #     def costFx(x, cov, query):
 #         i_cov = inv(cov)
