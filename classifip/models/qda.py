@@ -4,7 +4,8 @@ import matlab.engine
 import numpy as np
 import pandas as pd
 from cvxopt import solvers, matrix
-from numpy.linalg import inv, det
+from numpy import linalg
+import sys
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
@@ -35,19 +36,24 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         if clazz not in self.inv_cov:
             cov_clazz = self.__cov_by_clazz(clazz)
             self.cov[clazz] = cov_clazz
-            self.inv_cov[clazz] = inv(cov_clazz)
-            self.det_cov[clazz] = det(cov_clazz)
+            if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
+                self.inv_cov[clazz] = linalg.inv(cov_clazz)
+                self.det_cov[clazz] = linalg.det(cov_clazz)
+            else: # computing pseudo inverse/determinant to a singular covariance matrix
+                self.inv_cov[clazz] = linalg.pinv(cov_clazz)
+                eig_values, _ = linalg.eig(cov_clazz)
+                self.det_cov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
         return self.cov[clazz], self.inv_cov[clazz], self.det_cov[clazz]
 
 
 class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
-    def __init__(self, ell=20, init_matlab=True):
+    def __init__(self, init_matlab=True):
         """
         ell : be careful with negative ll_upper interval, it needs max(0 , ll_upper)
         :param ell:
         """
         super(LinearDiscriminant, self).__init__(init_matlab=init_matlab)
-        self.ell = ell
+        self.ell = None
         self.prior = dict()
         self.means, self.inv_cov, self.det_cov = dict(), dict(), dict()
         self._mean_lower, self._mean_upper = dict(), dict()
@@ -64,13 +70,17 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             covClazz, _, _ = self.get_cov_by_clazz(clazz)
             _nb_instances_by_clazz = self.__nb_by_clazz(clazz)
             cov += covClazz * (_nb_instances_by_clazz - 1)  # biased estimator
-        cov = cov / (self._N - self._nb_clazz)  # unbiased estimator group
-        return cov, inv(cov), det(cov)
+        cov /= self._N - self._nb_clazz  # unbiased estimator group
+        return cov, linalg.inv(cov), linalg.det(cov)
 
     def __nb_by_clazz(self, clazz):
         return len(self._data[self._data.y == clazz])
 
-    def learn(self, X, y):
+    def learn(self, X, y, ell=20):
+        self.ell = ell
+        self.means, self.inv_cov, self.det_cov = dict(), dict(), dict()
+        self._mean_lower, self._mean_upper = dict(), dict()
+
         self._N, self._p = X.shape
         assert self._N == len(y), "Size X and y is not equals."
         y = np.array(y) if type(y) is list else y
@@ -81,7 +91,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         self._clazz = np.array(self._data.y.cat.categories.tolist())
         self._nb_clazz = len(self._clazz)
 
-        for clazz in self._data.y.cat.categories.tolist():
+        for clazz in self._clazz:
             mean = self.get_mean_by_clazz(clazz)
             self.get_cov_by_clazz(clazz)
             self.prior[clazz] = self.__nb_by_clazz(clazz) / self._N
@@ -118,13 +128,18 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             mean_upper = self._mean_upper[clazz]
             p_inf, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='inf')
             p_up, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='sup')
-            lower.append(p_inf)
-            upper.append(p_up)
+            lower.append(p_inf * self.prior[clazz])
+            upper.append(p_up * self.prior[clazz])
 
-        inference = np.divide(lower, upper[::-1])
-        answers = self._clazz[(inference > 1)]
-        print("inf/sup:", np.divide(lower, upper[::-1]))
-        return answers, bounds
+        from ..representations.voting import Scores
+
+        score = Scores(np.c_[lower, upper])
+        return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
+
+        # inference = np.divide(lower, upper[::-1])
+        # answers = self._clazz[(inference > 1)]
+        # print("inf/sup:", np.divide(lower, upper[::-1]))
+        # return answers, bounds
 
     def __compute_probability(self, mean, inv_cov, det_cov, query):
         _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
@@ -144,8 +159,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             h = matrix([ell_upper, -ell_lower])
             return solvers.qp(P=P, q=q, G=G, h=h)
 
-        def __min_convex_cp(cov, q, lower, upper, d):
-            i_cov = matrix(inv(cov))
+        def __min_convex_cp(Q, q, lower, upper, d):
+            i_cov = matrix(Q)
             b = matrix(q)
 
             def cOptFx(x=None, z=None):
@@ -219,15 +234,17 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         if n_row != len(y): raise ValueError("The number of column is not same in (X,y)")
         return X, np.array(y)
 
-    def plot2D_classification(self, query=None):
+    def plot2D_classification(self, query=None, colors=None):
 
         X, y = self.__check_data_available()
         n_row, n_col = X.shape
 
         import matplotlib.pyplot as plt
+        import matplotlib as mpl
 
         c_map = plt.cm.get_cmap("hsv", self._nb_clazz + 1)
-        colors = dict((self._clazz[idx], c_map(idx)) for idx in range(0, self._nb_clazz))
+        colors = dict((self._clazz[idx], c_map(idx)) for idx in range(0, self._nb_clazz)) \
+            if colors is None else colors
 
         def plot_constraints(lower, upper):
             plt.plot([lower[0], lower[0], upper[0], upper[0], lower[0]],
@@ -237,6 +254,21 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         def plot2D_scatter(X, y):
             color_by_instance = [colors[c] for c in y]
             plt.scatter(X[:, 0], X[:, 1], marker='+', c=color_by_instance)
+
+        def plot_ellipse(splot, mean, cov, color):
+            from scipy import linalg
+
+            v, w = linalg.eigh(cov)
+            u = w[0] / linalg.norm(w[0])
+            angle = np.arctan(u[1] / u[0])
+            angle = 180 * angle / np.pi
+            ell = mpl.patches.Ellipse(mean, 2 * v[0] ** 0.5, 2 * v[1] ** 0.5,
+                                      180 + angle, facecolor="none",
+                                      edgecolor=color,
+                                      linewidth=2, zorder=2)
+            ell.set_clip_box(splot.bbox)
+            ell.set_alpha(0.9)
+            splot.add_artist(ell)
 
         if n_col == 2:
             for clazz in self._clazz:
@@ -254,6 +286,13 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                     _, est_mean_upper = _bounds[clazz]['sup']
                     plt.plot([est_mean_lower[0]], [est_mean_lower[1]], marker='x', markersize=4, color="black")
                     plt.plot([est_mean_upper[0]], [est_mean_upper[1]], marker='x', markersize=4, color="black")
+
+            cov, inv, det = self.__cov_group_sample()
+            s_plot = plt.subplot()
+            for clazz in self._clazz:
+                mean = self.get_mean_by_clazz(clazz)
+                plot_ellipse(s_plot, mean, cov, colors[clazz])
+
         elif n_col > 2:
             if query is not None:
                 inference, _ = self.evaluate(query)
@@ -274,7 +313,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         plot2D_scatter(X, y)
         plt.show()
 
-    def plot2D_decision_boundary(self, h=.5):
+    def plot2D_decision_boundary(self, h=.1):
 
         X, y = self.__check_data_available()
 
@@ -293,12 +332,10 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         NO_CLASS_COMPARABLE = -1
         for query in np.c_[xx.ravel(), yy.ravel()]:
             answer, _ = self.evaluate(query)
-            if len(answer) == 0:
+            if len(answer) > 1 or len(answer) == 0:
                 z = np.append(z, NO_CLASS_COMPARABLE)
-            elif len(answer) == 1:
-                z = np.append(z, clazz_by_index[answer[0]])
             else:
-                raise Exception("There are a error of imprecise inference!!")
+                z = np.append(z, clazz_by_index[answer[0]])
 
         y_colors = [clazz_by_index[clazz] for clazz in y]
         z = z.reshape(xx.shape)
@@ -323,7 +360,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
 
         forRecursive(lower, upper, 0, d, np.array([]))
 
-    def supremum_bf(self, query):
+    def show_all_brute_optimal(self, query):
         cov, inv, det = self.__cov_group_sample()
         for clazz in self._clazz:
             mean_lower = self._mean_lower[clazz]
@@ -331,18 +368,3 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             print("box", mean_lower, mean_upper)
             self.__brute_force_search(clazz, query, mean_lower, mean_upper, inv, det, self._p)
 
-# def testingLargeDim(n, d):
-#     def costFx(x, cov, query):
-#         i_cov = inv(cov)
-#         q = query.T @ i_cov
-#         return 0.5 * (x.T @ i_cov @ x) + q.T @ x
-#
-#     e_mean = np.random.normal(size=d)
-#     e_cov = normal(d, d)
-#     e_cov = e_cov.T * e_cov
-#     query = np.random.normal(size=d)
-#     q = maximum_Fx(e_cov, e_mean, query, n, d)
-#     print("--->", q["x"], costFx(np.array(q["x"]), e_cov, query))
-#     bnb_search(e_cov, e_mean, query, n, d)
-#     brute_force_search(e_cov, e_mean, query, n, d)
-# testingLargeDim(20, 5)
