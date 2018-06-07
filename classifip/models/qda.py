@@ -246,9 +246,10 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         colors = dict((self._clazz[idx], c_map(idx)) for idx in range(0, self._nb_clazz)) \
             if colors is None else colors
 
-        def plot_constraints(lower, upper):
+        def plot_constraints(lower, upper, _linestyle="solid"):
             plt.plot([lower[0], lower[0], upper[0], upper[0], lower[0]],
-                     [lower[1], upper[1], upper[1], lower[1], lower[1]])
+                     [lower[1], upper[1], upper[1], lower[1], lower[1]],
+                     linestyle=_linestyle)
             plt.grid()
 
         def plot2D_scatter(X, y):
@@ -272,9 +273,13 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
 
         if n_col == 2:
             for clazz in self._clazz:
-                mean_lower = self._mean_lower[clazz]
-                mean_upper = self._mean_upper[clazz]
-                plot_constraints(mean_lower, mean_upper)
+                post_mean_lower = self._mean_lower[clazz]
+                post_mean_upper = self._mean_upper[clazz]
+                plot_constraints(post_mean_lower, post_mean_upper)
+                mean = self.get_mean_by_clazz(clazz)
+                prior_mean_lower = mean - self.ell
+                prior_mean_upper = mean + self.ell
+                plot_constraints(prior_mean_lower, prior_mean_upper, _linestyle = "dashed")
 
             if query is not None:
                 ml_mean, ml_cov, ml_prob = self.fit_max_likelihood(query)
