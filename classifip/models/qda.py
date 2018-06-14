@@ -39,7 +39,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
                 self.inv_cov[clazz] = linalg.inv(cov_clazz)
                 self.det_cov[clazz] = linalg.det(cov_clazz)
-            else: # computing pseudo inverse/determinant to a singular covariance matrix
+            else:  # computing pseudo inverse/determinant to a singular covariance matrix
                 self.inv_cov[clazz] = linalg.pinv(cov_clazz)
                 eig_values, _ = linalg.eig(cov_clazz)
                 self.det_cov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
@@ -234,7 +234,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         if n_row != len(y): raise ValueError("The number of column is not same in (X,y)")
         return X, np.array(y)
 
-    def plot2D_classification(self, query=None, colors=None):
+    def plot2D_classification(self, query=None, colors=None, markers=['*', 'v', 'o', '+', '-', '.', ',']):
 
         X, y = self.__check_data_available()
         n_row, n_col = X.shape
@@ -245,6 +245,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         c_map = plt.cm.get_cmap("hsv", self._nb_clazz + 1)
         colors = dict((self._clazz[idx], c_map(idx)) for idx in range(0, self._nb_clazz)) \
             if colors is None else colors
+        markers = dict((self._clazz[idx], markers[idx]) for idx in range(0, self._nb_clazz))
 
         def plot_constraints(lower, upper, _linestyle="solid"):
             plt.plot([lower[0], lower[0], upper[0], upper[0], lower[0]],
@@ -253,8 +254,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             plt.grid()
 
         def plot2D_scatter(X, y):
-            color_by_instance = [colors[c] for c in y]
-            plt.scatter(X[:, 0], X[:, 1], marker='+', c=color_by_instance)
+            for row in range(0, len(y)):
+                plt.scatter(X[row, 0], X[row, 1], marker=markers[y[row]], c=colors[y[row]])
 
         def plot_ellipse(splot, mean, cov, color):
             from scipy import linalg
@@ -279,7 +280,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                 mean = self.get_mean_by_clazz(clazz)
                 prior_mean_lower = mean - self.ell
                 prior_mean_upper = mean + self.ell
-                plot_constraints(prior_mean_lower, prior_mean_upper, _linestyle = "dashed")
+                plot_constraints(prior_mean_lower, prior_mean_upper, _linestyle="dashed")
 
             if query is not None:
                 ml_mean, ml_cov, ml_prob = self.fit_max_likelihood(query)
@@ -318,7 +319,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         plot2D_scatter(X, y)
         plt.show()
 
-    def plot2D_decision_boundary(self, h=.1):
+    def plot2D_decision_boundary(self, h=.1, markers=['*', 'v', 'o', '+', '-', '.', ',']):
 
         X, y = self.__check_data_available()
 
@@ -343,9 +344,11 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                 z = np.append(z, clazz_by_index[answer[0]])
 
         y_colors = [clazz_by_index[clazz] for clazz in y]
+        markers = dict((self._clazz[idx], markers[idx]) for idx in range(0, self._nb_clazz))
         z = z.reshape(xx.shape)
         plt.contourf(xx, yy, z, alpha=0.4)
-        plt.scatter(X[:, 0], X[:, 1], c=y_colors, s=20, edgecolor='k')
+        for row in range(0, len(y)):
+            plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker= markers[y[row]], edgecolor='k')
         plt.show()
 
     ## Testing Optimal force brute
@@ -372,4 +375,3 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             mean_upper = self._mean_upper[clazz]
             print("box", mean_lower, mean_upper)
             self.__brute_force_search(clazz, query, mean_lower, mean_upper, inv, det, self._p)
-

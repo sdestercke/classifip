@@ -1,9 +1,10 @@
 import pandas as pd
 import feather
 import os
+from os.path import join
 
 current_dir = os.getcwd()
-out_path = os.path.join(current_dir, "../../resources/")
+out_path = join(current_dir, "../../resources/")
 
 
 def import_data_set(in_path, sep="\s", name=None):
@@ -12,12 +13,15 @@ def import_data_set(in_path, sep="\s", name=None):
         name = os.path.basename(in_path)
         name = os.path.splitext(name)
         name = name[0] + ".data"
-    feather.write_dataframe(data, os.path.join(out_path, name))
+    feather.write_dataframe(data, join(out_path, name))
 
 
-def export_data_set(name):
-    pass
+def export_data_set(name = None):
+    if name is None:
+        data = feather.read_dataframe(join(out_path, "iris.data"))
+    else:
+        data = feather.read_dataframe(join(out_path, name))
+    return data
 
-
-root = "/Users/salmuz/Downloads/iris.txt"
-import_data_set(root, sep=",")
+# root = "~/Dropbox/PhD/testing/data_lda.csv"
+# import_data_set(root, sep=",", name="bin_normal_rnd.data")
