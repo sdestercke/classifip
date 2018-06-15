@@ -3,7 +3,6 @@
 *.xml
 *.pyc
 *egg-info
-docs/
 dist/
 .idea/
 build/
