@@ -1,4 +1,5 @@
 from . import arff
+from . import uci_data_set
 from Orange.data import Table as OTable
 from Orange.preprocess import Discretize as Disc
 #from Orange.data.discretization import DiscretizeTable as DiscTable

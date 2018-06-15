@@ -24,5 +24,6 @@ setup(
     platforms = "any",
     description='Classification with Imprecise Probability methods.',
     long_description=open('README.rst').read(),
-    classifiers = classifiers.split('\n'),
+    classifiers = classifiers.split('\n'), install_requires=['numpy', 'cvxopt', 'scikit-learn', 'matplotlib', 'pandas',
+                                                             'feather-format']
 )
