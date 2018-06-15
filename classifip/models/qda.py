@@ -187,6 +187,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             raise Exception("Yet doesn't exist optimisation implemented")
 
         if solution['status'] != 'optimal':
+            print("[Solution-not-Optimal]", solution)
             raise Exception("Not exist solution optimal!!")
 
         return [v for v in solution['x']]
@@ -194,17 +195,24 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
     def __infimum_estimation(self, Q, q, mean_lower, mean_upper):
         if self._eng is None:
             raise Exception("Environment matlab hadn't been initialized.")
+        try:
+            Q = matlab.double((-1 * Q).tolist())
+            q = matlab.double(q.tolist())
+            LB = matlab.double(mean_lower.tolist())
+            UB = matlab.double(mean_upper.tolist())
+            A = matlab.double([])
+            b = matlab.double([])
+            Aeq = matlab.double([])
+            beq = matlab.double([])
+            x, f_val, time, stats = self._eng.quadprogbb(Q, self._eng.transpose(q), A, b, Aeq, beq,
+                                                         self._eng.transpose(LB), self._eng.transpose(UB), nargout=4)
+        except matlab.engine.MatlabExecutionError:
+            print("Some error in the QuadProgBB code, inputs:")
+            print("Q:", Q)
+            print("q:", q)
+            print("LB", LB, "UP", UB)
+            raise Exception("Matlab ERROR execution QuadProgBB")
 
-        Q = matlab.double((-1 * Q).tolist())
-        q = matlab.double(q.tolist())
-        LB = matlab.double(mean_lower.tolist())
-        UB = matlab.double(mean_upper.tolist())
-        A = matlab.double([])
-        b = matlab.double([])
-        Aeq = matlab.double([])
-        beq = matlab.double([])
-        x, f_val, time, stats = self._eng.quadprogbb(Q, self._eng.transpose(q), A, b, Aeq, beq,
-                                                     self._eng.transpose(LB), self._eng.transpose(UB), nargout=4)
         return np.asarray(x).reshape((1, self._p))[0]
 
     def fit_max_likelihood(self, query):
