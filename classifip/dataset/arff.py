@@ -291,9 +291,8 @@ class ArffFile(object):
             * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
         
         """
-        datasave=np.array([map(str,x) for x in self.data]).astype('|S25')
+        datasave = np.array([list(map(str, row)) for row in self.data])
         numitem=datasave.shape[0]
-        
         if discmet=='eqfreq':
             if selfeat!=None:
                 if self.attribute_types[selfeat]!='numeric':
@@ -339,7 +338,7 @@ class ArffFile(object):
                         cutpoint=[]
                         newname=[]
                         for j in range(numint):
-                            cutpoint.append(datasave[((j+1)*(numitem/(numint)))-1,i])
+                            cutpoint.append(datasave[int((j+1)*(numitem/(numint)))-1,i])
                         for j in range(numint):
                             if j==0:
                                 string=str(cutpoint[j])

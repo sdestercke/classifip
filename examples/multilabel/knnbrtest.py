@@ -30,6 +30,6 @@ test = model.evaluate([row[0:len(row)-nblab] for row in data.data[0:10]],knnbr_b
 
 # The output is a list of probability intervals, we can print each instance :
 print("Probability intervals obtained for each label on the first test instance \n")
-print test[0]
+print(test[0])
 
 
