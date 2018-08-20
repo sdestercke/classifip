@@ -1,7 +1,7 @@
 from .pairpip import get_binomial_int 
 from ..dataset.arff import ArffFile
 from scipy.spatial import kdtree, distance
-from ..representations.voting import Scores
+from ..representations.credalset import CredalSet
 import numpy as np
 from scipy.sparse import dok_matrix
 from scipy.misc import comb
