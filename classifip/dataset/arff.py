@@ -291,7 +291,7 @@ class ArffFile(object):
             * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
         
         """
-        datasave = np.array([list(map(str, row)) for row in self.data])
+        datasave = np.array([[str(item) for item in row] for row in self.data], dtype=object)
         numitem=datasave.shape[0]
         if discmet=='eqfreq':
             if selfeat!=None:
@@ -304,7 +304,7 @@ class ArffFile(object):
                 cutpoint=[]
                 newname=[]
                 for i in range(numint):
-                    cutpoint.append(datasave[((i+1)*(numitem/(numint)))-1,indexfeat])
+                    cutpoint.append(datasave[int((i+1)*(numitem/(numint)))-1,indexfeat])
                 for i in range(numint):
                     if i==0:
                         string=str(cutpoint[i])
@@ -319,12 +319,12 @@ class ArffFile(object):
                                         +';'+string2[0:min(len(string2),7)]+']')
                 for i in range(numint):
                     if i==0:
-                        datasave[(floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
+                        datasave[(floatdata<=float(cutpoint[i])),indexfeat]=newname[i]
                     elif i==(numint-1):
-                        datasave[(floatdata>cutpoint[i-1].astype(float)),indexfeat]=newname[i]
+                        datasave[(floatdata>float(cutpoint[i-1])),indexfeat]=newname[i]
                     else:
-                        datasave[(floatdata>cutpoint[i-1].astype(float)) &
-                            (floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
+                        datasave[(floatdata>float(cutpoint[i-1])) &
+                            (floatdata<=float(cutpoint[i])),indexfeat]=newname[i]
                 self.data=datasave.tolist()
                 self.attribute_types[selfeat]='nominal'
                 self.attribute_data[selfeat]=newname
@@ -353,12 +353,12 @@ class ArffFile(object):
                                         +';'+string2[0:min(len(string2),7)]+']')
                         for j in range(numint):
                             if j==0:
-                                datasave[(floatdata<=cutpoint[j].astype(float)),i]=newname[j]
+                                datasave[(floatdata<=float(cutpoint[j])),i]=newname[j]
                             elif j==(numint-1):
-                                datasave[(floatdata>cutpoint[j-1].astype(float)),i]=newname[j]
+                                datasave[(floatdata>float(cutpoint[j-1])),i]=newname[j]
                             else:
-                                datasave[(floatdata>cutpoint[j-1].astype(float)) &
-                                    (floatdata<=cutpoint[j].astype(float)),i]=newname[j]
+                                datasave[(floatdata>float(cutpoint[j-1])) &
+                                    (floatdata<=float(cutpoint[j])),i]=newname[j]
                         self.attribute_types[feature]='nominal'
                         self.attribute_data[feature]=newname
                 self.data=datasave.tolist()
