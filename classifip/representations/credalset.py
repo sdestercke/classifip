@@ -305,8 +305,7 @@ class CredalSet(object):
         
         """
         if utilities is None:
-            utilities = np.ones((self.nbDecision, self.nbDecision))
-            np.fill_diagonal(utilities, 0)
+            utilities=np.identity(self.nbDecision)
         
         if utilities.shape[1]!=self.nbDecision:
             raise Exception('bad numbers of columns in utilities')
