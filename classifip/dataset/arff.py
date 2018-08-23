@@ -175,8 +175,7 @@ class ArffFile(object):
         selection.attributes=self.attributes[:]
         selection.comment=self.comment[:]
         
-        return selection 
-    
+        return selection
     
     def select_class_binary(self, positive, negative):
         """return an ARFF object where only some classes are selected in order
@@ -284,7 +283,7 @@ class ArffFile(object):
         :param numint: number of intervals into which divide attributes
         :type numint: integer
         :param selfeat: name of a particular feature to discretize, if None discretize all
-        :type numint: string
+        :type numint: integer
         
         ..todo::
         
@@ -433,8 +432,6 @@ class ArffFile(object):
         
         if discmet=='ent':
             print("sorry, not implemented, please use discretize_ent function of classifip.datasets")
-
-            
 
     @staticmethod
     def parse(s):
@@ -592,7 +589,6 @@ class ArffFile(object):
                 datum.append(None)                     
             else:
                 self.__print_warning('incorrect value %s for nominal attribute %s' % (value, self.attributes[idx_attrib]))
-
 
     def __parse_sparse_data(self, l):
         pairs = [s.strip() for s in l.strip('{}').split(',')]

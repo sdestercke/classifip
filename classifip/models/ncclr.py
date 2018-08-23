@@ -2,7 +2,17 @@ from . import nccof
 from ..dataset.arff import ArffFile
 import numpy as np
 import copy
+from constraint import *
 
+def inference_ranking_csp(inferences):
+    ranking_utility = np.array([[2, 1, 0], [1, 2, 1], [0, 1, 2]])
+    for inference in inferences:
+        problem = Problem()
+        for idx, classifier in enumerate(inference):
+            maxDecision = classifier.getmaximaldecision(ranking_utility)
+            problem.addVariable("R" + str(idx), np.where(maxDecision > 0)[0])
+        problem.addConstraint(AllDifferentConstraint())
+        print(problem.getSolution())
 
 class NCCLR(object):
     """NCCLR implements the naive credal classification method using the IDM for
@@ -36,17 +46,16 @@ class NCCLR(object):
                         raise Exception("Error: Number labels for ranking is not correct in sample " + str(number))
                     instance.append(str(label_ranking.index(class_value)))
                 datarep.remove_col('L')
-                datarep.dump()
                 model.learn(datarep)
                 self.setnccof.append(model)
         except KeyError:
             raise Exception("Error: The name of ranking attribute should be called 'L'.")
 
-    def evaluate(self, test_dataset, ncc_epsilon=0.001, ncc_s_param=2):
-
+    def evaluate(self, test_data_set, ncc_s_param=2):
         answers = []
-        for j in range(self.nb_labels):
-            answer = self.setnccof[j].evaluate(test_dataset, ncc_epsilon, ncc_s_param)
-            answers.append(answer[0])
-
+        for item in test_data_set:
+            ans_lw_ranking = []
+            for j in range(self.nb_labels):
+                ans_lw_ranking.extend(self.setnccof[j].evaluate([item], ncc_epsilon=0.001, ncc_s_param=ncc_s_param))
+            answers.append(ans_lw_ranking)
         return answers
