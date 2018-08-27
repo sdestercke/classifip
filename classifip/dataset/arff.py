@@ -283,7 +283,7 @@ class ArffFile(object):
         :param numint: number of intervals into which divide attributes
         :type numint: integer
         :param selfeat: name of a particular feature to discretize, if None discretize all
-        :type numint: integer
+        :type selfeat: string
         
         ..todo::
         
@@ -510,7 +510,7 @@ class ArffFile(object):
         :param name: name of the attribute
         :type name: string
         :param data: modalities/labels of the attribute
-        :type atype: list
+        :type data: list
         """
         
         self.attributes.append(name)
