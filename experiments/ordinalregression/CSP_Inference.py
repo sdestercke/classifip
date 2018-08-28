@@ -1,6 +1,7 @@
 import classifip
 import random
 import sys
+import numpy as np
 from scipy import stats
 from constraint import *
 
@@ -25,6 +26,7 @@ def kendall_tau(y_idx_true, y_idx_predict, M):
     return (C-D)/(M*(M-1)/2)
 
 def measure_classifier_preference(y_true, y_predict):
+    print("Inferece[true,predict]:", y_true, y_predict)
     y_true = y_true.split(">")
     if y_predict is None: return 0.0;
     y_idx_true = []
@@ -32,21 +34,21 @@ def measure_classifier_preference(y_true, y_predict):
     for idx, value in enumerate(y_true):
         y_idx_true.append(idx)
         y_idx_predict.append(y_predict[value])
+    #tau = kendall_tau(y_idx_true, y_idx_predict, len(y_idx_true))
     tau, _ = stats.kendalltau(y_idx_predict, y_idx_true)
-    # print(tau, y_idx_true, y_idx_predict)
     return tau
 
 def experiment_01():
     model = classifip.models.ncclr.NCCLR()
-    dataArff= classifip.dataset.arff.ArffFile()
-    dataArff.load("/Users/salmuz/Downloads/datasets/iris_dense.xarff")
     seed = random.randrange(sys.maxsize)
     seed_kFold = random.randrange(sys.maxsize)
-    max_ncc_s_param, num_kFold, pct_testing = 10, 10, 0.4
+    max_ncc_s_param, num_kFold, pct_testing = 10, 10, 0.2
     print("Seed generated for system is (%5d, %5d)." % (seed, seed_kFold))
     avg_accuracy = dict()
     for nb_int in range(5, 11):
         print("Number interval for discreteness %5d." % nb_int)
+        dataArff = classifip.dataset.arff.ArffFile()
+        dataArff.load("/Users/salmuz/Downloads/datasets/iris_dense.xarff")
         dataArff.discretize(discmet="eqfreq", numint=nb_int)
         training, testing = classifip.evaluation.train_test_split(dataArff, test_pct=pct_testing, random_seed=seed)
         avg_accuracy[str(nb_int)] = dict()
@@ -59,10 +61,10 @@ def experiment_01():
                 evaluate_pBox = model.evaluate(set_test.data, ncc_s_param=ncc_imprecise)
                 avg_test = 0
                 for idx, pBox in enumerate(evaluate_pBox):
-                    solution = model.predict_CSP([pBox])
-                    avg_test += measure_classifier_preference(set_test.data[idx][-1], solution[0])
-                avg_cv += avg_test/len(evaluate_pBox)
-            avg_accuracy[str(nb_int)][str(ncc_imprecise)] = avg_cv
+                    predict = model.predict_CSP([pBox])
+                    avg_test += measure_classifier_preference(set_test.data[idx][-1], predict[0])
+                avg_cv += avg_test/len(set_test.data)
+            avg_accuracy[str(nb_int)][str(ncc_imprecise)] = avg_cv/num_kFold
             print("avg imprecision", ncc_imprecise, avg_cv)
     print("Results:", avg_accuracy)
 
