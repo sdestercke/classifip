@@ -1,25 +1,36 @@
 import abc
-
 import matlab.engine
 import numpy as np
 import pandas as pd
 from cvxopt import solvers, matrix
 from numpy import linalg
 import sys
+import io
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
-    def __init__(self, init_matlab=False):
+    def __init__(self, init_matlab=False, DEBUG=False):
         # Starting matlab environment
         if init_matlab:
             self._eng = matlab.engine.start_matlab()
         else:
             self._eng = None
+        self._DEBUG = DEBUG
         self._N, self._p = None, None
         self._data = None
+        self.ell = None
         self._clazz = None
         self._nb_clazz = None
         self.means, self.cov, self.inv_cov, self.det_cov = dict(), dict(), dict(), dict()
+
+    def getData(self):
+        return self._data
+
+    def getClazz(self):
+        return self._clazz
+
+    def getEll(self):
+        return self.ell
 
     def __mean_by_clazz(self, clazz):
         return self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
@@ -45,24 +56,47 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 self.det_cov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
         return self.cov[clazz], self.inv_cov[clazz], self.det_cov[clazz]
 
+    def fit_max_likelihood(self, query):
+        means, probabilities = dict(), dict()
+        cov, inv, det = self._cov_group_sample()
+        for clazz in self._clazz:
+            means[clazz] = self.get_mean_by_clazz(clazz)
+            probabilities[clazz] = self._compute_probability(means[clazz], inv, det, query)
+        return means, cov, probabilities
+
+    @abc.abstractmethod
+    def _compute_probability(self, param, inv, det, query):
+        pass
+
+    @abc.abstractmethod
+    def _cov_group_sample(self):
+        """
+        :rtype: object
+        """
+        pass
+
 
 class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
-    def __init__(self, init_matlab=True):
+    """
+       Imprecise Linear Discriminant implemented with a imprecise gaussian distribution and
+       conjugate exponential family.
+    """
+    def __init__(self, init_matlab=True, DEBUG=False):
         """
-        ell : be careful with negative ll_upper interval, it needs max(0 , ll_upper)
-        :param ell:
+        :param init_matlab:
         """
-        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab)
-        self.ell = None
+        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab, DEBUG=DEBUG)
         self.prior = dict()
         self.means, self.inv_cov, self.det_cov = dict(), dict(), dict()
         self._mean_lower, self._mean_upper = dict(), dict()
         # self.cov_group_sample = (None, None, None)
 
-    def __cov_group_sample(self):
+    def get_bound_means(self, clazz):
+        return self._mean_lower[clazz], self._mean_upper[clazz]
+
+    def _cov_group_sample(self):
         """
-        Hint: Improving this method using the SVD method for computing
-              pseudo-inverse matrix
+        Hint: Improving this method using the SVD method for computing pseudo-inverse matrix
         :return:
         """
         cov = 0
@@ -77,6 +111,12 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         return len(self._data[self._data.y == clazz])
 
     def learn(self, X, y, ell=20):
+        """
+        :param X:
+        :param y:
+        :param ell: be careful with negative ll_upper interval, it needs max(0 , ll_upper)
+        :return:
+        """
         self.ell = ell
         self.means, self.inv_cov, self.det_cov = dict(), dict(), dict()
         self._mean_lower, self._mean_upper = dict(), dict()
@@ -116,13 +156,13 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                     estimator = _self.__infimum_estimation(inv, q, mean_lower, mean_upper)
                 else:
                     estimator = _self.__supremum_estimation(inv, q, mean_lower, mean_upper, method)
-                prob_lower = _self.__compute_probability(np.array(estimator), inv, det, query)
+                prob_lower = _self._compute_probability(np.array(estimator), inv, det, query)
                 __put_bounds(prob_lower, estimator, clazz, bound)
             return __get_bounds(clazz, bound)
 
         lower = []
         upper = []
-        cov, inv, det = self.__cov_group_sample()
+        cov, inv, det = self._cov_group_sample()
         for clazz in self._clazz:
             mean_lower = self._mean_lower[clazz]
             mean_upper = self._mean_upper[clazz]
@@ -141,7 +181,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         # print("inf/sup:", np.divide(lower, upper[::-1]))
         # return answers, bounds
 
-    def __compute_probability(self, mean, inv_cov, det_cov, query):
+    def _compute_probability(self, mean, inv_cov, det_cov, query):
         _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
         _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
         return _const * np.exp(_exp)
@@ -196,6 +236,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         if self._eng is None:
             raise Exception("Environment matlab hadn't been initialized.")
         try:
+            __out = io.StringIO()
+            __err = io.StringIO()
             Q = matlab.double((-1 * Q).tolist())
             q = matlab.double(q.tolist())
             LB = matlab.double(mean_lower.tolist())
@@ -205,159 +247,25 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             Aeq = matlab.double([])
             beq = matlab.double([])
             x, f_val, time, stats = self._eng.quadprogbb(Q, self._eng.transpose(q), A, b, Aeq, beq,
-                                                         self._eng.transpose(LB), self._eng.transpose(UB), nargout=4)
+                                        self._eng.transpose(LB), self._eng.transpose(UB), nargout=4,
+                                        stdout=__out, stderr=__err)
+            if self._DEBUG:
+                print("[DEBUG_MATHLAB_OUTPUT:", __out.getvalue())
+                print("[DEBUG_MATHLAB_OUTPUT:", __err.getvalue())
         except matlab.engine.MatlabExecutionError:
             print("Some error in the QuadProgBB code, inputs:")
-            print("Q:", Q)
-            print("q:", q)
-            print("LB", LB, "UP", UB)
+            print("Q matrix:", Q)
+            print("q vector:", q)
+            print("Lower Bound:", mean_lower, "Upper Bound", mean_upper)
             raise Exception("Matlab ERROR execution QuadProgBB")
 
         return np.asarray(x).reshape((1, self._p))[0]
 
-    def fit_max_likelihood(self, query):
-        means, probabilities = dict(), dict()
-        cov, inv, det = self.__cov_group_sample()
-        for clazz in self._clazz:
-            means[clazz] = self.get_mean_by_clazz(clazz)
-            probabilities[clazz] = self.__compute_probability(means[clazz], inv, det, query)
-        return means, cov, probabilities
-
     def __repr__(self):
         print("lower:", self._mean_lower)
         print("upper:", self._mean_upper)
-        print("group cov", self.__cov_group_sample())
-        return "WADA!!"
-
-    ## Plotting for 2D data
-
-    def __check_data_available(self):
-
-        X = self._data.iloc[:, :-1].as_matrix()
-        y = self._data.y.tolist()
-        if X is None: raise ValueError("It needs to learn one sample training")
-
-        n_row, _ = X.shape
-        if not isinstance(y, list): raise ValueError("Y isn't corrected form.")
-        if n_row != len(y): raise ValueError("The number of column is not same in (X,y)")
-        return X, np.array(y)
-
-    def plot2D_classification(self, query=None, colors=None, markers=['*', 'v', 'o', '+', '-', '.', ',']):
-
-        X, y = self.__check_data_available()
-        n_row, n_col = X.shape
-
-        import matplotlib.pyplot as plt
-        import matplotlib as mpl
-
-        c_map = plt.cm.get_cmap("hsv", self._nb_clazz + 1)
-        colors = dict((self._clazz[idx], c_map(idx)) for idx in range(0, self._nb_clazz)) \
-            if colors is None else colors
-        markers = dict((self._clazz[idx], markers[idx]) for idx in range(0, self._nb_clazz))
-
-        def plot_constraints(lower, upper, _linestyle="solid"):
-            plt.plot([lower[0], lower[0], upper[0], upper[0], lower[0]],
-                     [lower[1], upper[1], upper[1], lower[1], lower[1]],
-                     linestyle=_linestyle)
-            plt.grid()
-
-        def plot2D_scatter(X, y):
-            for row in range(0, len(y)):
-                plt.scatter(X[row, 0], X[row, 1], marker=markers[y[row]], c=colors[y[row]])
-
-        def plot_ellipse(splot, mean, cov, color):
-            from scipy import linalg
-
-            v, w = linalg.eigh(cov)
-            u = w[0] / linalg.norm(w[0])
-            angle = np.arctan(u[1] / u[0])
-            angle = 180 * angle / np.pi
-            ell = mpl.patches.Ellipse(mean, 2 * v[0] ** 0.5, 2 * v[1] ** 0.5,
-                                      180 + angle, facecolor="none",
-                                      edgecolor=color,
-                                      linewidth=2, zorder=2)
-            ell.set_clip_box(splot.bbox)
-            ell.set_alpha(0.9)
-            splot.add_artist(ell)
-
-        if n_col == 2:
-            for clazz in self._clazz:
-                post_mean_lower = self._mean_lower[clazz]
-                post_mean_upper = self._mean_upper[clazz]
-                plot_constraints(post_mean_lower, post_mean_upper)
-                mean = self.get_mean_by_clazz(clazz)
-                prior_mean_lower = mean - self.ell
-                prior_mean_upper = mean + self.ell
-                plot_constraints(prior_mean_lower, prior_mean_upper, _linestyle="dashed")
-
-            if query is not None:
-                ml_mean, ml_cov, ml_prob = self.fit_max_likelihood(query)
-                plt.plot([query[0]], [query[1]], marker='h', markersize=5, color="black")
-                _, _bounds = self.evaluate(query)
-                for clazz in self._clazz:
-                    plt.plot([ml_mean[clazz][0]], [ml_mean[clazz][1]], marker='o', markersize=5, color=colors[clazz])
-                    _, est_mean_lower = _bounds[clazz]['inf']
-                    _, est_mean_upper = _bounds[clazz]['sup']
-                    plt.plot([est_mean_lower[0]], [est_mean_lower[1]], marker='x', markersize=4, color="black")
-                    plt.plot([est_mean_upper[0]], [est_mean_upper[1]], marker='x', markersize=4, color="black")
-
-            cov, inv, det = self.__cov_group_sample()
-            s_plot = plt.subplot()
-            for clazz in self._clazz:
-                mean = self.get_mean_by_clazz(clazz)
-                plot_ellipse(s_plot, mean, cov, colors[clazz])
-
-        elif n_col > 2:
-            if query is not None:
-                inference, _ = self.evaluate(query)
-                X = np.vstack([X, query])
-                y = np.append(y, inference[0])
-
-            from sklearn.manifold import Isomap
-            iso = Isomap(n_components=2)
-            projection = iso.fit_transform(X)
-            X = np.c_[projection[:, 0], projection[:, 1]]
-
-            if query is not None:
-                color_instance = colors[inference[0]] if len(inference) == 1 else 'black'
-                plt.plot([X[n_row, 0]], [X[n_row, 1]], color='red', marker='o', mfc=color_instance)
-        else:
-            raise Exception("Not implemented for one feature yet.")
-
-        plot2D_scatter(X, y)
-        plt.show()
-
-    def plot2D_decision_boundary(self, h=.1, markers=['*', 'v', 'o', '+', '-', '.', ',']):
-
-        X, y = self.__check_data_available()
-
-        _, n_col = X.shape
-
-        if n_col > 2: raise Exception("Not implemented for n-dimension yet.")
-
-        import matplotlib.pyplot as plt
-
-        x_min, x_max = X[:, 0].min() - .5, X[:, 0].max() + .5
-        y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
-        xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-
-        z = np.array([])
-        clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(self._clazz, 1))
-        NO_CLASS_COMPARABLE = -1
-        for query in np.c_[xx.ravel(), yy.ravel()]:
-            answer, _ = self.evaluate(query)
-            if len(answer) > 1 or len(answer) == 0:
-                z = np.append(z, NO_CLASS_COMPARABLE)
-            else:
-                z = np.append(z, clazz_by_index[answer[0]])
-
-        y_colors = [clazz_by_index[clazz] for clazz in y]
-        markers = dict((self._clazz[idx], markers[idx]) for idx in range(0, self._nb_clazz))
-        z = z.reshape(xx.shape)
-        plt.contourf(xx, yy, z, alpha=0.4)
-        for row in range(0, len(y)):
-            plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker= markers[y[row]], edgecolor='k')
-        plt.show()
+        print("group cov", self._cov_group_sample())
+        return "QDA!!"
 
     ## Testing Optimal force brute
     def __brute_force_search(self, clazz, query, lower, upper, inv, det, d):
@@ -371,15 +279,24 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                     forRecursive(lowers, uppers, level + 1, L, np.append(optimal, current))
                 else:
                     print("optimal value cost:", clazz, np.append(optimal, current),
-                          self.__compute_probability(np.append(optimal, current), inv, det, query),
+                          self._compute_probability(np.append(optimal, current), inv, det, query),
                           cost_Fx(np.append(optimal, current), query, inv))
 
         forRecursive(lower, upper, 0, d, np.array([]))
 
     def show_all_brute_optimal(self, query):
-        cov, inv, det = self.__cov_group_sample()
+        cov, inv, det = self._cov_group_sample()
         for clazz in self._clazz:
             mean_lower = self._mean_lower[clazz]
             mean_upper = self._mean_upper[clazz]
             print("box", mean_lower, mean_upper)
             self.__brute_force_search(clazz, query, mean_lower, mean_upper, inv, det, self._p)
+
+class QuadraticDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
+    """
+       Imprecise Quadratic Discriminant implemented with a imprecise gaussian distribution and
+       conjugate exponential family.
+    """
+    def __init__(self, init_matlab=True):
+        super(QuadraticDiscriminant, self).__init__(init_matlab=init_matlab)
+        self.ell = None
