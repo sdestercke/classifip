@@ -30,10 +30,12 @@ def output_paper_result(in_path=None):
     data = export_data_set('bin_normal_rnd.data') if in_path is None else pd.read_csv(in_path)
     X = data.loc[:, ['x1', 'x2']].values
     y = data.y.tolist()
-    lqa = LinearDiscriminant(init_matlab=True, DEBUG=True)
+    lqa = LinearDiscriminant(init_matlab=False, DEBUG=True, PARALLEL=True)
     lqa.learn(X, y, ell=2)
+    # lqa.evaluate(np.array([2, 2]))
     # pc.plot2D_classification(lqa, np.array([2, 2]), colors={0: 'red', 1: 'blue'})
-    pc.plot2D_decision_boundary(lqa)
+    pc.plot2D_decision_boundary(lqa, h=0.1, pl_process=True)
+    # pc.plot2D_decision_boundary_det(X, y, h=0.01)
 
 
 def output_paper_zone_imprecise():

@@ -9,12 +9,14 @@ import io
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
-    def __init__(self, init_matlab=False, DEBUG=False):
+    def __init__(self, init_matlab=False, DEBUG=False, PARALLEL=False):
         # Starting matlab environment
-        # if init_matlab:
-        #     self._eng = matlab.engine.start_matlab()
-        # else:
-        #     self._eng = None
+        if init_matlab:
+            self._eng = matlab.engine.start_matlab()
+            print(matlab.engine.find_matlab())
+        else:
+            self._eng = None
+        self._PARALLEL = PARALLEL
         self._DEBUG = DEBUG
         self._N, self._p = None, None
         self._data = None
@@ -61,7 +63,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         cov, inv, det = self._cov_group_sample()
         for clazz in self._clazz:
             means[clazz] = self.get_mean_by_clazz(clazz)
-            probabilities[clazz] = self._compute_probability(means[clazz], inv, det, query)
+            probabilities[clazz] = self.compute_probability(means[clazz], inv, det, query)
         return means, cov, probabilities
 
     @abc.abstractmethod
@@ -81,11 +83,11 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
        Imprecise Linear Discriminant implemented with a imprecise gaussian distribution and
        conjugate exponential family.
     """
-    def __init__(self, init_matlab=True, DEBUG=False):
+    def __init__(self, init_matlab=True, DEBUG=False, PARALLEL=False):
         """
         :param init_matlab:
         """
-        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab, DEBUG=DEBUG)
+        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab, DEBUG=DEBUG, PARALLEL=PARALLEL)
         self.prior = dict()
         self.means, self.inv_cov, self.det_cov = None, None, None
         self._mean_lower, self._mean_upper = None, None
@@ -139,9 +141,19 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             self._mean_lower[clazz] = (-self.ell + nb_by_clazz * mean) / nb_by_clazz
             self._mean_upper[clazz] = (self.ell + nb_by_clazz * mean) / nb_by_clazz
 
-    def evaluate(self, query, method="quadratic", session="default"):
-        _eng = matlab.engine.start_matlab(session)
+    def evaluate(self, query, method="quadratic", session=None, session_backup="backup"):
         bounds = dict((clazz, dict()) for clazz in self._clazz)
+        if self._PARALLEL and session is not None:
+            try:
+                eng_session = matlab.engine.connect_matlab(session)
+            except Exception as exp:
+                print("[DEBUG] Error matlab session:", exp)
+                try:
+                    eng_session = matlab.engine.connect_matlab(session_backup)
+                except Exception as exp:
+                    print("[DEBUG:AGAIN] Error matlab session:", exp)
+                    eng_session = matlab.engine.start_matlab()
+        else: eng_session = self._eng
 
         def __get_bounds(clazz, bound="inf"):
             return bounds[clazz][bound] if bound in bounds[clazz] else None
@@ -154,7 +166,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             if __get_bounds(clazz, bound) is None:
                 q = query.T @ inv
                 if bound == "inf":
-                    estimator = _self.__infimum_estimation(inv, q, mean_lower, mean_upper, _eng)
+                    estimator = _self.__infimum_estimation(inv, q, mean_lower, mean_upper, eng_session)
                 else:
                     estimator = _self.__supremum_estimation(inv, q, mean_lower, mean_upper, method)
                 prob = _self.compute_probability(np.array(estimator), inv, det, query)
@@ -172,7 +184,6 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             upper.append(p_up * self.prior[clazz])
 
         from ..representations.voting import Scores
-        # _eng.quit()
 
         score = Scores(np.c_[lower, upper])
         return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
@@ -233,9 +244,9 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
 
         return [v for v in solution['x']]
 
-    def __infimum_estimation(self, Q, q, mean_lower, mean_upper, _eng):
-        if _eng is None:
-            raise Exception("Environment matlab hadn't been initialized.")
+    def __infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session):
+        # if self._eng is None:
+        #     raise Exception("Environment matlab hadn't been initialized.")
         try:
             __out = io.StringIO()
             __err = io.StringIO()
@@ -247,8 +258,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             b = matlab.double([])
             Aeq = matlab.double([])
             beq = matlab.double([])
-            x, f_val, time, stats = _eng.quadprogbb(Q, _eng.transpose(q), A, b, Aeq, beq,
-                                        _eng.transpose(LB), _eng.transpose(UB), nargout=4,
+            x, f_val, time, stats = eng_session.quadprogbb(Q, eng_session.transpose(q), A, b, Aeq, beq,
+                    eng_session.transpose(LB), eng_session.transpose(UB), nargout=4,
                                         stdout=__out, stderr=__err)
             if self._DEBUG:
                 print("[DEBUG_MATHLAB_OUTPUT:", __out.getvalue())

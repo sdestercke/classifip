@@ -115,10 +115,18 @@ def plot2D_classification(model, query=None, colors=None,
     plt.show()
 
 
-def _evalutate(model, newClazz, clazz_by_index, query):
-    print("--->", query)
-    newQuery = np.array(query[:-1]).astype(float)
-    answer, _ = model.evaluate(newQuery)
+def prediction(model, newClazz, clazz_by_index, prefix_session, query):
+    session_current = None
+
+    if prefix_session is not None:
+        name = multiprocessing.current_process().name
+        print("[DEBUG] worker name", name)
+        name = name.split("-")
+        session_current = prefix_session + str(int(name[1])%5)
+        print("[DEBUG] Process matlab working:", session_current)
+
+    answer, _ = model.evaluate(query, session=session_current)
+
     if len(answer) > 1 or len(answer) == 0:
         iClass = "-".join(str(clazz) for clazz in sorted(answer))
         return newClazz[iClass]
@@ -126,12 +134,12 @@ def _evalutate(model, newClazz, clazz_by_index, query):
         return clazz_by_index[answer[0]]
 
 
-def plot2D_decision_boundary(model, h=.01, cmap_color=None,
+def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None,
+                             pl_process=False, pl_process_nb=4, pl_prefix_session="MATLABEngine",
                              markers=list(['*', 'v', 'o', '+', '-', '.', ','])):
     X, y = __check_data_available(model.getData())
     _clazz = model.getClazz()
     _nb_clazz = len(_clazz)
-
     _, n_col = X.shape
 
     if n_col > 2: raise Exception("Not implemented for n-dimension yet.")
@@ -140,36 +148,27 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None,
     y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
     xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
 
-    z = np.array([])
     clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(_clazz, 1))
-    newClazz = __generate_all_multi_clazz(_clazz)
+    newClazz = __generate_all_multi_clazz(_clazz) if new_multi_clazz is None else new_multi_clazz
 
-    func = partial(_evalutate, model, newClazz, clazz_by_index)
+    if pl_process:
+        func = partial(prediction, model, newClazz, clazz_by_index, pl_prefix_session)
+        pool = multiprocessing.Pool(processes=4)
+        print(pool)
+        z = pool.map(func, np.c_[xx.ravel(), yy.ravel()])
+    else:
+        z = np.array([])
+        for query in np.c_[xx.ravel(), yy.ravel()]:
+            z = np.append(z, prediction(model, newClazz, clazz_by_index, None, query))
 
-    print(np.c_[xx.ravel(), yy.ravel(),])
-    nb_process = 4
-    session = ["session-" + str(i) for i in range(nb_process*4)]
-    print(session)
-    pool_session = [session[i % (nb_process*4)] for i in range(len(yy.ravel()))]
-    print(np.c_[xx.ravel(), yy.ravel(), pool_session])
-    pool = multiprocessing.Pool(processes=nb_process)
-    z = pool.map(func, np.c_[xx.ravel(), yy.ravel(), pool_session])
-
-    print(")---", z)
-    # pool = multiprocessing.Pool(processes=10)
-    # z = pool.map(_evalutate, queries)
-    # pool._number_left
-
-    # while pool._cache:
-    #     print("number of jobs pending: ", len(pool._cache))
-    # if not pool.is_alive():
-    #     y_colors = [clazz_by_index[clazz] for clazz in y]
-    #     z = z.reshape(xx.shape)
-    #     cmap_color = plt.cm.viridis if cmap_color is None else plt.cm.get_cmap(plt.cm.gist_ncar, _nb_clazz + len(newClazz))
-    #     plt.contourf(xx, yy, z, alpha=0.4, cmap=cmap_color)
-    #     for row in range(0, len(y)):
-    #         plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker=markers[y[row]], edgecolor='k')
-    #     plt.show()
+    y_colors = [clazz_by_index[clazz] for clazz in y]
+    z = np.array(z)
+    z = z.reshape(xx.shape)
+    cmap_color = plt.cm.viridis if cmap_color is None else plt.cm.get_cmap(plt.cm.gist_ncar, _nb_clazz + len(newClazz))
+    plt.contourf(xx, yy, z, alpha=0.4, cmap=cmap_color)
+    for row in range(0, len(y)):
+        plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker=markers[y[row]], edgecolor='k')
+    plt.show()
 
 
 def plot2D_decision_boundary_det(X, y, h=.01,
