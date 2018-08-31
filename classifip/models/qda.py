@@ -11,10 +11,10 @@ import io
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
     def __init__(self, init_matlab=False, DEBUG=False):
         # Starting matlab environment
-        if init_matlab:
-            self._eng = matlab.engine.start_matlab()
-        else:
-            self._eng = None
+        # if init_matlab:
+        #     self._eng = matlab.engine.start_matlab()
+        # else:
+        #     self._eng = None
         self._DEBUG = DEBUG
         self._N, self._p = None, None
         self._data = None
@@ -65,7 +65,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         return means, cov, probabilities
 
     @abc.abstractmethod
-    def _compute_probability(self, param, inv, det, query):
+    def compute_probability(self, param, inv, det, query):
         pass
 
     @abc.abstractmethod
@@ -87,8 +87,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         """
         super(LinearDiscriminant, self).__init__(init_matlab=init_matlab, DEBUG=DEBUG)
         self.prior = dict()
-        self.means, self.inv_cov, self.det_cov = dict(), dict(), dict()
-        self._mean_lower, self._mean_upper = dict(), dict()
+        self.means, self.inv_cov, self.det_cov = None, None, None
+        self._mean_lower, self._mean_upper = None, None
         # self.cov_group_sample = (None, None, None)
 
     def get_bound_means(self, clazz):
@@ -139,7 +139,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             self._mean_lower[clazz] = (-self.ell + nb_by_clazz * mean) / nb_by_clazz
             self._mean_upper[clazz] = (self.ell + nb_by_clazz * mean) / nb_by_clazz
 
-    def evaluate(self, query, method="quadratic"):
+    def evaluate(self, query, method="quadratic", session="default"):
+        _eng = matlab.engine.start_matlab(session)
         bounds = dict((clazz, dict()) for clazz in self._clazz)
 
         def __get_bounds(clazz, bound="inf"):
@@ -153,16 +154,15 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             if __get_bounds(clazz, bound) is None:
                 q = query.T @ inv
                 if bound == "inf":
-                    estimator = _self.__infimum_estimation(inv, q, mean_lower, mean_upper)
+                    estimator = _self.__infimum_estimation(inv, q, mean_lower, mean_upper, _eng)
                 else:
                     estimator = _self.__supremum_estimation(inv, q, mean_lower, mean_upper, method)
-                prob_lower = _self._compute_probability(np.array(estimator), inv, det, query)
-                __put_bounds(prob_lower, estimator, clazz, bound)
+                prob = _self.compute_probability(np.array(estimator), inv, det, query)
+                __put_bounds(prob, estimator, clazz, bound)
             return __get_bounds(clazz, bound)
 
-        lower = []
-        upper = []
-        cov, inv, det = self._cov_group_sample()
+        lower, upper = [], []
+        _, inv, det = self._cov_group_sample()
         for clazz in self._clazz:
             mean_lower = self._mean_lower[clazz]
             mean_upper = self._mean_upper[clazz]
@@ -172,6 +172,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             upper.append(p_up * self.prior[clazz])
 
         from ..representations.voting import Scores
+        # _eng.quit()
 
         score = Scores(np.c_[lower, upper])
         return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
@@ -181,7 +182,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         # print("inf/sup:", np.divide(lower, upper[::-1]))
         # return answers, bounds
 
-    def _compute_probability(self, mean, inv_cov, det_cov, query):
+    def compute_probability(self, mean, inv_cov, det_cov, query):
         _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
         _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
         return _const * np.exp(_exp)
@@ -232,8 +233,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
 
         return [v for v in solution['x']]
 
-    def __infimum_estimation(self, Q, q, mean_lower, mean_upper):
-        if self._eng is None:
+    def __infimum_estimation(self, Q, q, mean_lower, mean_upper, _eng):
+        if _eng is None:
             raise Exception("Environment matlab hadn't been initialized.")
         try:
             __out = io.StringIO()
@@ -246,8 +247,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             b = matlab.double([])
             Aeq = matlab.double([])
             beq = matlab.double([])
-            x, f_val, time, stats = self._eng.quadprogbb(Q, self._eng.transpose(q), A, b, Aeq, beq,
-                                        self._eng.transpose(LB), self._eng.transpose(UB), nargout=4,
+            x, f_val, time, stats = _eng.quadprogbb(Q, _eng.transpose(q), A, b, Aeq, beq,
+                                        _eng.transpose(LB), _eng.transpose(UB), nargout=4,
                                         stdout=__out, stderr=__err)
             if self._DEBUG:
                 print("[DEBUG_MATHLAB_OUTPUT:", __out.getvalue())
@@ -265,6 +266,11 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         print("lower:", self._mean_lower)
         print("upper:", self._mean_upper)
         print("group cov", self._cov_group_sample())
+        print("cov", self.cov)
+        print("det cov", self.det_cov)
+        print("inv cov",  self.inv_cov)
+        print("prior", self.prior)
+        print("means", self.means)
         return "QDA!!"
 
     ## Testing Optimal force brute
@@ -279,7 +285,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                     forRecursive(lowers, uppers, level + 1, L, np.append(optimal, current))
                 else:
                     print("optimal value cost:", clazz, np.append(optimal, current),
-                          self._compute_probability(np.append(optimal, current), inv, det, query),
+                          self.compute_probability(np.append(optimal, current), inv, det, query),
                           cost_Fx(np.append(optimal, current), query, inv))
 
         forRecursive(lower, upper, 0, d, np.array([]))

@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import itertools as it
 from functools import reduce
+import multiprocessing
+from functools import partial
+
 
 def __generate_all_multi_clazz(clazz):
     """
@@ -112,6 +115,17 @@ def plot2D_classification(model, query=None, colors=None,
     plt.show()
 
 
+def _evalutate(model, newClazz, clazz_by_index, query):
+    print("--->", query)
+    newQuery = np.array(query[:-1]).astype(float)
+    answer, _ = model.evaluate(newQuery)
+    if len(answer) > 1 or len(answer) == 0:
+        iClass = "-".join(str(clazz) for clazz in sorted(answer))
+        return newClazz[iClass]
+    else:
+        return clazz_by_index[answer[0]]
+
+
 def plot2D_decision_boundary(model, h=.01, cmap_color=None,
                              markers=list(['*', 'v', 'o', '+', '-', '.', ','])):
     X, y = __check_data_available(model.getData())
@@ -130,21 +144,32 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None,
     clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(_clazz, 1))
     newClazz = __generate_all_multi_clazz(_clazz)
 
-    for query in np.c_[xx.ravel(), yy.ravel()]:
-        answer, _ = model.evaluate(query)
-        if len(answer) > 1 or len(answer) == 0:
-            iClass = "-".join(str(clazz) for clazz in sorted(answer))
-            z = np.append(z, newClazz[iClass])
-        else:
-            z = np.append(z, clazz_by_index[answer[0]])
+    func = partial(_evalutate, model, newClazz, clazz_by_index)
 
-    y_colors = [clazz_by_index[clazz] for clazz in y]
-    z = z.reshape(xx.shape)
-    cmap_color = plt.cm.viridis if cmap_color is None else plt.cm.get_cmap(plt.cm.gist_ncar, _nb_clazz + len(newClazz))
-    plt.contourf(xx, yy, z, alpha=0.4, cmap=cmap_color)
-    for row in range(0, len(y)):
-        plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker=markers[y[row]], edgecolor='k')
-    plt.show()
+    print(np.c_[xx.ravel(), yy.ravel(),])
+    nb_process = 4
+    session = ["session-" + str(i) for i in range(nb_process*4)]
+    print(session)
+    pool_session = [session[i % (nb_process*4)] for i in range(len(yy.ravel()))]
+    print(np.c_[xx.ravel(), yy.ravel(), pool_session])
+    pool = multiprocessing.Pool(processes=nb_process)
+    z = pool.map(func, np.c_[xx.ravel(), yy.ravel(), pool_session])
+
+    print(")---", z)
+    # pool = multiprocessing.Pool(processes=10)
+    # z = pool.map(_evalutate, queries)
+    # pool._number_left
+
+    # while pool._cache:
+    #     print("number of jobs pending: ", len(pool._cache))
+    # if not pool.is_alive():
+    #     y_colors = [clazz_by_index[clazz] for clazz in y]
+    #     z = z.reshape(xx.shape)
+    #     cmap_color = plt.cm.viridis if cmap_color is None else plt.cm.get_cmap(plt.cm.gist_ncar, _nb_clazz + len(newClazz))
+    #     plt.contourf(xx, yy, z, alpha=0.4, cmap=cmap_color)
+    #     for row in range(0, len(y)):
+    #         plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker=markers[y[row]], edgecolor='k')
+    #     plt.show()
 
 
 def plot2D_decision_boundary_det(X, y, h=.01,
