@@ -4,14 +4,13 @@ import matplotlib as mpl
 import itertools as it
 from functools import reduce
 
-
 def __generate_all_multi_clazz(clazz):
     """
     source: https://markhneedham.com/blog/2013/11/06/python-generate-all-combinations-of-a-list/
     :param clazz:
     :return: all multi-classes
     """
-    clazz = sorted(clazz)
+    clazz = [str(clazz) for clazz in sorted(clazz)]
     last_idx = len(clazz)
     multi_clazz = reduce(lambda acc, x: acc + list(it.combinations(clazz, x)), range(2, len(clazz) + 1), [])
     new_clazz = dict()
@@ -148,13 +147,11 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None,
     plt.show()
 
 
-def plot2D_decision_boundary_det(self, h=.01, markers=list(['*', 'v', 'o', '+', '-', '.', ','])):
-    from classifip.dataset.uci_data_set import export_data_set
-
-    data = export_data_set('iris.data')
-    X = data.iloc[:, 0:2].values
-    y = data.iloc[:, -1].tolist()
+def plot2D_decision_boundary_det(X, y, h=.01,
+                                 markers=list(['*', 'v', 'o', '+', '-', '.', ','])):
     _, n_col = X.shape
+    _clazz = list(set(y))
+    _nb_clazz = len(_clazz)
 
     if n_col > 2: raise Exception("Not implemented for n-dimension yet.")
 
@@ -165,7 +162,7 @@ def plot2D_decision_boundary_det(self, h=.01, markers=list(['*', 'v', 'o', '+', 
     xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
 
     z = np.array([])
-    clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(self._clazz, 1))
+    clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(_clazz, 1))
     from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDAD
     lda = LDAD(solver="svd", store_covariance=True)
     lda.fit(X, y)
@@ -173,7 +170,7 @@ def plot2D_decision_boundary_det(self, h=.01, markers=list(['*', 'v', 'o', '+', 
         evaluate = lda.predict([query])
         z = np.append(z, clazz_by_index[evaluate[0]])
     y_colors = [clazz_by_index[clazz] for clazz in y]
-    markers = dict((self._clazz[idx], markers[idx]) for idx in range(0, self._nb_clazz))
+    markers = dict((_clazz[idx], markers[idx]) for idx in range(0, _nb_clazz))
     z = z.reshape(xx.shape)
     plt.contourf(xx, yy, z, alpha=0.4)
     for row in range(0, len(y)):
