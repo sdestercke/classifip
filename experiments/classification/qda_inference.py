@@ -7,6 +7,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import KFold
+import matplotlib.pyplot as plt
 
 
 def testingLargeDim(n, d):
@@ -30,25 +31,30 @@ def output_paper_result(in_path=None):
     data = export_data_set('bin_normal_rnd.data') if in_path is None else pd.read_csv(in_path)
     X = data.loc[:, ['x1', 'x2']].values
     y = data.y.tolist()
-    lqa = LinearDiscriminant(init_matlab=False, DEBUG=True, PARALLEL=True)
+    lqa = LinearDiscriminant(init_matlab=True, DEBUG=True)
     lqa.learn(X, y, ell=2)
     # lqa.evaluate(np.array([2, 2]))
     # pc.plot2D_classification(lqa, np.array([2, 2]), colors={0: 'red', 1: 'blue'})
-    pc.plot2D_decision_boundary(lqa, h=0.1, pl_process=True)
+    pc.plot2D_decision_boundary(lqa, h=0.006, new_multi_clazz={'0-1': -1})
     # pc.plot2D_decision_boundary_det(X, y, h=0.01)
 
 
-def output_paper_zone_imprecise():
+def output_paper_zone_imprecise(method = "imprecise"):
     data = export_data_set('iris.data')
     X = data.iloc[:, 0:2].values
     y = data.iloc[:, -1].tolist()
-    lqa = LinearDiscriminant(init_matlab=False)
-    lqa.learn(X, y, ell=5)
-    #query = np.array([5.0, 2])
-    #answer, _ = lqa.evaluate(query)
-    # lqa.plot2D_classification(query)
-    #lqa.plot2D_decision_boundary()
-    pc.plot2D_decision_boundary(lqa)
+    if method == "imprecise":
+        lqa = LinearDiscriminant(init_matlab=True, DEBUG=True)
+        lqa.learn(X, y, ell=5)
+        pc.plot2D_decision_boundary(lqa, h=0.01, cmap_color= plt.cm.gist_ncar)
+        # newDic = dict()
+        # newDic['Iris-setosa-Iris-versicolor'] = -1
+        # newDic['Iris-setosa-Iris-virginica'] = -1
+        # newDic['Iris-versicolor-Iris-virginica'] = -1
+        # newDic['Iris-setosa-Iris-versicolor-Iris-virginica'] = -1
+        # pc.plot2D_decision_boundary(lqa, h=0.01, new_multi_clazz=newDic)
+    else:
+        pc.plot2D_decision_boundary_det(X, y, h=0.01)
 
 
 def computing_best_imprecise_mean(in_path=None, seed=0, cv_n_fold=10,
@@ -310,5 +316,5 @@ in_path = "/Users/salmuz/Downloads/glass.csv"
 # computing_performance_LDA(in_path, seeds=seeds)
 # computing_cv_accuracy_LDA(in_path)
 # computing_precise_vs_imprecise(ell_best=0.1, seeds=seeds)
-output_paper_result()
 # output_paper_zone_imprecise()
+output_paper_result()

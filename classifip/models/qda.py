@@ -9,14 +9,13 @@ import io
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
-    def __init__(self, init_matlab=False, DEBUG=False, PARALLEL=False):
+    def __init__(self, init_matlab=False, DEBUG=False):
         # Starting matlab environment
         if init_matlab:
             self._eng = matlab.engine.start_matlab()
             print(matlab.engine.find_matlab())
         else:
             self._eng = None
-        self._PARALLEL = PARALLEL
         self._DEBUG = DEBUG
         self._N, self._p = None, None
         self._data = None
@@ -83,11 +82,11 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
        Imprecise Linear Discriminant implemented with a imprecise gaussian distribution and
        conjugate exponential family.
     """
-    def __init__(self, init_matlab=True, DEBUG=False, PARALLEL=False):
+    def __init__(self, init_matlab=True, DEBUG=False):
         """
         :param init_matlab:
         """
-        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab, DEBUG=DEBUG, PARALLEL=PARALLEL)
+        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab, DEBUG=DEBUG)
         self.prior = dict()
         self.means, self.inv_cov, self.det_cov = None, None, None
         self._mean_lower, self._mean_upper = None, None
@@ -141,19 +140,9 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             self._mean_lower[clazz] = (-self.ell + nb_by_clazz * mean) / nb_by_clazz
             self._mean_upper[clazz] = (self.ell + nb_by_clazz * mean) / nb_by_clazz
 
-    def evaluate(self, query, method="quadratic", session=None, session_backup="backup"):
+    def evaluate(self, query, method="quadratic"):
         bounds = dict((clazz, dict()) for clazz in self._clazz)
-        if self._PARALLEL and session is not None:
-            try:
-                eng_session = matlab.engine.connect_matlab(session)
-            except Exception as exp:
-                print("[DEBUG] Error matlab session:", exp)
-                try:
-                    eng_session = matlab.engine.connect_matlab(session_backup)
-                except Exception as exp:
-                    print("[DEBUG:AGAIN] Error matlab session:", exp)
-                    eng_session = matlab.engine.start_matlab()
-        else: eng_session = self._eng
+        eng_session = self._eng
 
         def __get_bounds(clazz, bound="inf"):
             return bounds[clazz][bound] if bound in bounds[clazz] else None
@@ -245,8 +234,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         return [v for v in solution['x']]
 
     def __infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session):
-        # if self._eng is None:
-        #     raise Exception("Environment matlab hadn't been initialized.")
+        if eng_session is None:
+            raise Exception("Environment matlab hadn't been initialized.")
         try:
             __out = io.StringIO()
             __err = io.StringIO()
