@@ -71,6 +71,6 @@ class NCCLR(object):
                 maxDecision = classifier.getmaximaldecision(self.ranking_utility)
                 problem.addVariable(clazz, np.where(maxDecision > 0)[0])
             problem.addConstraint(AllDifferentConstraint())
-            solution = problem.getSolution()
-            solutions.append(None if solution is None else solution)
+            solutionsCSP = problem.getSolutions()
+            solutions.append(None if len(solutionsCSP) == 0 else solutionsCSP)
         return solutions

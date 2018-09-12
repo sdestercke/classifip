@@ -25,18 +25,38 @@ def kendall_tau(y_idx_true, y_idx_predict, M):
                 D += 1
     return (C-D)/(M*(M-1)/2)
 
-def measure_classifier_preference(y_true, y_predict):
-    print("Inferece[true,predict]:", y_true, y_predict)
+def spearman_distance(y_idx_true, y_idx_predict):
+    return np.power(np.array(y_idx_true) - np.array(y_idx_predict), 2)
+
+def correctness_measure(y_true, y_predicts):
+    print("Inferece[true,predict]:", y_true, y_predicts)
     y_true = y_true.split(">")
-    if y_predict is None: return 0.0;
-    y_idx_true = []
-    y_idx_predict = []
-    for idx, value in enumerate(y_true):
-        y_idx_true.append(idx)
-        y_idx_predict.append(y_predict[value])
-    #tau = kendall_tau(y_idx_true, y_idx_predict, len(y_idx_true))
-    tau, _ = stats.kendalltau(y_idx_predict, y_idx_true)
-    return tau
+    if y_predicts is None: return 0.0;
+    distances  = []
+    for y_predict in y_predicts:
+        y_idx_true = np.array([], dtype=int)
+        y_idx_predict = np.array([], dtype=int)
+        for idx, value in enumerate(y_true):
+            y_idx_true = np.append(y_idx_true, idx)
+            y_idx_predict = np.append(y_idx_predict, y_predict[value])
+        distances.append(sum(spearman_distance(y_idx_true, y_idx_predict)))
+    k = len(y_true)
+    return 1 - 6*min(distances)/(k*(k*k -1))
+
+def completeness_measure(y_true, y_predicts):
+    y_true = y_true.split(">")
+    k = len(y_true)
+    R = 0
+    if y_predicts is not None:
+        set_ranks = dict()
+        for y_predict in y_predicts:
+            for idx, label in enumerate(y_true):
+                if label not in set_ranks:
+                    set_ranks[label] = np.array([], dtype=int)
+                set_ranks[label] = np.append(set_ranks[label], y_predict[label])
+        for key, _ in set_ranks.items():
+            R += len(np.unique(set_ranks[key]))
+    return 1 - R/(k*k)
 
 def experiment_01():
     model = classifip.models.ncclr.NCCLR()
@@ -45,7 +65,7 @@ def experiment_01():
     max_ncc_s_param, num_kFold, pct_testing = 10, 10, 0.2
     print("Seed generated for system is (%5d, %5d)." % (seed, seed_kFold))
     avg_accuracy = dict()
-    for nb_int in range(5, 11):
+    for nb_int in range(6, 7):
         print("Number interval for discreteness %5d." % nb_int)
         dataArff = classifip.dataset.arff.ArffFile()
         dataArff.load("/Users/salmuz/Downloads/datasets/iris_dense.xarff")
@@ -55,17 +75,22 @@ def experiment_01():
         for ncc_imprecise in range(2, max_ncc_s_param + 1):
             print("Level imprecision %5d." % ncc_imprecise)
             cv_kFold = classifip.evaluation.k_fold_cross_validation(training, num_kFold, randomise=True, random_seed=seed_kFold)
-            avg_cv = 0
+            avg_cv_correctness = 0
+            avg_cv_completeness = 0
             for set_train, set_test in cv_kFold:
                 model.learn(set_train)
                 evaluate_pBox = model.evaluate(set_test.data, ncc_s_param=ncc_imprecise)
-                avg_test = 0
+                avg_correctness = 0
+                avg_completeness = 0
                 for idx, pBox in enumerate(evaluate_pBox):
-                    predict = model.predict_CSP([pBox])
-                    avg_test += measure_classifier_preference(set_test.data[idx][-1], predict[0])
-                avg_cv += avg_test/len(set_test.data)
-            avg_accuracy[str(nb_int)][str(ncc_imprecise)] = avg_cv/num_kFold
-            print("avg imprecision", ncc_imprecise, avg_cv)
+                    predicts = model.predict_CSP([pBox])
+                    avg_correctness += correctness_measure(set_test.data[idx][-1], predicts[0])
+                    avg_completeness += completeness_measure(set_test.data[idx][-1], predicts[0])
+                avg_cv_correctness += avg_correctness/len(set_test.data)
+                avg_cv_completeness += avg_completeness/len(set_test.data)
+            avg_accuracy[str(nb_int)][str(ncc_imprecise)] = \
+                dict({'corr': avg_cv_correctness/num_kFold, 'comp': avg_cv_completeness/num_kFold})
+            print("avg imprecision", ncc_imprecise, avg_cv_correctness)
     print("Results:", avg_accuracy)
 
 experiment_01()
