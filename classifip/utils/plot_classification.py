@@ -33,12 +33,13 @@ def __check_data_available(data):
 
 def plot2D_classification(model, query=None, colors=None,
                           markers=list(['*', 'v', 'o', '+', '-', '.', ','])):
-    X, y = __check_data_available(model.getData())
+    X, y = __check_data_available(model.get_data())
     n_row, n_col = X.shape
-    _clazz = model.getClazz()
+    _clazz = model.get_clazz()
     _nb_clazz = len(_clazz)
 
     c_map = plt.cm.get_cmap("hsv", _nb_clazz + 1)
+    print(colors, markers, model.get_clazz())
     colors = dict((_clazz[idx], c_map(idx)) for idx in range(0, _nb_clazz)) \
         if colors is None else colors
     markers = dict((_clazz[idx], markers[idx]) for idx in range(0, _nb_clazz))
@@ -68,15 +69,15 @@ def plot2D_classification(model, query=None, colors=None,
 
     if n_col == 2:
         for clazz in _clazz:
+            mean = model.get_mean_by_clazz(clazz)
+            prior_mean_lower = mean - model.get_ell()
+            prior_mean_upper = mean + model.get_ell()
+            plot_constraints(prior_mean_lower, prior_mean_upper, line_style="dashed")
             post_mean_lower, post_mean_upper = model.get_bound_means(clazz)
             plot_constraints(post_mean_lower, post_mean_upper)
-            mean = model.get_mean_by_clazz(clazz)
-            prior_mean_lower = mean - model.getEll()
-            prior_mean_upper = mean + model.getEll()
-            plot_constraints(prior_mean_lower, prior_mean_upper, line_style="dashed")
 
         if query is not None:
-            ml_mean, ml_cov, ml_prob = model.fit_max_likelihood(query)
+            ml_mean, ml_prob = model.fit_max_likelihood(query)
             plt.plot([query[0]], [query[1]], marker='h', markersize=5, color="black")
             _, _bounds = model.evaluate(query)
             for clazz in _clazz:
@@ -86,9 +87,9 @@ def plot2D_classification(model, query=None, colors=None,
                 plt.plot([est_mean_lower[0]], [est_mean_lower[1]], marker='x', markersize=4, color="black")
                 plt.plot([est_mean_upper[0]], [est_mean_upper[1]], marker='x', markersize=4, color="black")
 
-        cov, inv, det = model._cov_group_sample()
         s_plot = plt.subplot()
         for clazz in _clazz:
+            cov, inv, det = model.get_cov_by_clazz(clazz)
             mean = model.get_mean_by_clazz(clazz)
             plot_ellipse(s_plot, mean, cov, colors[clazz])
 
@@ -124,8 +125,8 @@ def prediction(model, newClazz, clazz_by_index, query):
 
 def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None,
                              markers=list(['*', 'v', 'o', '+', '-', '.', ','])):
-    X, y = __check_data_available(model.getData())
-    _clazz = model.getClazz()
+    X, y = __check_data_available(model.get_data())
+    _clazz = model.get_clazz()
     _nb_clazz = len(_clazz)
     _, n_col = X.shape
 

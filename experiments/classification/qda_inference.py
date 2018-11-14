@@ -1,5 +1,4 @@
-# Testing 02
-from classifip.models.qda import LinearDiscriminant
+from classifip.models.qda import EuclideanDiscriminant, LinearDiscriminant, QuadraticDiscriminant
 from classifip.dataset.uci_data_set import export_data_set
 from classifip.utils import plot_classification as pc
 import numpy as np
@@ -9,44 +8,61 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
 
-
-def testingLargeDim(n, d):
-    pass
-    # def costFx(x, cov, query):
-    # i_cov = inv(cov)
-    # q = query.T @ i_cov
-    # return 0.5 * (x.T @ i_cov @ x) + q.T @ x
-
-    # e_mean = np.random.normal(size=d)
-    # e_cov = normal(d, d)
-    # e_cov = e_cov.T * e_cov
-    # query = np.random.normal(size=d)
-    # q = maximum_Fx(e_cov, e_mean, query, n, d)
-    # print("--->", q["x"], costFx(np.array(q["x"]), e_cov, query))
-    # bnb_search(e_cov, e_mean, query, n, d)
-    # brute_force_search(e_cov, e_mean, query, n, d)
+QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
 
 
-def output_paper_result(in_path=None):
+def __test_imprecise_model(model, data, plotting, features, clazz = -1, h=0.02, ell=2.0):
+    X = data.iloc[:, features].values
+    y = np.array(data.iloc[:, clazz].tolist())
+    _, p = X.shape
+    model.learn(X=X, y=y, ell=ell)
+    print("Evaluation ones features", model.evaluate(np.ones(p)), flush=True)
+    if plotting:
+        pc.plot2D_classification(model, np.array(np.ones(p)))
+        pc.plot2D_decision_boundary(model, h=h)
+
+
+def _test_IEuclideanDA(in_train=None, plotting=True, features=list([1, 3])):
+    ieqa = EuclideanDiscriminant()
+    data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
+    __test_imprecise_model(ieqa, data, plotting, features, h=0.02)
+
+
+def _test_ILDA(in_train=None, plotting=True, features=list([1, 3])):
+    ilda = LinearDiscriminant()
+    data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
+    __test_imprecise_model(ilda, data, plotting, features, h=0.1)
+
+
+def _test_IQDA(in_train=None, plotting=True, features=list([1, 3])):
+    qlda = QuadraticDiscriminant()
+    data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
+    __test_imprecise_model(qlda, data, plotting, features, h=0.1)
+
+
+def output_paper_result(in_path=None, model="edla", features=list([1,2]), ell=0.5, hgrid=0.1):
     data = export_data_set('bin_normal_rnd.data') if in_path is None else pd.read_csv(in_path)
-    X = data.loc[:, ['x1', 'x2']].values
-    y = data.y.tolist()
-    lqa = LinearDiscriminant(init_matlab=True, DEBUG=True)
-    lqa.learn(X, y, ell=2)
-    # lqa.evaluate(np.array([2, 2]))
-    # pc.plot2D_classification(lqa, np.array([2, 2]), colors={0: 'red', 1: 'blue'})
-    pc.plot2D_decision_boundary(lqa, h=0.006, new_multi_clazz={'0-1': -1})
+    if model == "idla":
+        learning = LinearDiscriminant(DEBUG=True)
+    elif model == "edla":
+        learning = EuclideanDiscriminant(DEBUG=True)
+    elif model == "qdla":
+        learning = QuadraticDiscriminant(DEBUG=True)
+    else:
+        raise Exception("Selected model does not exist")
+    __test_imprecise_model(learning, data, True, features, h=hgrid, ell=ell, clazz=0)
+    # pc.plot2D_decision_boundary(lqa, h=0.1, new_multi_clazz={'0-1': -1})
     # pc.plot2D_decision_boundary_det(X, y, h=0.01)
 
 
-def output_paper_zone_imprecise(method = "imprecise"):
+def output_paper_zone_imprecise(method="imprecise"):
     data = export_data_set('iris.data')
     X = data.iloc[:, 0:2].values
     y = data.iloc[:, -1].tolist()
     if method == "imprecise":
         lqa = LinearDiscriminant(init_matlab=True, DEBUG=True)
         lqa.learn(X, y, ell=5)
-        pc.plot2D_decision_boundary(lqa, h=0.01, cmap_color= plt.cm.gist_ncar)
+        pc.plot2D_decision_boundary(lqa, h=0.01, cmap_color=plt.cm.gist_ncar)
         # newDic = dict()
         # newDic['Iris-setosa-Iris-versicolor'] = -1
         # newDic['Iris-setosa-Iris-virginica'] = -1
@@ -295,7 +311,7 @@ def computing_time_prediction(in_path=None):
     y = data.iloc[:, -1].tolist()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=0)
     lqa = LinearDiscriminant(init_matlab=True)
-    lqa.learn(X_train, y_train, ell=0.01)
+    lqa.learn(X=X_train, y=y_train, ell=0.01)
     sum_time = 0
     n, _ = X_test.shape
     for i, test in enumerate(X_test):
@@ -307,9 +323,14 @@ def computing_time_prediction(in_path=None):
     print("--->", sum_time, '---n---', n)
 
 
-seeds = list([23, 10, 44, 31, 0, 17, 13, 29, 47, 87])
-seed_sampling_learn_ell = 23
-in_path = "/Users/salmuz/Downloads/glass.csv"
+# _test_IEuclideanDA()
+# _test_ILDA()
+# _test_IQDA()
+output_paper_result()
+
+# seeds = list([23, 10, 44, 31, 0, 17, 13, 29, 47, 87])
+# seed_sampling_learn_ell = 23
+# in_path = "/Users/salmuz/Downloads/glass.csv"
 # computing_best_imprecise_mean(in_path, seed=seed_sampling_learn_ell, from_ell=0.01, to_ell=0.1, by_ell=0.01)
 # computing_accuracy_imprecise(in_path, ell_optimal=0.03, seeds=seeds)
 # computing_cv_accuracy_imprecise(in_path, ell_optimal=0.03)
@@ -317,4 +338,4 @@ in_path = "/Users/salmuz/Downloads/glass.csv"
 # computing_cv_accuracy_LDA(in_path)
 # computing_precise_vs_imprecise(ell_best=0.1, seeds=seeds)
 # output_paper_zone_imprecise()
-output_paper_result()
+# output_paper_result()
