@@ -5,7 +5,7 @@ import copy
 from constraint import *
 
 
-def _create_utility_matrix(size):
+def _create_rank_utility_matrix(size):
     utility = np.zeros([size, size])
     for i in range(0, size):
         for j in range(i, size):
@@ -18,19 +18,18 @@ class NCCLR(object):
        Label ranking problem with label-wise decomposition.
 
     """
-
     def __init__(self):
         self.nb_clazz = 0
         self.set_nccof = dict()
         self.clazz = []
-        self.ranking_utility = None;
+        self.ranking_utility = None
 
     def learn(self, learn_data_set):
         try:
             classes = learn_data_set.attribute_data['L'][:]
             self.nb_clazz = len(classes)
             self.clazz = classes
-            self.ranking_utility = _create_utility_matrix(self.nb_clazz)
+            self.ranking_utility = _create_rank_utility_matrix(self.nb_clazz)
             rankings = [str(i + 1) for i in range(self.nb_clazz)]
             for class_value in classes:
                 # print("Building ranking classifier %s" % class_value)
