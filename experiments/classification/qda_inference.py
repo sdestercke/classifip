@@ -8,7 +8,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
 from classifip.evaluation.measures import u65, u80
-import logging, sys, random, os
+import logging, sys, random, os, csv
 
 QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
 MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant, 'iqda': QuadraticDiscriminant}
@@ -89,9 +89,11 @@ def output_paper_zone_im_precise(is_imprecise=True, model_type="ieda", in_train=
                            query=None, is_imprecise=is_imprecise, cmap_color=plt.cm.gist_ncar)
 
 
-def computing_best_imprecise_mean(in_path=None, cv_nfold=10, model_type="ieda", test_size=0.4,
+def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ieda", test_size=0.4,
                                   from_ell=0.1, to_ell=1.0, by_ell=0.1, seed=None):
     assert os.path.exists(in_path), "Without training data, not testing"
+    assert os.path.exists(out_path), "File for putting results does not exist"
+
     logger = __create_logger("computing_best_imprecise_mean")
 
     data = pd.read_csv(in_path)
@@ -109,6 +111,10 @@ def computing_best_imprecise_mean(in_path=None, cv_nfold=10, model_type="ieda", 
         splits.append((idx_train, idx_test))
         logger.info("Splits %s train %s", len(splits), idx_train)
         logger.info("Splits %s test %s", len(splits), idx_test)
+
+    # Create a CSV file for saving results
+    file_csv = open(out_path, 'w')
+    writer = csv.writer(file_csv)
 
     for ell_current in np.arange(from_ell, to_ell, by_ell):
         ell_u65[ell_current], ell_u80[ell_current] = 0, 0
@@ -133,7 +139,10 @@ def computing_best_imprecise_mean(in_path=None, cv_nfold=10, model_type="ieda", 
             logger.debug("Partial-kfold (%s, %s, %s)", ell_current, ell_u65[ell_current], ell_u80[ell_current])
         ell_u65[ell_current] = ell_u65[ell_current] / cv_nfold
         ell_u80[ell_current] = ell_u80[ell_current] / cv_nfold
+        writer.writerow([ell_current, ell_u65[ell_current], ell_u80[ell_current]])
+        file_csv.flush()
         logger.debug("Partial-ell (%s, %s, %s)", ell_current, ell_u65, ell_u80)
+    file_csv.close()
     logger.debug("Total-ell %s %s %s", in_path, ell_u65, ell_u80)
 
 
@@ -348,7 +357,8 @@ def computing_time_prediction(in_path=None):
 
 # Experiments with several datasets
 in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
-computing_best_imprecise_mean(in_path=in_path)
+out_path = "/Users/salmuz/Downloads/results.csv"
+computing_best_imprecise_mean(in_path=in_path, model_type="ilda")
 # seeds = list([23, 10, 44, 31, 0, 17, 13, 29, 47, 87])
 # seed_sampling_learn_ell = 23
 # computing_best_imprecise_mean(in_path, seed=seed_sampling_learn_ell, from_ell=0.01, to_ell=0.1, by_ell=0.01)

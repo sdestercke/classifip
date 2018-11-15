@@ -364,6 +364,10 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                                                  DEBUG=DEBUG)
         self._is_compute_total_cov = False
 
+    def learn(self, learn_data_set=None, ell=2, X=None, y=None):
+        self._is_compute_total_cov = False
+        super(LinearDiscriminant, self).learn(learn_data_set, ell, X, y)
+
     def get_cov_by_clazz(self, clazz):
         """
         Hint: Improving this method using the SVD method for computing pseudo-inverse matrix
@@ -383,7 +387,6 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                 self._gp_dcov[clazz_gp] = linalg.det(cov)
 
             self._is_compute_total_cov = True
-
         return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
 
 
