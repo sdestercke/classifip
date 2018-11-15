@@ -84,7 +84,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         :return:
         """
         self._ell = ell
-        self._gp_mean, self._gp_icov, self._gp_dcov = dict(), dict(), dict()
+        self._gp_mean, self._gp_cov, self._gp_icov, self._gp_dcov = dict(), dict(), dict(), dict()
         self._mean_lower, self._mean_upper = dict(), dict()
 
         # transformation of Arff data to feature matrix and vector category
@@ -316,7 +316,7 @@ class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
     """
 
     def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
-        super(EuclideanDiscriminant, self).__init__(init_matlab=init_matlab,
+        super(EuclideanDiscriminant, self).__init__(init_matlab=False,
                                                     add_path_matlab=add_path_matlab,
                                                     DEBUG=DEBUG)
 
@@ -370,7 +370,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         :return:
         """
         if not self._is_compute_total_cov:
-            cov = 0 # estimation of empirical total covariance matrix
+            cov = 0  # estimation of empirical total covariance matrix
             for clazz_gp in self._clazz:
                 covClazz, _, _ = super(LinearDiscriminant, self).get_cov_by_clazz(clazz_gp)
                 _nb_instances_by_clazz = self._nb_by_clazz(clazz)
@@ -380,11 +380,12 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             for clazz_gp in self._clazz:
                 self._gp_cov[clazz_gp] = cov
                 self._gp_icov[clazz_gp] = linalg.inv(cov)
-                self._gp_dcov[clazz_gp] =linalg.det(cov)
+                self._gp_dcov[clazz_gp] = linalg.det(cov)
 
-            self._is_compute_total_cov=True
+            self._is_compute_total_cov = True
 
         return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
+
 
 class QuadraticDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
     """

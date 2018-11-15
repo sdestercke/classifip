@@ -1,4 +1,9 @@
 from setuptools import setup, find_packages
+import os
+
+resources_dir = os.path.join('resources')
+datafiles = [(d, [os.path.join(d,f) for f in files])
+    for d, folders, files in os.walk(resources_dir)]
 
 classifiers = """\
 Development Status :: 2 - Pre-Alpha
@@ -25,5 +30,6 @@ setup(
     long_description=open('README.rst').read(),
     classifiers = classifiers.split('\n'),
     install_requires=['numpy', 'cvxopt', 'scikit-learn', 'matplotlib', 'pandas',
-                      'Orange3', 'python-constraint', 'feather-format']
+                      'Orange3', 'python-constraint', 'feather-format'],
+    data_files= datafiles
 )

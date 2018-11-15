@@ -1,11 +1,10 @@
 import pandas as pd
 import feather
-import os
+import os, sys
 from os.path import join
 
-current_dir = os.getcwd()
+current_dir = os.path.abspath(os.path.dirname(__file__))
 out_path = join(current_dir, "../../resources/")
-
 
 def import_data_set(in_path, sep="\s", name=None, header=None):
     data = pd.read_csv(in_path, sep=sep, header=header)

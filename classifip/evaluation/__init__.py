@@ -1,4 +1,4 @@
-from . import costMatrix
+from . import costMatrix, measures
 
 import random
 
@@ -39,16 +39,16 @@ def k_fold_cross_validation(data, K, randomise=False, random_seed=None, structur
         yield datatr, datatst
 
 
-def train_test_split(data, test_pct = 0.5, random_seed=None):
+def train_test_split(dataArff, test_pct = 0.5, random_seed=None):
     """
        Generates partition (training, testing) pairs from the items in X
     """
-    training = data.make_clone()
+    training = dataArff.make_clone()
     if random_seed is not None:
         random.seed(random_seed)
         random.shuffle(training.data)
     testing = training.make_clone()
-    idx_end_train = int(len(data.data) * (1 - test_pct))
+    idx_end_train = int(len(dataArff.data) * (1 - test_pct))
     training.data = training.data[:idx_end_train]
     testing.data = testing.data[idx_end_train:]
     return training, testing
