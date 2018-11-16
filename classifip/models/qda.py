@@ -271,6 +271,10 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
         return np.asarray(x).reshape((1, self._p))[0]
 
+    def close_matlab(self):
+        if self._eng is not None:
+            self._eng.quit()
+
     def __repr__(self):
         print("lower:", self._mean_lower)
         print("upper:", self._mean_upper)
