@@ -1,32 +1,18 @@
 from classifip.models.qda import EuclideanDiscriminant, LinearDiscriminant, QuadraticDiscriminant
 from classifip.dataset.uci_data_set import export_data_set
-from classifip.utils import plot_classification as pc
-import numpy as np
-import pandas as pd
+from classifip.utils import plot_classification as pc, create_logger
 from sklearn.model_selection import train_test_split
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
 from classifip.evaluation.measures import u65, u80
-import logging, sys, random, os, csv
+import random, os, csv, numpy as np, pandas as pd
+
 
 ## Server env:
 # export LD_PRELOAD=/usr/local/MATLAB/R2018b/sys/os/glnxa64/libstdc++.so.6.0.22
 QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
 MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant, 'iqda': QuadraticDiscriminant}
-
-
-def __create_logger(name="default"):
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.flush = sys.stdout.flush
-    handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    return logger
-
 
 def __factory_model(model_type, **kwargs):
     try:
@@ -122,7 +108,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
-    logger = __create_logger("computing_best_imprecise_mean")
+    logger = create_logger("computing_best_imprecise_mean")
 
     data = pd.read_csv(in_path)
     X = data.iloc[:, :-1].values
@@ -148,7 +134,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
 
     model_static = None
     if not pl_process:
-        model_static = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server)
+        model_static = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
     for ell_current in np.arange(from_ell, to_ell, by_ell):
         ell_u65[ell_current], ell_u80[ell_current] = 0, 0
         logger.info("ELL_CURRENT %s", ell_current)
@@ -160,12 +146,12 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
             pool.close()
             pool.join()
             z = reduce((lambda x, y: {'u65': x['u65'] + y['u65'], 'u80': x['u80'] + y['u80']}), z)
-            ell_u65[ell_current] = z["65"]
+            ell_u65[ell_current] = z["u65"]
             ell_u80[ell_current] = z["u80"]
         else:
             for split in splits:
                 z = prediction(model_static, model_type, X_train, y_train, ell_current, lib_path_server, split)
-                ell_u65[ell_current] = z["65"]
+                ell_u65[ell_current] = z["u65"]
                 ell_u80[ell_current] = z["u80"]
         ell_u65[ell_current] = ell_u65[ell_current] / cv_nfold
         ell_u80[ell_current] = ell_u80[ell_current] / cv_nfold
@@ -386,11 +372,11 @@ def computing_time_prediction(in_path=None):
 # output_paper_zone_im_precise()
 
 # Experiments with several datasets
-# QPBB_PATH_SERVER = [] # executed in host
-in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
+QPBB_PATH_SERVER = [] # executed in host
+in_path = "/Users/salmuz/Downloads/datasets/optdigits.csv"
 out_path = "/Users/salmuz/Downloads/results.csv"
 computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="ilda",
-                              pl_process=True, lib_path_server=QPBB_PATH_SERVER)
+                              pl_process=False, lib_path_server=QPBB_PATH_SERVER)
 # seeds = list([23, 10, 44, 31, 0, 17, 13, 29, 47, 87])
 # seed_sampling_learn_ell = 23
 # computing_best_imprecise_mean(in_path, seed=seed_sampling_learn_ell, from_ell=0.01, to_ell=0.1, by_ell=0.01)
