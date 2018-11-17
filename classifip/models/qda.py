@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from cvxopt import solvers, matrix
 from numpy import linalg
-from ..utils import create_logger
+from ..utils import create_logger, is_level_debug
 
 
 def is_sdp_symmetric(x):
@@ -253,20 +253,20 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         import matlab.engine
 
         if eng_session is None: raise Exception("Environment matlab hadn't been initialized.")
-        __out = io.StringIO()
+        _debug = is_level_debug(self._logger)
+        __out = None if _debug else io.StringIO()
         __err = io.StringIO()
         try:
-            Q = matlab.double(Q.tolist())
-            q = eng_session.transpose(matlab.double(q.tolist()))
+            Q_m = matlab.double(Q.tolist())
+            q_m = eng_session.transpose(matlab.double(q.tolist()))
             LB = eng_session.transpose(matlab.double(mean_lower.tolist()))
             UB = eng_session.transpose(matlab.double(mean_upper.tolist()))
             A = matlab.double([])
             b = matlab.double([])
             Aeq = matlab.double([])
             beq = matlab.double([])
-            x, _, _, _ = eng_session.quadprogbb(Q, q, A, b, Aeq, beq, LB, UB,
+            x, _, _, _ = eng_session.quadprogbb(Q_m, q_m, A, b, Aeq, beq, LB, UB,
                                                 nargout=4, stdout=__out, stderr=__err)
-            self._logger.debug("[DEBUG_MATHLAB_OUTPUT: %s", __out.getvalue())
             self.__nb_rebuild_opt = 0
         except Exception as e:
             # In case, MATHLAB crash 3 times, optimal point will take mean of category

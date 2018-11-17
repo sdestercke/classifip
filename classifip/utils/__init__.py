@@ -12,3 +12,6 @@ def create_logger(name="default", DEBUG=False):
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     return logger
+
+def is_level_debug(logger):
+    return logger.getEffectiveLevel() == logging.DEBUG
