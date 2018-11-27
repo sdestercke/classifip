@@ -1,8 +1,8 @@
 from . import plot_classification
-import logging, sys
 
 
 def create_logger(name="default", DEBUG=False):
+    import logging, sys
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG if DEBUG else logging.INFO)
     handler = logging.StreamHandler(sys.stdout)
@@ -13,5 +13,7 @@ def create_logger(name="default", DEBUG=False):
     logger.addHandler(handler)
     return logger
 
+
 def is_level_debug(logger):
+    import logging
     return logger.getEffectiveLevel() == logging.DEBUG

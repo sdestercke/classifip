@@ -190,7 +190,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         return self._data[self._data.y == clazz].iloc[:, :-1].cov().as_matrix()
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
-
+        self._logger.debug("[iS-Inverse-Covariance-SDP] (%s, %s)", clazz, self._gp_sdp[clazz])
         if self._gp_sdp[clazz]:
             def __min_convex_qp(A, q, lower, upper, d):
                 ell_lower = matrix(lower, (d, 1))
@@ -269,22 +269,24 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                                                 nargout=4, stdout=__out, stderr=__err)
             self.__nb_rebuild_opt = 0
         except Exception as e:
+            self._logger.debug("[DEBUG_MATHLAB_EXCEPTION] %s", __err.getvalue())
+            self._logger.debug("[DEBUG_MATHLAB_EXCEPTION] %s", e)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT]: Crash QuadProgBB, inputs:class %s", clazz)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Q matrix: %s", Q)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] q vector: %s", q)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Lower Bound: %s", mean_lower)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Upper Bound %s", mean_upper)
+            # In the cases matlab crash and session is lost, so we need a new session
+            self.close_matlab()
+            self._eng = matlab.engine.start_matlab()
+            for _in_path in self._add_path_matlab: self._eng.addpath(_in_path)
             # In case, MATHLAB crash 3 times, optimal point will take mean of category
             if self.__nb_rebuild_opt > 2:
                 self.__nb_rebuild_opt = 0
                 return self.get_mean_by_clazz(clazz)
             self.__nb_rebuild_opt += 1
-            self._logger.debug("[DEBUG_MATHLAB_OUTPUT]", __err.getvalue())
-            self._logger.debug("[DEBUG_MATHLAB_EXCEPTION]", e)
-            self._logger.debug("[DEBUG_MATHLAB_OUTPUT]: Crash QuadProgBB, inputs:class", clazz)
-            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Q matrix:", Q)
-            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] q vector:", q)
-            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Lower Bound:", mean_lower)
-            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Upper Bound", mean_upper)
-            self._eng = matlab.engine.start_matlab()
-            for _in_path in self._add_path_matlab: self._eng.addpath(_in_path)
             self._logger.debug("[DEBUG_MATHLAB_OUTPUT] New MATHLAB LOADING")
-            return self.quadprogbb(Q, q, mean_lower, mean_upper, eng_session, clazz)
+            return self.quadprogbb(Q, q, mean_lower, mean_upper, self._eng, clazz)
 
         return np.asarray(x).reshape((1, self._p))[0]
 
@@ -292,7 +294,10 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         return self.quadprogbb((-1 * Q), (-1 * q), mean_lower, mean_upper, eng_session, clazz)
 
     def close_matlab(self):
-        if self._eng is not None: self._eng.quit()
+        try:
+            if self._eng is not None: self._eng.quit()
+        except Exception as e:
+            self._logger.debug("[DEBUG_MATHLAB_CLOSE] %s", e)
 
     ## Testing Optimal force brute
 
@@ -375,6 +380,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                                                  add_path_matlab=add_path_matlab)
         self._is_compute_total_cov = False
         self._logger = create_logger("ILDA", DEBUG)
+        if DEBUG: solvers.options['show_progress']=True
 
     def learn(self, learn_data_set=None, ell=2, X=None, y=None):
         self._is_compute_total_cov = False
@@ -421,4 +427,5 @@ class QuadraticDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
     def __init__(self, init_matlab=True, add_path_matlab=None, DEBUG=False):
         super(QuadraticDiscriminant, self).__init__(init_matlab=init_matlab,
                                                     add_path_matlab=add_path_matlab)
-        self._logger = create_logger("ILDA", DEBUG)
+        self._logger = create_logger("IQDA", DEBUG)
+        if DEBUG: solvers.options['show_progress'] = True
