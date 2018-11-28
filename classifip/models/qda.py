@@ -187,7 +187,12 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         return self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
 
     def __cov_by_clazz(self, clazz):
-        return self._data[self._data.y == clazz].iloc[:, :-1].cov().as_matrix()
+        _sub_data = self._data[self._data.y == clazz].iloc[:, :-1]
+        _n, _p = _sub_data.shape
+        if _n > 1: return _sub_data.cov().as_matrix()
+        ## Bug: Impossible to compute covariance of just ONE instance
+        ## e.g. _sub_data.shape = (1, 8)
+        else: return np.eye(_p, dtype=np.dtype('d'))
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
         self._logger.debug("[iS-Inverse-Covariance-SDP] (%s, %s)", clazz, self._gp_sdp[clazz])
@@ -295,7 +300,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
     def close_matlab(self):
         try:
-            if self._eng is not None: self._eng.quit()
+            if self._eng is not None : self._eng.quit()
         except Exception as e:
             self._logger.debug("[DEBUG_MATHLAB_CLOSE] %s", e)
 
