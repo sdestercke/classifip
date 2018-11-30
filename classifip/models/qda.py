@@ -4,6 +4,7 @@ import pandas as pd
 from cvxopt import solvers, matrix
 from numpy import linalg
 from ..utils import create_logger, is_level_debug
+import matlab.engine
 
 
 def is_sdp_symmetric(x):
@@ -24,7 +25,6 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         """
         # Starting matlab environment
         if init_matlab:
-            import matlab.engine
             self._eng = matlab.engine.start_matlab()
             self._add_path_matlab = [] if add_path_matlab is None else add_path_matlab
             for _in_path in self._add_path_matlab: self._eng.addpath(_in_path)
@@ -146,7 +146,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 self._logger.debug("[BOUND_ESTIMATION:%s] Q matrix: %s", bound, inv)
                 self._logger.debug("[BOUND_ESTIMATION:%s] q vector: %s", bound, q)
                 self._logger.debug("[BOUND_ESTIMATION:%s] Lower Bound: %s", bound, mean_lower)
-                self._logger.debug("[BOUND_ESTIMATION:%s] Upper Bound %s",bound, mean_upper)
+                self._logger.debug("[BOUND_ESTIMATION:%s] Upper Bound %s", bound, mean_upper)
                 if bound == "inf":
                     estimator = _self.infimum_estimation(inv, q, mean_lower, mean_upper, eng_session, clazz)
                 else:
@@ -255,8 +255,6 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 max  1/2*x'*(-H)*x - f'*x
                 s.t.  ....(same)
         """
-        import matlab.engine
-
         if eng_session is None: raise Exception("Environment matlab hadn't been initialized.")
         _debug = is_level_debug(self._logger)
         __out = None if _debug else io.StringIO()
@@ -282,7 +280,6 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Lower Bound: %s", mean_lower)
             self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Upper Bound %s", mean_upper)
             # In the cases matlab crash and session is lost, so we need a new session
-            self.close_matlab()
             self._eng = matlab.engine.start_matlab()
             for _in_path in self._add_path_matlab: self._eng.addpath(_in_path)
             # In case, MATHLAB crash 3 times, optimal point will take mean of category
@@ -300,7 +297,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
     def close_matlab(self):
         try:
-            if self._eng is not None : self._eng.quit()
+            if self._eng is not None: self._eng.quit()
         except Exception as e:
             self._logger.debug("[DEBUG_MATHLAB_CLOSE] %s", e)
 
@@ -385,7 +382,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                                                  add_path_matlab=add_path_matlab)
         self._is_compute_total_cov = False
         self._logger = create_logger("ILDA", DEBUG)
-        if DEBUG: solvers.options['show_progress']=True
+        if DEBUG: solvers.options['show_progress'] = True
 
     def learn(self, learn_data_set=None, ell=2, X=None, y=None):
         self._is_compute_total_cov = False
