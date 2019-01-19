@@ -2,7 +2,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from classifip.evaluation.measures import u65, u80
 from classifip.utils import create_logger
-import random, os, csv, numpy as np, pandas as pd
+import sys, random, os, csv, numpy as np, pandas as pd
 # noinspection PyUnresolvedReferences
 from qda_common import __factory_model
 
@@ -22,7 +22,7 @@ class ManagerWorkers:
         self.NUMBER_OF_PROCESSES = cpu_count() if nb_process is None else nb_process
 
     def executeAsync(self, model_type, lib_path_server, ):
-        print("starting %d workers" % self.NUMBER_OF_PROCESSES)
+        print("starting %d workers" % self.NUMBER_OF_PROCESSES, flush=True)
         self.workers = []
         for i in range(self.NUMBER_OF_PROCESSES):
             p = Process(target=prediction,
@@ -37,7 +37,7 @@ class ManagerWorkers:
             self.qeTraining[i].put(kwargs)
 
     def poisonPillTraining(self):
-        for i in range(self.NUMBER_OF_PROCESSES): self.qeTraining[i].push(None)
+        for i in range(self.NUMBER_OF_PROCESSES): self.qeTraining[i].put(None)
 
     def joinTraining(self):
         for i in range(self.NUMBER_OF_PROCESSES): self.qeTraining[i].join()
@@ -56,7 +56,7 @@ class ManagerWorkers:
 
 
 def prediction(pid, tasks, queue, results, model_type, lib_path_server):
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server)
+    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
     while True:
         training = queue.get()
         if training is None: break
@@ -66,13 +66,13 @@ def prediction(pid, tasks, queue, results, model_type, lib_path_server):
             task = tasks.get()
             if task is None: break
             evaluate, _ = model.evaluate(task['X_test'])
-            print("(testing, ell_current, prediction, ground-truth) ", pid, evaluate, task)
+            print("(pid, evaluate, task) ", pid, evaluate, task, flush=True)
             if task['y_test'] in evaluate:
                 sum65 += u65(evaluate)
                 sum80 += u80(evaluate)
         queue.task_done()
         results.put(dict({'u65': sum65, 'u80': sum80}))
-    print("Worker PID finished", pid)
+    print("Worker PID finished", pid, flush=True)
 
 
 def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ieda", test_size=0.4,
@@ -122,7 +122,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
             for utility in iter(shared_results.get, 'STOP'):
                 ell_u65[ell_current] += utility['u65'] / n_test
                 ell_u80[ell_current] += utility['u80'] / n_test
-            print("Partial-kfold", ell_current, ell_u65[ell_current], ell_u80[ell_current])
+            print("Partial-kfold", ell_current, ell_u65[ell_current], ell_u80[ell_current], flush=True)
 
         ell_u65[ell_current] = ell_u65[ell_current] / cv_nfold
         ell_u80[ell_current] = ell_u80[ell_current] / cv_nfold
@@ -134,9 +134,8 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
     logger.debug("Total-ell %s %s %s", in_path, ell_u65, ell_u80)
 
 
-in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
-out_path = "/Users/salmuz/Downloads/results_iris_ilda.csv"
-QPBB_PATH_SERVER = []  # executed in host
+in_path = sys.argv[1]
+out_path = sys.argv[2]
 computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="ilda",
-                              from_ell=0.01, to_ell=0.02, by_ell=0.01, seed=697720819,
+                              from_ell=0.65, to_ell=1, by_ell=0.01, seed=697720819,
                               lib_path_server=QPBB_PATH_SERVER, nb_process=3)

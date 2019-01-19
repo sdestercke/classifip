@@ -5,6 +5,7 @@ import xxhash
 
 MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant, 'iqda': QuadraticDiscriminant}
 MODEL_TYPES_PRECISE = {'lda': LinearDiscriminantAnalysis, 'qda': QuadraticDiscriminantAnalysis}
+INFIMUM, SUPREMUM = "inf", "sup"
 
 
 def __factory_model(model_type, **kwargs):
@@ -75,7 +76,6 @@ class StoreQueries:
 
         return format(self.queries)
 
-# INFIMUM, SUPREMUM = "inf", "sup"
 # If ELL parameter is not same we create a new store_queries
 # otherwise we could use the same and improve performance evaluate
 # if self.store_queries is None or not self.store_queries.is_same_keystore(self._ell):
