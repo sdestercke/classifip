@@ -17,13 +17,14 @@ def __factory_model(model_type, **kwargs):
 
 def __factory_model_precise(model_type, **kwargs):
     try:
+        if model_type == 'lda': kwargs["solver"] = "svd";
         return MODEL_TYPES_PRECISE[model_type.lower()](**kwargs)
     except:
         raise Exception("Selected model does not exist")
 
 
 def generate_seeds(nb_seeds):
-    return [random.randrange(pow(2, 30)) for i in range(nb_seeds)]
+    return [random.randrange(pow(2, 20)) for _ in range(nb_seeds)]
 
 
 class StoreQueries:

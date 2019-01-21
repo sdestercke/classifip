@@ -3,7 +3,6 @@ from sklearn.model_selection import KFold
 from classifip.evaluation.measures import u65, u80
 from classifip.utils import create_logger
 import sys, random, os, csv, numpy as np, pandas as pd
-# noinspection PyUnresolvedReferences
 from qda_common import __factory_model
 
 ## Server env:
@@ -21,7 +20,7 @@ class ManagerWorkers:
         self.qeTraining = [JoinableQueue() for i in range(nb_process)]
         self.NUMBER_OF_PROCESSES = cpu_count() if nb_process is None else nb_process
 
-    def executeAsync(self, model_type, lib_path_server, ):
+    def executeAsync(self, model_type, lib_path_server):
         print("starting %d workers" % self.NUMBER_OF_PROCESSES, flush=True)
         self.workers = []
         for i in range(self.NUMBER_OF_PROCESSES):
@@ -136,6 +135,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
 
 in_path = sys.argv[1]
 out_path = sys.argv[2]
+# QPBB_PATH_SERVER = []  # executed in host
 computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="ilda",
                               from_ell=0.65, to_ell=1, by_ell=0.01, seed=697720819,
                               lib_path_server=QPBB_PATH_SERVER, nb_process=3)
