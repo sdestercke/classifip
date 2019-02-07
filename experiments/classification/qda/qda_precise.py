@@ -2,7 +2,7 @@ from classifip.evaluation.measures import u65, u80
 from qda_common import __factory_model_precise, generate_seeds
 from classifip.dataset.uci_data_set import export_data_set
 from sklearn.model_selection import KFold
-import numpy as np, pandas as pd
+import numpy as np, pandas as pd, sys
 from classifip.utils import create_logger
 from sklearn.model_selection import train_test_split
 
@@ -67,6 +67,7 @@ def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=
     logger.info("[data-set:avgResults] (%s, %s, %s)", in_path, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
 
 
-in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
+#in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
+in_path = sys.argv[1]
 # performance_hold_out(in_path, model_type='lda')
 performance_cv_accuracy(in_path, model_type='qda')
