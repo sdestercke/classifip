@@ -22,13 +22,13 @@ def is_sdp_symmetric(x):
     return is_pos_def(x) and check_symmetric(x)
 
 
-def inference_maximal_criterion(lower, upper):
+def inference_maximal_criterion(lower, upper, clazz):
     pairwise_comparison = []
     # O(n^2), n: number of classes
     for idl, l in enumerate(lower):
         for idu, u in enumerate(upper):
             if idl != idu and l - u > 0:
-                pairwise_comparison.append([self._clazz[idl], self._clazz[idu]])
+                pairwise_comparison.append([clazz[idl], clazz[idu]])
 
     top_max = dict()
     down_min = dict()
@@ -206,7 +206,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             score = Scores(np.c_[lower, upper])
             return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
         else:
-            return inference_maximal_criterion(lower, upper), bounds
+            return inference_maximal_criterion(lower, upper, self._clazz), bounds
 
     def get_bound_means(self, clazz):
         return self._mean_lower[clazz], self._mean_upper[clazz]
