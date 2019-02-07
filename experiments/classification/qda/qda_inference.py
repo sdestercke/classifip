@@ -81,12 +81,12 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
 
 # Macbook
 # QPBB_PATH_SERVER = []  # executed in host
-# in_path = "/Users/salmuz/Downloads/datasets/glass.csv"
-# out_path = "/Users/salmuz/Downloads/results_yeast_ilda.csv"
+# in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
+# out_path = "/Users/salmuz/Downloads/results_iris_inda.csv"
 
-# in_path = sys.argv[1]
-# out_path = sys.argv[2]
+in_path = sys.argv[1]
+out_path = sys.argv[2]
 
-computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="ilda",
-                              from_ell=0.65, to_ell=5.5, by_ell=0.01, seed=697720819,
+computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="inda",
+                              from_ell=4.0, to_ell=5.5, by_ell=0.01, seed=697720819,
                               lib_path_server=QPBB_PATH_SERVER)

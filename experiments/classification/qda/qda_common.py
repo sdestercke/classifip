@@ -1,9 +1,9 @@
-from classifip.models.qda import EuclideanDiscriminant, LinearDiscriminant, QuadraticDiscriminant
+from classifip.models.qda import EuclideanDiscriminant, LinearDiscriminant, QuadraticDiscriminant, NaiveDiscriminant
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 import random
 import xxhash
 
-MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant, 'iqda': QuadraticDiscriminant}
+MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant, 'iqda': QuadraticDiscriminant, 'inda': NaiveDiscriminant}
 MODEL_TYPES_PRECISE = {'lda': LinearDiscriminantAnalysis, 'qda': QuadraticDiscriminantAnalysis}
 INFIMUM, SUPREMUM = "inf", "sup"
 
@@ -42,7 +42,6 @@ class StoreQueries:
     def put_query(self, probability, estimator, clazz, query, bound=INFIMUM):
         q_hash = self.__hash(query)
         if q_hash not in self.queries[clazz]:
-            print("--->", q_hash)
             self.queries[clazz][q_hash] = dict()
         self.__put_bounds(probability, estimator, clazz, q_hash, bound)
 

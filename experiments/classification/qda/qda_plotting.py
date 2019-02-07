@@ -1,7 +1,7 @@
 import numpy as np, pandas as pd
 from qda_common import __factory_model
 import matplotlib.pyplot as plt
-from classifip.models.qda import EuclideanDiscriminant, LinearDiscriminant, QuadraticDiscriminant
+from classifip.models.qda import EuclideanDiscriminant, LinearDiscriminant, QuadraticDiscriminant, NaiveDiscriminant
 from classifip.dataset.uci_data_set import export_data_set
 from classifip.utils import plot_classification as pc
 
@@ -30,6 +30,11 @@ def __test_imprecise_model(model, data, features=None, clazz=-1, hgrid=0.02, ell
 
 def _test_IEuclideanDA(in_train=None, features=None):
     ieqa = EuclideanDiscriminant(DEBUG=True)
+    data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
+    __test_imprecise_model(ieqa, data, features, hgrid=0.02)
+
+def _test_INaiveDA(in_train=None, features=None):
+    ieqa = NaiveDiscriminant(DEBUG=True)
     data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
     __test_imprecise_model(ieqa, data, features, hgrid=0.02)
 
@@ -64,6 +69,7 @@ def output_paper_zone_im_precise(is_imprecise=True, model_type="ieda", in_train=
 # _test_IEuclideanDA()
 _test_ILDA()
 # _test_IQDA()
+# _test_INaiveDA()
 # output_paper_result()
 # output_paper_zone_im_precise(model_type='ilda', hgrid=0.05)
 # output_paper_result()

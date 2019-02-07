@@ -4,7 +4,12 @@ import pandas as pd
 from cvxopt import solvers, matrix
 from numpy import linalg
 from ..utils import create_logger, is_level_debug
-import matlab.engine
+from classifip.representations.voting import Scores
+
+try:
+    import matlab.engine
+except e:
+    print("MATLAB not installed in host.")
 
 
 def is_sdp_symmetric(x):
@@ -15,6 +20,28 @@ def is_sdp_symmetric(x):
         return np.allclose(x, x.T, atol=tol)
 
     return is_pos_def(x) and check_symmetric(x)
+
+
+def inference_maximal_criterion(lower, upper):
+    pairwise_comparison = []
+    # O(n^2), n: number of classes
+    for idl, l in enumerate(lower):
+        for idu, u in enumerate(upper):
+            if idl != idu and l - u > 0:
+                pairwise_comparison.append([self._clazz[idl], self._clazz[idu]])
+
+    top_max = dict()
+    down_min = dict()
+    # O(l), l: number of pairwise comparison
+    for pairwise in pairwise_comparison:
+        if pairwise[0] not in down_min:
+            if pairwise[1] in top_max: top_max.pop(elem[1], None)
+            top_max[pairwise[0]] = 1
+            down_min[pairwise[1]] = 0
+        else:
+            down_min[pairwise[1]] = 0
+
+    return list(top_max.keys())
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
@@ -59,21 +86,21 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             self._gp_mean[clazz] = self.__mean_by_clazz(clazz)
         return self._gp_mean[clazz]
 
-    def get_cov_by_clazz(self, clazz):
-        if clazz not in self._gp_cov:
-            cov_clazz = self.__cov_by_clazz(clazz)
-            self._gp_cov[clazz] = cov_clazz
-            if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
-                self._gp_icov[clazz] = linalg.inv(cov_clazz)
-                self._gp_dcov[clazz] = linalg.det(cov_clazz)
-            else:  # computing pseudo inverse/determinant to a singular covariance matrix
-                self._gp_icov[clazz] = linalg.pinv(cov_clazz)
-                eig_values, _ = linalg.eig(cov_clazz)
-                self._gp_dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
-            self._gp_sdp[clazz] = is_sdp_symmetric(self._gp_icov[clazz])
-        return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
-
-    def probability_density_gaussian(self, mean, inv_cov, det_cov, query):
+    # def get_cov_by_clazz(self, clazz):
+    #     if clazz not in self._gp_cov:
+    #         cov_clazz = self._cov_by_clazz(clazz)
+    #         self._gp_cov[clazz] = cov_clazz
+    #         if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
+    #             self._gp_icov[clazz] = linalg.inv(cov_clazz)
+    #             self._gp_dcov[clazz] = linalg.det(cov_clazz)
+    #         else:  # computing pseudo inverse/determinant to a singular covariance matrix
+    #             self._gp_icov[clazz] = linalg.pinv(cov_clazz)
+    #             eig_values, _ = linalg.eig(cov_clazz)
+    #             self._gp_dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
+    #         self._gp_sdp[clazz] = is_sdp_symmetric(self._gp_icov[clazz])
+    #     return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
+    #
+    # def probability_density_gaussian(self, mean, inv_cov, det_cov, query):
         _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
         _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
         return _const * np.exp(_exp)
@@ -129,7 +156,16 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             self._mean_lower[clazz] = (-self._ell + nb_by_clazz * mean) / nb_by_clazz
             self._mean_upper[clazz] = (self._ell + nb_by_clazz * mean) / nb_by_clazz
 
-    def evaluate(self, query, method="quadratic"):
+    def evaluate(self, query, method="quadratic", criterion="maximality"):
+        """
+        This method is ..
+
+        :param query: new unlabeled instance
+        :param method: optimization method for computing optimal upper bound mean.
+        :param criterion: interval_dominance if criterion decision performs with Interval dominance,
+                otherwise maximality criterion
+        :return: tuple composed of set-valued categories and (lower,upper) bound probabilities.
+        """
         bounds = dict((clazz, dict()) for clazz in self._clazz)
         eng_session = self._eng
 
@@ -165,16 +201,12 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             lower.append(p_inf * self._prior[clazz])
             upper.append(p_up * self._prior[clazz])
 
-        from classifip.representations.voting import Scores
-        score = Scores(np.c_[lower, upper])
-        return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
 
-        # from classifip.representations.intervalsProbability import IntervalsProbability
-        # return IntervalsProbability(np.array([upper, lower]))
-        # inference = np.divide(lower, upper[::-1])
-        # answers = self._clazz[(inference > 1)]
-        # print("inf/sup:", np.divide(lower, upper[::-1]))
-        # return answers, bounds
+        if criterion == "interval_dominance":
+            score = Scores(np.c_[lower, upper])
+            return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
+        else:
+            return inference_maximal_criterion(lower, upper), bounds
 
     def get_bound_means(self, clazz):
         return self._mean_lower[clazz], self._mean_upper[clazz]
@@ -186,13 +218,15 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
     def __mean_by_clazz(self, clazz):
         return self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
 
-    def __cov_by_clazz(self, clazz):
+    def _cov_by_clazz(self, clazz):
         _sub_data = self._data[self._data.y == clazz].iloc[:, :-1]
         _n, _p = _sub_data.shape
-        if _n > 1: return _sub_data.cov().as_matrix()
+        if _n > 1:
+            return _sub_data.cov().as_matrix()
         ## Bug: Impossible to compute covariance of just ONE instance
         ## e.g. _sub_data.shape = (1, 8)
-        else: return np.eye(_p, dtype=np.dtype('d'))
+        else:
+            return np.eye(_p, dtype=np.dtype('d'))
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
         self._logger.debug("[iS-Inverse-Covariance-SDP] (%s, %s)", clazz, self._gp_sdp[clazz])
@@ -431,3 +465,26 @@ class QuadraticDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                                                     add_path_matlab=add_path_matlab)
         self._logger = create_logger("IQDA", DEBUG)
         if DEBUG: solvers.options['show_progress'] = True
+
+
+class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
+    """
+            Imprecise Euclidean Distance Discriminant implemented with a
+            imprecise gaussian distribution and conjugate exponential family.
+        """
+
+    def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
+        super(NaiveDiscriminant, self).__init__(init_matlab=False, add_path_matlab=add_path_matlab)
+        self._logger = create_logger("INDA", DEBUG)
+
+    def get_cov_by_clazz(self, clazz):
+        if clazz not in self._gp_cov:
+            cov_clazz = self._cov_by_clazz(clazz)
+            diagonal = np.einsum('ii->i', cov_clazz)
+            save = diagonal.copy()
+            cov_clazz[...] = 0
+            diagonal[...] = save
+            self._gp_cov[clazz] = cov_clazz
+            self._gp_icov[clazz] = linalg.inv(cov_clazz)
+            self._gp_dcov[clazz] = linalg.det(cov_clazz)
+        return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
