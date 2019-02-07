@@ -86,21 +86,21 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             self._gp_mean[clazz] = self.__mean_by_clazz(clazz)
         return self._gp_mean[clazz]
 
-    # def get_cov_by_clazz(self, clazz):
-    #     if clazz not in self._gp_cov:
-    #         cov_clazz = self._cov_by_clazz(clazz)
-    #         self._gp_cov[clazz] = cov_clazz
-    #         if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
-    #             self._gp_icov[clazz] = linalg.inv(cov_clazz)
-    #             self._gp_dcov[clazz] = linalg.det(cov_clazz)
-    #         else:  # computing pseudo inverse/determinant to a singular covariance matrix
-    #             self._gp_icov[clazz] = linalg.pinv(cov_clazz)
-    #             eig_values, _ = linalg.eig(cov_clazz)
-    #             self._gp_dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
-    #         self._gp_sdp[clazz] = is_sdp_symmetric(self._gp_icov[clazz])
-    #     return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
-    #
-    # def probability_density_gaussian(self, mean, inv_cov, det_cov, query):
+    def get_cov_by_clazz(self, clazz):
+        if clazz not in self._gp_cov:
+            cov_clazz = self._cov_by_clazz(clazz)
+            self._gp_cov[clazz] = cov_clazz
+            if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
+                self._gp_icov[clazz] = linalg.inv(cov_clazz)
+                self._gp_dcov[clazz] = linalg.det(cov_clazz)
+            else:  # computing pseudo inverse/determinant to a singular covariance matrix
+                self._gp_icov[clazz] = linalg.pinv(cov_clazz)
+                eig_values, _ = linalg.eig(cov_clazz)
+                self._gp_dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
+            self._gp_sdp[clazz] = is_sdp_symmetric(self._gp_icov[clazz])
+        return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
+
+    def probability_density_gaussian(self, mean, inv_cov, det_cov, query):
         _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
         _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
         return _const * np.exp(_exp)

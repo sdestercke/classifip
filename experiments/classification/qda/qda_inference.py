@@ -1,10 +1,9 @@
-from classifip.models.qda import EuclideanDiscriminant, LinearDiscriminant, QuadraticDiscriminant
 from classifip.utils import create_logger
 from sklearn.model_selection import train_test_split
 from qda_common import __factory_model
 from sklearn.model_selection import KFold
 from classifip.evaluation.measures import u65, u80
-import random, os, csv, numpy as np, pandas as pd
+import random, os, csv, sys, numpy as np, pandas as pd
 
 
 def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ieda", test_size=0.4,
@@ -84,6 +83,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
 # in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
 # out_path = "/Users/salmuz/Downloads/results_iris_inda.csv"
 
+QPBB_PATH_SERVER = []
 in_path = sys.argv[1]
 out_path = sys.argv[2]
 
