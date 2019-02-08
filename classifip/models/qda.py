@@ -8,7 +8,7 @@ from classifip.representations.voting import Scores
 
 try:
     import matlab.engine
-except e:
+except Exception as e:
     print("MATLAB not installed in host.")
 
 
@@ -35,13 +35,15 @@ def inference_maximal_criterion(lower, upper, clazz):
     # O(l), l: number of pairwise comparison
     for pairwise in pairwise_comparison:
         if pairwise[0] not in down_min:
-            if pairwise[1] in top_max: top_max.pop(elem[1], None)
+            if pairwise[1] in top_max: top_max.pop(pairwise[1], None)
             top_max[pairwise[0]] = 1
             down_min[pairwise[1]] = 0
         else:
             down_min[pairwise[1]] = 0
 
-    return list(top_max.keys())
+    maximal_elements =  list(top_max.keys())
+    # If there is no maximals, so maximal elements are all classes.
+    return clazz if len(maximal_elements) == 0 else  maximal_elements
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
