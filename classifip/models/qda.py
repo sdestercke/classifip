@@ -484,6 +484,7 @@ class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
             cov_clazz = self._cov_by_clazz(clazz)
             diagonal = np.einsum('ii->i', cov_clazz)
             save = diagonal.copy()
+            save[save == 0] = pow(10, -6)
             cov_clazz[...] = 0
             diagonal[...] = save
             self._gp_cov[clazz] = cov_clazz
