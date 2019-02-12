@@ -3,7 +3,7 @@ from sklearn.model_selection import KFold
 from classifip.evaluation.measures import u65, u80
 from classifip.utils import create_logger
 import sys, random, os, csv, numpy as np, pandas as pd
-from qda_common import __factory_model
+from qda_common import __factory_model, generate_seeds
 
 ## Server env:
 # export LD_PRELOAD=/usr/local/MATLAB/R2018b/sys/os/glnxa64/libstdc++.so.6.0.22
@@ -65,13 +65,53 @@ def prediction(pid, tasks, queue, results, model_type, lib_path_server):
             task = tasks.get()
             if task is None: break
             evaluate, _ = model.evaluate(task['X_test'])
-            print("(pid, evaluate, task) ", pid, evaluate, task, flush=True)
+            print("(pid, prediction, ground-truth) ", pid, evaluate, task, flush=True)
             if task['y_test'] in evaluate:
                 sum65 += u65(evaluate)
                 sum80 += u80(evaluate)
         queue.task_done()
         results.put(dict({'u65': sum65, 'u80': sum80}))
     print("Worker PID finished", pid, flush=True)
+
+def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optimal=0.1, nb_process=2,
+                                      lib_path_server=None, cv_n_fold=10, seeds=None):
+    data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
+    logger = create_logger("computing_best_imprecise_mean", True)
+    logger.info('Training dataset %s', in_path)
+    X = data.iloc[:, :-1].values
+    y = np.array(data.iloc[:, -1].tolist())
+    avg_u65, avg_u80 = 0, 0
+    seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
+    logger.info('Seeds used for accuracy %s', seeds)
+    manager = ManagerWorkers(nb_process=nb_process)
+    manager.executeAsync(model_type, lib_path_server)
+    for time in range(cv_n_fold):
+        kf = KFold(n_splits=cv_n_fold, random_state=seeds[time], shuffle=True)
+        mean_u65, mean_u80 = 0, 0
+        for idx_train, idx_test in kf.split(y):
+            logger.info("Splits train %s",  idx_train)
+            logger.info("Splits test %s", idx_test)
+            X_cv_train, y_cv_train = X[idx_train], y[idx_train]
+            X_cv_test, y_cv_test = X[idx_test], y[idx_test]
+            n_test = len(idx_test)
+
+            manager.addNewTraining(X=X_cv_train, y=y_cv_train, ell=ell_optimal)
+            for i, test in enumerate(X_cv_test): manager.addTask({'X_test': test, 'y_test': y_cv_test[i]})
+            manager.poisonPillWorkers()
+
+            manager.joinTraining()  # wait all process for computing results
+            shared_results = manager.getResults()
+            shared_results.put('STOP')  ## stop loop queue
+            for utility in iter(shared_results.get, 'STOP'):
+                mean_u65 += utility['u65'] / n_test
+                mean_u80 += utility['u80'] / n_test
+            logger.debug("Partial-kfold (%s, %s, %s, %s)", ell_optimal, time, mean_u65, mean_u80)
+        logger.info("Time, seed, u65, u80 (%s, %s, %s, %s)", time, seeds[time],
+                    mean_u65 / cv_n_fold, mean_u80 / cv_n_fold)
+        avg_u65 += mean_u65 / cv_n_fold
+        avg_u80 += mean_u80 / cv_n_fold
+    logger.debug("total-ell (%s, %s, %s, %s)", in_path, ell_optimal, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
+
 
 
 def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ieda", test_size=0.4,
@@ -121,7 +161,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
             for utility in iter(shared_results.get, 'STOP'):
                 ell_u65[ell_current] += utility['u65'] / n_test
                 ell_u80[ell_current] += utility['u80'] / n_test
-            print("Partial-kfold", ell_current, ell_u65[ell_current], ell_u80[ell_current], flush=True)
+            logger.info("Partial-kfold (%s, %s, %s)", ell_current, ell_u65[ell_current], ell_u80[ell_current])
 
         ell_u65[ell_current] = ell_u65[ell_current] / cv_nfold
         ell_u80[ell_current] = ell_u80[ell_current] / cv_nfold
@@ -137,5 +177,11 @@ in_path = sys.argv[1]
 out_path = sys.argv[2]
 # QPBB_PATH_SERVER = []  # executed in host
 computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="ilda",
-                              from_ell=0.65, to_ell=1, by_ell=0.01, seed=697720819,
-                              lib_path_server=QPBB_PATH_SERVER, nb_process=3)
+                             from_ell=0.01, to_ell=5, by_ell=0.01,
+                             lib_path_server=QPBB_PATH_SERVER, nb_process=3)
+
+# in_path = sys.argv[1]
+# ell_optimal = float(sys.argv[2])
+# QPBB_PATH_SERVER = []  # executed in host
+# performance_cv_accuracy_imprecise(in_path=in_path, ell_optimal=ell_optimal, model_type="ilda",
+#                                   lib_path_server=QPBB_PATH_SERVER, nb_process=1)

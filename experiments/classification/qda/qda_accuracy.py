@@ -6,6 +6,8 @@ from classifip.utils import create_logger
 import numpy as np, pandas as pd, sys
 from sklearn.model_selection import train_test_split
 
+QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
+
 
 def performance_accuracy_hold_out(in_path=None, model_type="ilda", ell_optimal=0.1, lib_path_server=None,
                                   seeds=list([0])):
@@ -46,6 +48,7 @@ def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optim
     y = np.array(data.iloc[:, -1].tolist())
     avg_u65, avg_u80 = 0, 0
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
+    logger.info('Seeds used for accuracy %s', seeds)
     model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
     for time in range(cv_n_fold):
         kf = KFold(n_splits=cv_n_fold, random_state=seeds[time], shuffle=True)
@@ -73,6 +76,8 @@ def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optim
     logger.debug("total-ell (%s, %s, %s, %s)", in_path, ell_optimal, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
 
 
-# computing_accuracy_imprecise(in_path, ell_optimal=0.03, seeds=seeds)
-in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
-performance_cv_accuracy_imprecise(in_path, ell_optimal=0.03)
+in_path = sys.argv[1]
+ell_optimal = float(sys.argv[2])
+# QPBB_PATH_SERVER = []
+performance_cv_accuracy_imprecise(in_path=in_path, ell_optimal=ell_optimal, model_type="ilda",
+                                  lib_path_server=QPBB_PATH_SERVER)

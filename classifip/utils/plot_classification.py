@@ -31,8 +31,8 @@ def __check_data_available(data):
     return X, np.array(y)
 
 
-def plot2D_classification(model, query=None, colors=None,
-                          markers=list(['*', 'v', 'o', '+', '-', '.', ','])):
+def plot2D_classification(model, query=None, colors=None, markers=None):
+    markers = list(['*', 'v', 'o', '+', '-', '.', ',']) if markers is None else markers
     X, y = __check_data_available(model.get_data())
     n_row, n_col = X.shape
     _clazz = model.get_clazz()
@@ -114,8 +114,8 @@ def plot2D_classification(model, query=None, colors=None,
     plt.show()
 
 
-def prediction(model, newClazz, clazz_by_index, query):
-    answer, _ = model.evaluate(query)
+def prediction(model, newClazz, clazz_by_index, query, criterion):
+    answer, _ = model.evaluate(query, criterion=criterion)
     if len(answer) > 1 or len(answer) == 0:
         iClass = "-".join(str(clazz) for clazz in sorted(answer))
         return newClazz[iClass]
@@ -123,8 +123,9 @@ def prediction(model, newClazz, clazz_by_index, query):
         return clazz_by_index[answer[0]]
 
 
-def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None,
-                             markers=list(['*', 'v', 'o', '+', '-', '.', ','])):
+def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None, markers=None,
+                             criterion="maximality"):
+    markers = list(['*', 'v', 'o', '+', '-', '.', ',']) if markers is None else markers
     X, y = __check_data_available(model.get_data())
     _clazz = model.get_clazz()
     _nb_clazz = len(_clazz)
@@ -140,7 +141,7 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
     z = np.array([])
     print("[DEBUG] How many queries:", len(yy.ravel()))
     for query in np.c_[xx.ravel(), yy.ravel()]:
-        z = np.append(z, prediction(model, newClazz, clazz_by_index, query))
+        z = np.append(z, prediction(model, newClazz, clazz_by_index, query, criterion))
 
     y_colors = [clazz_by_index[clazz] for clazz in y]
     z = np.array(z)
@@ -152,8 +153,8 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
     plt.show()
 
 
-def plot2D_decision_boundary_det(X, y, h=.01,
-                                 markers=list(['*', 'v', 'o', '+', '-', '.', ','])):
+def plot2D_decision_boundary_det(X, y, h=.01, markers=None):
+    markers = list(['*', 'v', 'o', '+', '-', '.', ',']) if markers is None else markers
     _, n_col = X.shape
     _clazz = list(set(y))
     _nb_clazz = len(_clazz)

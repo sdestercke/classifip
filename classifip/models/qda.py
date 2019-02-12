@@ -373,7 +373,7 @@ class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
     def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
         super(EuclideanDiscriminant, self).__init__(init_matlab=False,
                                                     add_path_matlab=add_path_matlab)
-        self._logger = create_logger("ILDA", DEBUG)
+        self._logger = create_logger("IEDA", DEBUG)
 
     def get_cov_by_clazz(self, clazz):
         if clazz not in self._gp_cov:

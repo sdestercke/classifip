@@ -67,10 +67,10 @@ def output_paper_zone_im_precise(is_imprecise=True, model_type="ieda", in_train=
 
 # Simple testing methods
 # _test_IEuclideanDA()
-_test_ILDA()
+# _test_ILDA()
 # _test_IQDA()
 # _test_INaiveDA()
 # output_paper_result()
-# output_paper_zone_im_precise(model_type='ilda', hgrid=0.05)
+output_paper_zone_im_precise(model_type='ilda', hgrid=0.05)
 # output_paper_result()
 
