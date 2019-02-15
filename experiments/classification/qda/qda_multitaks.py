@@ -114,8 +114,9 @@ def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optim
 
 
 
-def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ieda", test_size=0.4,
-                                  from_ell=0.1, to_ell=1.0, by_ell=0.1, seed=None, lib_path_server=None, nb_process=2):
+def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ieda",
+                                  from_ell=0.1, to_ell=1.0, by_ell=0.1, seed=None, lib_path_server=None,
+                                  nb_process=2):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
@@ -128,10 +129,9 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
     ell_u65, ell_u80 = dict(), dict()
     seed = random.randrange(pow(2, 30)) if seed is None else seed
     logger.debug("MODEL: %s, SEED: %s", model_type, seed)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=seed)
     kf = KFold(n_splits=cv_nfold, random_state=None, shuffle=True)
     splits = list([])
-    for idx_train, idx_test in kf.split(y_train):
+    for idx_train, idx_test in kf.split(y):
         splits.append((idx_train, idx_test))
         logger.info("Splits %s train %s", len(splits), idx_train)
         logger.info("Splits %s test %s", len(splits), idx_test)
@@ -147,8 +147,8 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
         for idx_train, idx_test in splits:
             logger.info("Splits train %s", idx_train)
             logger.info("Splits test %s", idx_test)
-            X_cv_train, y_cv_train = X_train[idx_train], y_train[idx_train]
-            X_cv_test, y_cv_test = X_train[idx_test], y_train[idx_test]
+            X_cv_train, y_cv_train = X[idx_train], y[idx_train]
+            X_cv_test, y_cv_test = X[idx_test], y[idx_test]
             n_test = len(idx_test)
 
             manager.addNewTraining(X=X_cv_train, y=y_cv_train, ell=ell_current)
