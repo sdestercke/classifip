@@ -74,6 +74,7 @@ def prediction(pid, tasks, queue, results, model_type, lib_path_server):
         results.put(dict({'u65': sum65, 'u80': sum80}))
     print("Worker PID finished", pid, flush=True)
 
+
 def computing_training_testing_step(X_training, y_training, X_testing, y_testing, ell_current, manager, acc_u65,
                                     acc_u80):
     n_test = len(y_testing)
@@ -92,6 +93,7 @@ def computing_training_testing_step(X_training, y_training, X_testing, y_testing
         acc_u65 += utility['u65'] / n_test
         acc_u80 += utility['u80'] / n_test
     return acc_u65, acc_u80
+
 
 def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=None, model_type="ilda",
                                   from_ell=0.1, to_ell=1.0, by_ell=0.1, seed=None, cv_kfold_first=10,
@@ -128,7 +130,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
         logger.info("Splits %s testing %s", idx_kfold, idx_testing)
 
         # n-Skipping fold cross-validation (purpose for parallel computing)
-        if idx_kfold > skip_nfold:
+        if idx_kfold >= skip_nfold:
             # Generate same k-fold-second (train, test) for impartially computing accuracy all ell parameters
             splits_ell = list([])
             logger.debug("[2-STEP-SEED] MODEL: %s, SEED: %s OF FIRST STEP %s", model_type, seed_2step[idx_kfold], seed)
@@ -162,7 +164,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
             # Computing optimal ells for using in testing step
             acc_ellu80 = max(ell_u80.values())
             ellu80_opts = [k for k, v in ell_u80.items() if v == acc_ellu80]
-            acc_u65[idx_kfold], acc_u80[idx_kfold], n_ell_opts= 0, 0, len(ellu80_opts)
+            acc_u65[idx_kfold], acc_u80[idx_kfold], n_ell_opts = 0, 0, len(ellu80_opts)
             for ellu80_opt in ellu80_opts:
                 logger.info("ELL_OPTIMAL_SELECT_SAMPLING %s", ellu80_opt)
                 acc_u65[idx_kfold], acc_u80[idx_kfold] = \
@@ -179,11 +181,14 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
 
     manager.poisonPillTraining()
     file_csv.close()
-    logger.debug("Total-ell %s %s %s", in_path, acc_u65, acc_u80)
+    logger.debug("Total-accuracy (%s, %s, %s)", in_path, acc_u65, acc_u80)
+    logger.debug("Total-avg-accuracy (%s, %s, %s)", in_path, np.mean(list(acc_u65.values())),
+                 np.mean(list(acc_u80.values())))
+
 
 in_path = sys.argv[1]
 out_path = sys.argv[2]
 # QPBB_PATH_SERVER = []  # executed in host
 computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="ilda",
-                              from_ell=0.01, to_ell=0.03, by_ell=0.01, #seed=XXX, skip_nfold=X,
+                              from_ell=0.01, to_ell=5.5, by_ell=0.01,  # seed=XXX, skip_nfold=X,
                               lib_path_server=QPBB_PATH_SERVER, nb_process=1)

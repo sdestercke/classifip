@@ -153,7 +153,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
             train_test_split(X, y, test_size=test_size, random_state=seeds[sampling])
 
         # n-Skipping sampling testing (purpose for parallel computing)
-        if idx_kfold > skip_n_sample:
+        if idx_kfold >= skip_n_sample:
             kf = KFold(n_splits=cv_nfold, random_state=None, shuffle=True)
             ell_u65, ell_u80, splits = dict(), dict(), list([])
             for idx_train, idx_test in kf.split(y_learning):
@@ -198,19 +198,19 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
             file_csv.flush()
             logger.debug("Partial-ell-2step (%s, %s, %s, %s)", -999, ellu80_opts, acc_u65[sampling], acc_u80[sampling])
 
-    logger.debug("Total-accuracy (%s, %s, %s)", in_path, acc_u65, acc_u80)
-    logger.debug("Total-avg-accuracy (%s, %s, %s)", in_path, np.mean(list(acc_u65.values())),
-                 np.mean(list(acc_u80.values())))
     writer.writerow([-9999, -9, np.mean(list(acc_u65.values())), np.mean(list(acc_u80.values()))])
     manager.poisonPillTraining()
     file_csv.close()
+    logger.debug("Total-accuracy (%s, %s, %s)", in_path, acc_u65, acc_u80)
+    logger.debug("Total-avg-accuracy (%s, %s, %s)", in_path, np.mean(list(acc_u65.values())),
+                 np.mean(list(acc_u80.values())))
 
 
 in_path = sys.argv[1]
 out_path = sys.argv[2]
 # QPBB_PATH_SERVER = []  # executed in host
 computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="ilda",
-                              from_ell=0.01, to_ell=5.5, by_ell=0.01, #seeds=XXX, skip_n_sample=X,
+                              from_ell=0.01, to_ell=5.5, by_ell=0.01,  # seeds=XXX, skip_n_sample=X,
                               lib_path_server=QPBB_PATH_SERVER, nb_process=1, n_sampling=1)
 
 # in_path = sys.argv[1]
