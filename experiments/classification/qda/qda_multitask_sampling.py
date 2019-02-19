@@ -97,7 +97,8 @@ def computing_training_testing_step(X_training, y_training, X_testing, y_testing
 
 def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optimal=0.1, nb_process=2,
                                       lib_path_server=None, cv_n_fold=10, seeds=None):
-    data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
+    assert os.path.exists(in_path), "Without training data, not testing"
+    data = pd.read_csv(in_path)
     logger = create_logger("computing_best_imprecise_mean", True)
     logger.info('Training dataset %s', in_path)
     X = data.iloc[:, :-1].values
@@ -116,7 +117,7 @@ def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optim
             X_cv_train, y_cv_train = X[idx_train], y[idx_train]
             X_cv_test, y_cv_test = X[idx_test], y[idx_test]
             mean_u65, mean_u80 = computing_training_testing_step(X_cv_train, y_cv_train, X_cv_test, y_cv_test,
-                                                                 ell_current, manager, mean_u65, mean_u80)
+                                                                 ell_optimal, manager, mean_u65, mean_u80)
             logger.debug("Partial-kfold (%s, %s, %s, %s)", ell_optimal, time, mean_u65, mean_u80)
         logger.info("Time, seed, u65, u80 (%s, %s, %s, %s)", time, seeds[time],
                     mean_u65 / cv_n_fold, mean_u80 / cv_n_fold)
@@ -151,15 +152,17 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
     for sampling in range(n_sampling):
         X_learning, X_testing, y_learning, y_testing = \
             train_test_split(X, y, test_size=test_size, random_state=seeds[sampling])
+        logger.info("Splits %s learning %s", sampling, y_learning)
+        logger.info("Splits %s testing %s", sampling, y_testing)
 
         # n-Skipping sampling testing (purpose for parallel computing)
-        if idx_kfold >= skip_n_sample:
+        if sampling >= skip_n_sample:
             kf = KFold(n_splits=cv_nfold, random_state=None, shuffle=True)
             ell_u65, ell_u80, splits = dict(), dict(), list([])
             for idx_train, idx_test in kf.split(y_learning):
                 splits.append((idx_train, idx_test))
-                logger.info("Splits %s train %s", len(splits), idx_train)
-                logger.info("Splits %s test %s", len(splits), idx_test)
+                logger.info("Sampling %s Splits %s train %s", sampling, len(splits), idx_train)
+                logger.info("Sampling %s Splits %s test %s", sampling, len(splits), idx_test)
 
             for ell_current in np.arange(from_ell, to_ell, by_ell):
                 ell_u65[ell_current], ell_u80[ell_current] = 0, 0

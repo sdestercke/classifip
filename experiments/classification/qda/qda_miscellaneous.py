@@ -1,14 +1,19 @@
 from classifip.evaluation.measures import u65, u80
 from qda_common import __factory_model_precise, __factory_model, generate_seeds
-import numpy as np, pandas as pd, sys, time
+import numpy as np, pandas as pd, sys, time, os
 from classifip.utils import create_logger
 from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split
+
+## Server env:
+# export LD_PRELOAD=/usr/local/MATLAB/R2018b/sys/os/glnxa64/libstdc++.so.6.0.22
+QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
 
 
 def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, seeds=None, lib_path_server=None,
                                    model_type_precise='lda', model_type_imprecise='ilda'):
     data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
-    logger = create_logger("computing_best_imprecise_mean", True)
+    logger = create_logger("computing_precise_vs_imprecise", True)
     logger.info('Training dataset %s', in_path)
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
@@ -47,29 +52,37 @@ def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, 
             n_real_times += 1
             avg_imprecise += imprecise_mean / n_real_fold
             avg_precise += precise_mean / n_real_fold
-    logger.debug("(dataset, imprec, prec) (%s, %s, %s)", in_path, avg_imprecise / n_real_times, avg_precise / n_real_times)
+    logger.debug("(dataset, imprec, prec) (%s, %s, %s)", in_path, avg_imprecise / n_real_times,
+                 avg_precise / n_real_times)
 
 
 def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=None, model_type="ilda"):
-    data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
-    logger = create_logger("computing_best_imprecise_mean", True)
+    assert os.path.exists(in_path), "Without training data, not testing"
+    data = pd.read_csv(in_path, header=None)
+    logger = create_logger("computing_time_prediction", True)
     logger.info('Training dataset %s', in_path)
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].tolist()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=0)
-    model = __factory_model(model_type_imprecise, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
-    lqa = LinearDiscriminant(init_matlab=True)
-    lqa.learn(X=X_train, y=y_train, ell=0.01)
+    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
+    model.learn(X=X_train, y=y_train, ell=ell_optimal)
     sum_time = 0
     n, _ = X_test.shape
     for i, test in enumerate(X_test):
         start = time.time()
-        evaluate, _ = lqa.evaluate(test)
+        evaluate, _ = model.evaluate(test)
         end = time.time()
-        print(evaluate, "-----", y_test[i], '--time--', (end - start))
+        logger.info("Evaluate %s, Ground-truth %s, Time %s ", evaluate, y_test[i], (end - start))
         sum_time += (end - start)
-    print("--->", sum_time, '---n---', n)
+    logger.info("Total time %s and average %s of %s testing", sum_time, sum_time / n, n)
 
 
-in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
-computing_precise_vs_imprecise(in_path, ell_optimal=1.3)
+in_path = sys.argv[1]
+ell_optimal = float(sys.argv[2])
+# QPBB_PATH_SERVER = []  # executed in host
+computing_precise_vs_imprecise(in_path=in_path, ell_optimal=ell_optimal,
+                               model_type_precise='lda', model_type_imprecise='ilda',
+                               lib_path_server=QPBB_PATH_SERVER)
+
+# computing_time_prediction(in_path=in_path, ell_optimal=ell_optimal, model_type="ilda",
+#                           lib_path_server=QPBB_PATH_SERVER)
