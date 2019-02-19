@@ -35,7 +35,7 @@ def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, 
             for i, test in enumerate(X_cv_test):
                 evaluate_imp, _ = model_impr.evaluate(test)
                 evaluate = model_prec.predict([test])
-                logger.debug("(testing, ell_current, prediction, ground-truth) (%s, %s, %s, %s, %s)",
+                logger.debug("(testing, ell_current, cautious, correctness, ground-truth) (%s, %s, %s, %s, %s)",
                              i, ell_optimal, evaluate_imp, evaluate, y_cv_test[i])
                 if len(evaluate_imp) > 1:
                     n_real_tests += 1
@@ -74,7 +74,7 @@ def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=Non
         end = time.time()
         logger.info("Evaluate %s, Ground-truth %s, Time %s ", evaluate, y_test[i], (end - start))
         sum_time += (end - start)
-    logger.info("Total time %s and average %s of %s testing", sum_time, sum_time / n, n)
+    logger.info("Total time (%s, %s) and average %s of %s testing", in_path, sum_time, sum_time / n, n)
 
 
 in_path = sys.argv[1]
