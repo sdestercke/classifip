@@ -70,8 +70,8 @@ def prediction(pid, tasks, queue, results, model_type, lib_path_server):
             if task['y_test'] in evaluate:
                 sum65 += u65(evaluate)
                 sum80 += u80(evaluate)
-        queue.task_done()
         results.put(dict({'u65': sum65, 'u80': sum80}))
+        queue.task_done()
     print("Worker PID finished", pid, flush=True)
 
 
