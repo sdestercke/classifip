@@ -56,7 +56,7 @@ class ManagerWorkers:
 
 
 def prediction(pid, tasks, queue, results, model_type, lib_path_server):
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
+    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
     while True:
         training = queue.get()
         if training is None: break
@@ -97,12 +97,15 @@ def computing_training_testing_step(X_training, y_training, X_testing, y_testing
 
 def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=None, model_type="ilda",
                                   from_ell=0.1, to_ell=1.0, by_ell=0.1, seed=None, cv_kfold_first=10,
-                                  nb_process=2, skip_nfold=0, cv_kfold_second=10):
+                                  nb_process=2, skip_nfold=0, cv_kfold_second=10, seed_second=None):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
-    logger = create_logger("computing_best_imprecise_mean", True)
-    logger.info('Training dataset %s', in_path)
+    logger = create_logger("computing_best_imprecise_mean_cv", True)
+    logger.info('Training dataset (%s, %s, %s)', in_path, out_path, model_type)
+    logger.info('Parameters (ells, nbProcess, skip_nfold, cv_kfold_second) (%s, %s, %s, %s, %s, %s, %s)', from_ell,
+                to_ell, by_ell, nb_process, skip_nfold, cv_kfold_second)
+
     data = pd.read_csv(in_path)  # , header=None)
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
@@ -119,7 +122,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
 
     kfFirst = KFold(n_splits=cv_kfold_first, random_state=seed, shuffle=True)
     acc_u80, acc_u65, idx_kfold = dict(), dict(), 0
-    seed_2step = generate_seeds(cv_kfold_first)
+    seed_2step = generate_seeds(cv_kfold_second) if seed_second is None else seed_second
     logger.debug("[SECOND-STEP-SEEDS] MODEL: %s, SEED: %s, SECOND-SEED: %s", model_type, seed, seed_2step)
     for idx_learning, idx_testing in kfFirst.split(y):
         ell_u65, ell_u80 = dict(), dict()
@@ -159,7 +162,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
                 writer.writerow([ell_current, idx_kfold, ell_u65[ell_current], ell_u80[ell_current]])
                 file_csv.flush()
                 logger.debug("Partial-ell-k-step (%s, %s, %s)", idx_kfold, ell_u65[ell_current], ell_u80[ell_current])
-            logger.debug("Total-ell-k-step (%s %s %s %s)", in_path, idx_kfold, ell_u65, ell_u80)
+            logger.debug("Total-ell-k-step (%s, %s, %s, %s)", in_path, idx_kfold, ell_u65, ell_u80)
 
             # Computing optimal ells for using in testing step
             acc_ellu80 = max(ell_u80.values())
@@ -178,7 +181,6 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
             logger.debug("Partial-ell-2step (%s, %s, %s, %s)", -999, ellu80_opts, acc_u65[idx_kfold],
                          acc_u80[idx_kfold])
         idx_kfold += 1
-
     manager.poisonPillTraining()
     file_csv.close()
     logger.debug("Total-accuracy (%s, %s, %s)", in_path, acc_u65, acc_u80)

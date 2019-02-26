@@ -10,15 +10,18 @@ QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab
 
 
 def performance_accuracy_hold_out(in_path=None, model_type="ilda", ell_optimal=0.1, lib_path_server=None,
-                                  seeds=list([0])):
-    data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
-    logger = create_logger("computing_best_imprecise_mean", True)
-    logger.info('Training dataset %s', in_path)
+                                  seeds=None, DEBUG=False):
+    assert os.path.exists(in_path), "Without training data, cannot performing cross hold-out accuracy"
+    data = pd.read_csv(in_path)
+    logger = create_logger("performance_accuracy_hold_out", True)
+    logger.info('Training dataset (%s, %s, %s)', in_path, model_type, ell_optimal)
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].tolist()
+    seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
+    logger.info('Seeds used for accuracy %s', seeds)
     n_time = len(seeds)
     mean_u65, mean_u80 = 0, 0
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
+    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=DEBUG)
     for k in range(0, n_time):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=seeds[k])
         model.learn(X=X_cv_train, y=y_cv_train, ell=ell_optimal)
@@ -40,16 +43,17 @@ def performance_accuracy_hold_out(in_path=None, model_type="ilda", ell_optimal=0
 
 
 def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optimal=0.1,
-                                      lib_path_server=None, cv_n_fold=10, seeds=None):
-    data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
-    logger = create_logger("computing_best_imprecise_mean", True)
-    logger.info('Training dataset %s', in_path)
+                                      lib_path_server=None, cv_n_fold=10, seeds=None, DEBUG=False):
+    assert os.path.exists(in_path), "Without training data, cannot performing cross validation accuracy"
+    data = pd.read_csv(in_path)
+    logger = create_logger("performance_cv_accuracy_imprecise", True)
+    logger.info('Training dataset (%s, %s, %s)', in_path, model_type, ell_optimal)
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
     avg_u65, avg_u80 = 0, 0
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
     logger.info('Seeds used for accuracy %s', seeds)
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
+    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=DEBUG)
     for time in range(cv_n_fold):
         kf = KFold(n_splits=cv_n_fold, random_state=seeds[time], shuffle=True)
         mean_u65, mean_u80 = 0, 0
@@ -73,7 +77,7 @@ def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optim
                     mean_u80 / cv_n_fold)
         avg_u65 += mean_u65 / cv_n_fold
         avg_u80 += mean_u80 / cv_n_fold
-    logger.debug("total-ell (%s, %s, %s, %s)", in_path, ell_optimal, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
+    logger.debug("Total-ell (%s, %s, %s, %s)", in_path, ell_optimal, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
 
 
 in_path = sys.argv[1]

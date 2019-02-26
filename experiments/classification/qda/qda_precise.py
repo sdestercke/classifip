@@ -2,20 +2,21 @@ from classifip.evaluation.measures import u65, u80
 from qda_common import __factory_model_precise, generate_seeds
 from classifip.dataset.uci_data_set import export_data_set
 from sklearn.model_selection import KFold
-import numpy as np, pandas as pd, sys
+import numpy as np, pandas as pd, sys, os
 from classifip.utils import create_logger
 from sklearn.model_selection import train_test_split
 
 
 def performance_hold_out(in_path=None, model_type='lda', test_pct=0.4, n_times=10, seeds=None):
-    data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
-    logger = create_logger("computing_precise_hold_out", True)
-    logger.info('Training data set %s, test percentage %s', in_path, test_pct)
+    assert os.path.exists(in_path), "Without training data, not testing"
+    data = pd.read_csv(in_path, header=None)
+    logger = create_logger("performance_hold_out", True)
+    logger.info('Training data set %s, test percentage %s, model_type %s', in_path, test_pct, model_type)
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].tolist()
     model = __factory_model_precise(model_type, solver="svd", store_covariance=True)
     mean_u65, mean_u80 = 0, 0
-    seeds =  generate_seeds(n_times) if seeds is None else seeds
+    seeds = generate_seeds(n_times) if seeds is None else seeds
     logger.info('Seeds generated %s', seeds)
     for i in range(0, n_times):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_pct, random_state=seeds[i])
@@ -30,13 +31,14 @@ def performance_hold_out(in_path=None, model_type='lda', test_pct=0.4, n_times=1
         logger.info("Time, u65, u80 (%s, %s, %s)", i, sum_u65 / n, sum_u80 / n)
         mean_u65 += sum_u65 / n
         mean_u80 += sum_u80 / n
-    logger.info("Avg. Results: (%s, %s)", mean_u65 / n_times, mean_u80 / n_times)
+    logger.info("[Total:data-set:avgResults] (%s, %s)", mean_u65 / n_times, mean_u80 / n_times)
 
 
 def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=None):
-    data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
-    logger = create_logger("computing_precise_hold_out", True)
-    logger.info('Training data set %s, cv_n_fold %s', in_path, cv_n_fold)
+    assert os.path.exists(in_path), "Without training data, not testing"
+    data = pd.read_csv(in_path, header=None)
+    logger = create_logger("performance_cv_accuracy", True)
+    logger.info('Training data set %s, cv_n_fold %s, model_type %s', in_path, cv_n_fold, model_type)
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
     avg_u65, avg_u80 = 0, 0
@@ -48,7 +50,6 @@ def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=
         model = __factory_model_precise(model_type, store_covariance=True)
         mean_u65, mean_u80 = 0, 0
         for idx_train, idx_test in kf.split(y):
-            print("time", time, idx_test)
             X_cv_train, y_cv_train = X[idx_train], y[idx_train]
             X_cv_test, y_cv_test = X[idx_test], y[idx_test]
             model.fit(X_cv_train, y_cv_train)
@@ -61,13 +62,13 @@ def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=
                     sum_u80 += u80(evaluate)
             mean_u65 += sum_u65 / n_test
             mean_u80 += sum_u80 / n_test
-        logger.info("time, seed, u65, u80 (%s, %s, %s, %s)", time, seeds[time], mean_u65 / cv_n_fold, mean_u80 / cv_n_fold)
+        logger.info("Time, seed, u65, u80 (%s, %s, %s, %s)", time, seeds[time], mean_u65 / cv_n_fold,
+                    mean_u80 / cv_n_fold)
         avg_u65 += mean_u65 / cv_n_fold
         avg_u80 += mean_u80 / cv_n_fold
-    logger.info("[data-set:avgResults] (%s, %s, %s)", in_path, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
+    logger.info("[Total:data-set:avgResults] (%s, %s, %s)", in_path, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
 
 
-#in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
 in_path = sys.argv[1]
 # performance_hold_out(in_path, model_type='lda')
 performance_cv_accuracy(in_path, model_type='qda')

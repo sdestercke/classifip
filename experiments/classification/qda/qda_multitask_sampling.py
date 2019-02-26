@@ -14,19 +14,21 @@ from multiprocessing import Process, Queue, cpu_count, JoinableQueue
 
 class ManagerWorkers:
 
-    def __init__(self, nb_process):
+    def __init__(self, nb_process, criterion="maximality"):
         self.workers = None
         self.tasks = Queue()
         self.results = Queue()
         self.qeTraining = [JoinableQueue() for i in range(nb_process)]
         self.NUMBER_OF_PROCESSES = cpu_count() if nb_process is None else nb_process
+        self.criterion_decision = criterion
 
     def executeAsync(self, model_type, lib_path_server):
-        print("starting %d workers" % self.NUMBER_OF_PROCESSES, flush=True)
+        print("Starting %d workers" % self.NUMBER_OF_PROCESSES, flush=True)
         self.workers = []
         for i in range(self.NUMBER_OF_PROCESSES):
             p = Process(target=prediction,
-                        args=(i, self.tasks, self.qeTraining[i], self.results, model_type, lib_path_server,))
+                        args=(i, self.tasks, self.qeTraining[i], self.results, model_type,
+                              lib_path_server, self.criterion_decision))
             self.workers.append(p)
 
         for w in self.workers:
@@ -55,8 +57,8 @@ class ManagerWorkers:
         for i in range(self.NUMBER_OF_PROCESSES): self.addTask(None)
 
 
-def prediction(pid, tasks, queue, results, model_type, lib_path_server):
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
+def prediction(pid, tasks, queue, results, model_type, lib_path_server, criterion="maximality"):
+    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
     while True:
         training = queue.get()
         if training is None: break
@@ -65,8 +67,8 @@ def prediction(pid, tasks, queue, results, model_type, lib_path_server):
         while True:
             task = tasks.get()
             if task is None: break
-            evaluate, _ = model.evaluate(task['X_test'])
-            print("(pid, prediction, ground-truth) ", pid, evaluate, task, flush=True)
+            evaluate, _ = model.evaluate(task['X_test'], criterion=criterion)
+            print("(pid, prediction, ground-truth, ins)", pid, evaluate, task['y_test'], task['X_test'], flush=True)
             if task['y_test'] in evaluate:
                 sum65 += u65(evaluate)
                 sum80 += u80(evaluate)
@@ -96,17 +98,17 @@ def computing_training_testing_step(X_training, y_training, X_testing, y_testing
 
 
 def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optimal=0.1, nb_process=2,
-                                      lib_path_server=None, cv_n_fold=10, seeds=None):
+                                      lib_path_server=None, cv_n_fold=10, seeds=None, criterion="maximality"):
     assert os.path.exists(in_path), "Without training data, not testing"
     data = pd.read_csv(in_path)
-    logger = create_logger("computing_best_imprecise_mean", True)
-    logger.info('Training dataset %s', in_path)
+    logger = create_logger("performance_cv_accuracy_imprecise", True)
+    logger.info('Training dataset (%s, %s, %s, %s)', in_path, model_type, ell_optimal, criterion)
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
     avg_u65, avg_u80 = 0, 0
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
     logger.info('Seeds used for accuracy %s', seeds)
-    manager = ManagerWorkers(nb_process=nb_process)
+    manager = ManagerWorkers(nb_process=nb_process, criterion=criterion)
     manager.executeAsync(model_type, lib_path_server)
     for time in range(cv_n_fold):
         kf = KFold(n_splits=cv_n_fold, random_state=seeds[time], shuffle=True)
@@ -127,14 +129,16 @@ def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optim
     logger.debug("total-ell (%s, %s, %s, %s)", in_path, ell_optimal, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
 
 
-def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ieda", test_size=0.4,
+def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ilda", test_size=0.4,
                                   from_ell=0.1, to_ell=1.0, by_ell=0.1, seeds=None, lib_path_server=None,
-                                  nb_process=2, n_sampling=10, skip_n_sample=0):
+                                  nb_process=2, n_sampling=10, skip_n_sample=0, criterion="maximality"):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
-    logger = create_logger("computing_best_imprecise_mean", True)
-    logger.info('Training dataset %s', in_path)
+    logger = create_logger("computing_best_imprecise_mean_sampling", True)
+    logger.info('Training dataset (%s, %s, %s)', in_path, model_type, criterion)
+    logger.info('Parameters (size, ells, nbProcess, sampling, nSkip) (%s, %s, %s, %s, %s, %s, %s)', test_size, from_ell,
+                to_ell, by_ell, nb_process, n_sampling, skip_n_sample)
     data = pd.read_csv(in_path)  # , header=None)
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
@@ -146,7 +150,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
     # Create a CSV file for saving results
     file_csv = open(out_path, 'a')
     writer = csv.writer(file_csv)
-    manager = ManagerWorkers(nb_process=nb_process)
+    manager = ManagerWorkers(nb_process=nb_process, criterion=criterion)
     manager.executeAsync(model_type, lib_path_server)
     acc_u80, acc_u65 = dict(), dict()
     for sampling in range(n_sampling):
@@ -155,6 +159,8 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
         logger.info("Splits %s learning %s", sampling, y_learning)
         logger.info("Splits %s testing %s", sampling, y_testing)
 
+        # n-Skipping sampling and reboot parameter from_ell to 0.01 next sampling
+        if skip_n_sample != 0 and sampling > skip_n_sample: from_ell = 0.01
         # n-Skipping sampling testing (purpose for parallel computing)
         if sampling >= skip_n_sample:
             kf = KFold(n_splits=cv_nfold, random_state=None, shuffle=True)
@@ -182,8 +188,8 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
                 ell_u80[ell_current] = ell_u80[ell_current] / cv_nfold
                 writer.writerow([ell_current, sampling, ell_u65[ell_current], ell_u80[ell_current]])
                 file_csv.flush()
-                logger.debug("Partial-ell-sampling (%s, %s, %s)", ell_current, sampling, ell_u65, ell_u80)
-            logger.debug("Total-ell-sampling (%s %s %s %s)", in_path, sampling, ell_u65, ell_u80)
+                logger.debug("Partial-ell-sampling (%s, %s, %s, %s)", ell_current, sampling, ell_u65, ell_u80)
+            logger.debug("Total-ell-sampling (%s, %s, %s, %s)", in_path, sampling, ell_u65, ell_u80)
 
             acc_ellu80 = max(ell_u80.values())
             ellu80_opts = [k for k, v in ell_u80.items() if v == acc_ellu80]

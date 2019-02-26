@@ -88,5 +88,5 @@ in_path = sys.argv[1]
 out_path = sys.argv[2]
 
 computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="inda",
-                              from_ell=4.0, to_ell=5.5, by_ell=0.01, seed=697720819,
+                              from_ell=0.01, to_ell=5.5, by_ell=0.01, # seed=XXX,
                               lib_path_server=QPBB_PATH_SERVER)
