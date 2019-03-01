@@ -76,7 +76,7 @@ def performance_qda_regularized(in_path=None, out_path=None, cv_n_fold=10, seeds
     assert os.path.exists(out_path), "Without output saving performance"
     data = pd.read_csv(in_path, header=None)
     logger = create_logger("performance_qda_regularized", True)
-    logger.info('Training data set %s, cv_n_fold %s, model_type %s', in_path, cv_n_fold, model_type)
+    logger.info('Training data set %s, cv_n_fold %s, model_type %s', in_path, cv_n_fold, "qda")
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
 
@@ -114,7 +114,7 @@ def performance_qda_regularized(in_path=None, out_path=None, cv_n_fold=10, seeds
         writer.writerow(acc_u80)
         file_csv.flush()
 
-        best_model = __factory_model_precise(model_type, store_covariance=True, reg_param=alphas[idx_best])
+        best_model = __factory_model_precise("qda", store_covariance=True, reg_param=alphas[idx_best])
         best_model.fit(X_training, y_training)
         accuracy[ikfold], bn_test, best_alphas[ikfold] = 0, len(idx_testing), alphas[idx_best]
         for i, test in enumerate(X_testing):
