@@ -6,7 +6,7 @@ from classifip.dataset.uci_data_set import export_data_set
 from classifip.utils import plot_classification as pc
 
 def __test_imprecise_model(model, data, features=None, clazz=-1, hgrid=0.02, ell=2.0,
-                           query=None, cmap_color=None, is_imprecise=True, criterion=None):
+                           query=None, cmap_color=None, is_imprecise=True, criterion="maximality"):
     features = list([1, 3]) if features is None else features
     X = data.iloc[:, features].values
     y = np.array(data.iloc[:, clazz].tolist())
@@ -58,7 +58,7 @@ def output_paper_result(model_type="ieda", ell=0.5, hgrid=0.1):
 
 
 def output_paper_zone_im_precise(is_imprecise=True, model_type="ieda", in_train=None, ell=2.0,
-                                 hgrid=0.1, features=None, criterion=None):
+                                 hgrid=0.1, features=None, criterion="maximality"):
     data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
     features = list([0, 1]) if features is None else features
     model = __factory_model(model_type, DEBUG=True) if is_imprecise else None
@@ -72,7 +72,7 @@ def output_paper_zone_im_precise(is_imprecise=True, model_type="ieda", in_train=
 # _test_IQDA()
 # _test_INaiveDA()
 # output_paper_result()
-output_paper_zone_im_precise(model_type='iqda', hgrid=0.01, ell= 2,
+output_paper_zone_im_precise(model_type='iqda', hgrid=0.01, ell= 5,
                              criterion="maximality")
 # output_paper_result()
 

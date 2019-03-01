@@ -14,7 +14,7 @@ def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, 
                                    model_type_precise='lda', model_type_imprecise='ilda'):
     data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
     logger = create_logger("computing_precise_vs_imprecise", True)
-    logger.info('Training dataset %s and models (%s, %s, %s, %s)', in_path, model_type_precise,
+    logger.info('Training dataset and models (%s, %s, %s, %s)', in_path, model_type_precise,
                 model_type_imprecise, ell_optimal)
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
@@ -39,8 +39,8 @@ def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, 
                     n_real_tests += 1
                     if y_cv_test[i] in evaluate_imp: time_imprecise += 1
                     if y_cv_test[i] in evaluate: time_precise += 1
-                logger.debug("(time, iTest, ellOptimal, timeImprecise, timePrecise)(%s, %s, %s, %s, %s)", time, i,
-                             ell_optimal, time_imprecise, time_precise)
+                logger.debug("(time, iTest, ellOptimal, cautious, prediction, ground-truth)(%s, %s, %s, %s, %s, %s)",
+                             time, i, ell_optimal, evaluate_imp, evaluate, y_cv_test[i])
             logger.debug("(time, ellOptimal, nRealTests, timeImprecise, timePrecise) (%s, %s, %s, %s, %s)", time,
                          ell_optimal, n_real_tests, time_imprecise, time_precise)
             if n_real_tests > 0:
