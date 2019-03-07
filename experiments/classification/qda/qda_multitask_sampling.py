@@ -220,7 +220,7 @@ out_path = sys.argv[2]
 # QPBB_PATH_SERVER = []  # executed in host
 computing_best_imprecise_mean(in_path=in_path, out_path=out_path, model_type="ilda",
                               from_ell=0.01, to_ell=5.5, by_ell=0.01,  # seeds=XXX, skip_n_sample=X,
-                              lib_path_server=QPBB_PATH_SERVER, nb_process=1, n_sampling=1)
+                              lib_path_server=QPBB_PATH_SERVER, nb_process=1) #, n_sampling=1)
 
 # in_path = sys.argv[1]
 # ell_optimal = float(sys.argv[2])

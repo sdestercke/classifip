@@ -123,6 +123,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         :param y:
         :return:
         """
+        assert ell > 10^-6, "Using a positive value ELL, otherwise using precise method LDA/QDA."
         self._ell = ell
         self._gp_mean, self._gp_sdp = dict(), dict()
         self._gp_cov, self._gp_icov, self._gp_dcov = dict(), dict(), dict()
@@ -168,6 +169,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 otherwise maximality criterion
         :return: tuple composed of set-valued categories and (lower,upper) bound probabilities.
         """
+        assert criterion == "maximality" or criterion == "interval_dominance", "Decision criterion does not exist."
         bounds = dict((clazz, dict()) for clazz in self._clazz)
         eng_session = self._eng
 
@@ -231,6 +233,25 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             return np.eye(_p, dtype=np.dtype('d'))
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
+        """
+        .. warning::
+            * One case which does not convergence with quadratic method
+                Q = np.array([[19.42941344,  -12.9899322, -5.1907171,   -0.25782677],
+                              [-12.9899322,  15.97805787, 1.87087712,   -6.72150886],
+                              [-5.1907171,   1.87087712,  36.99333345,  -16.21139038],
+                              [-0.25782677,  -6.72150886, -16.21139038, 103.0762929]])
+                q = np.array([-45.3553788, 26.52058282, -99.63769322, -61.59361441])
+                mean_lower = np.array([4.94791667, 3.36875, 1.41666667, 0.19375])
+                mean_upper = np.array([5.04375, 3.46458333, 1.5125, 0.28958333])
+
+        :param Q:
+        :param q:
+        :param mean_lower:
+        :param mean_upper:
+        :param clazz:
+        :param method:
+        :return:
+        """
         self._logger.debug("[iS-Inverse-Covariance-SDP] (%s, %s)", clazz, self._gp_sdp[clazz])
         if self._gp_sdp[clazz]:
             def __min_convex_qp(A, q, lower, upper, d):
@@ -330,12 +351,6 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
     def infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
         return self.quadprogbb((-1 * Q), (-1 * q), mean_lower, mean_upper, eng_session, clazz)
-
-    def close_matlab(self):
-        try:
-            if self._eng is not None: self._eng.quit()
-        except Exception as e:
-            self._logger.debug("[DEBUG_MATHLAB_CLOSE] %s", e)
 
     ## Testing Optimal force brute
 
