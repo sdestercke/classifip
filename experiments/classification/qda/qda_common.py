@@ -1,11 +1,55 @@
 from classifip.models.qda import EuclideanDiscriminant, LinearDiscriminant, QuadraticDiscriminant, NaiveDiscriminant
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
-import random
-import xxhash
+import random, xxhash, numpy as np, pandas as pd
+from scipy.stats import multivariate_normal as gaussian
 
-MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant, 'iqda': QuadraticDiscriminant, 'inda': NaiveDiscriminant}
-MODEL_TYPES_PRECISE = {'lda': LinearDiscriminantAnalysis, 'qda': QuadraticDiscriminantAnalysis}
 INFIMUM, SUPREMUM = "inf", "sup"
+
+
+class BaseEstimator:
+    def __init__(self, store_covariance=False):
+        self._data, self._N, self._p = None, 0, 0
+        self._clazz, self._nb_clazz = None, None
+        self._means, self._prior, self._cov = dict(), dict(), dict()
+
+    def fit(self, X, y):
+        self._N, self._p = X.shape
+        self._data = pd.concat([pd.DataFrame(X, dtype="float64"), pd.Series(y, dtype="category")], axis=1)
+        columns = ["x" + i for i in map(str, range(self._p))]
+        columns.extend('y')
+        self._data.columns = columns
+        self._clazz = np.array(self._data.y.cat.categories.tolist())
+        self._nb_clazz = len(self._clazz)
+
+    def predict(self, query):
+        pbs = np.array([gaussian.pdf(query, self._means[clazz], self._cov[clazz]) * self._prior[clazz] \
+                        for clazz in self._clazz])
+        return [self._clazz[pbs.argmax()]]
+
+
+class EuclideanDiscriminantPrecise(BaseEstimator):
+
+    def fit(self, X, y):
+        super(EuclideanDiscriminantPrecise, self).fit(X, y)
+        for clazz in self._clazz:
+            self._means[clazz] = self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
+            self._prior[clazz] = len(self._data[self._data.y == clazz]) / self._N
+            self._cov[clazz] = np.identity(self._p)
+
+
+class NaiveDiscriminantPrecise(BaseEstimator):
+
+    def fit(self, X, y):
+        super(NaiveDiscriminantPrecise, self).fit(X, y)
+        #cov_total = np.diag(np.var(self._data.iloc[:, :-1])) # Naive with variance global
+        for clazz in self._clazz:
+            self._means[clazz] = self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
+            self._prior[clazz] = len(self._data[self._data.y == clazz]) / self._N
+            self._cov[clazz] = np.diag(np.var(self._data[self._data.y == clazz].iloc[:, :-1]))
+
+
+MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant, 'iqda': QuadraticDiscriminant,
+               'inda': NaiveDiscriminant}
 
 
 def __factory_model(model_type, **kwargs):
@@ -13,6 +57,10 @@ def __factory_model(model_type, **kwargs):
         return MODEL_TYPES[model_type.lower()](**kwargs)
     except:
         raise Exception("Selected model does not exist")
+
+
+MODEL_TYPES_PRECISE = {'lda': LinearDiscriminantAnalysis, 'qda': QuadraticDiscriminantAnalysis,
+                       'eda': EuclideanDiscriminantPrecise, 'nda': NaiveDiscriminantPrecise}
 
 
 def __factory_model_precise(model_type, **kwargs):

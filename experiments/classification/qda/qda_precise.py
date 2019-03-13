@@ -66,8 +66,7 @@ def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=
                     mean_u80 / cv_n_fold)
         avg_u65 += mean_u65 / cv_n_fold
         avg_u80 += mean_u80 / cv_n_fold
-    logger.info("[Total:data-set:avgResults] (%s, %s, %s, %s)", in_path, kwargs, avg_u65 / cv_n_fold,
-                avg_u80 / cv_n_fold)
+    logger.info("[Total:data-set:avgResults] (%s, %s,  %s)", in_path, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
 
 
 def performance_qda_regularized(in_path=None, out_path=None, cv_n_fold=10, seeds=None,
@@ -125,9 +124,9 @@ def performance_qda_regularized(in_path=None, out_path=None, cv_n_fold=10, seeds
     logger.info("[total:data-set:avgResults] (%s, %s, %s, %s)", in_path, np.mean(accuracy), best_alphas, accuracy)
 
 
-# in_path = sys.argv[1]
-# performance_cv_accuracy(in_path, model_type='lda')
+in_path = "/Users/salmuz/Downloads/datasets/iris.csv"  # sys.argv[1]
+performance_cv_accuracy(in_path, model_type='eda')
 
-in_path = sys.argv[1]
-out_path = sys.argv[2]
-performance_qda_regularized(in_path, out_path)
+# in_path = sys.argv[1]
+# out_path = sys.argv[2]
+# performance_qda_regularized(in_path, out_path)

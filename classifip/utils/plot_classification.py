@@ -125,7 +125,7 @@ def prediction(model, newClazz, clazz_by_index, query, criterion):
 
 def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None, markers=None,
                              criterion="maximality"):
-    markers = list(['*', 'v', 'o', '+', '-', '.', ',']) if markers is None else markers
+    markers = list(['+', '*', 'v', 'o', '-', '.', ',']) if markers is None else markers
     X, y = __check_data_available(model.get_data())
     _clazz = model.get_clazz()
     _nb_clazz = len(_clazz)
@@ -154,7 +154,7 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
 
 
 def plot2D_decision_boundary_det(X, y, h=.01, markers=None):
-    markers = list(['*', 'v', 'o', '+', '-', '.', ',']) if markers is None else markers
+    markers = list(['+', '*', 'v', 'o', '-', '.', ',']) if markers is None else markers
     _, n_col = X.shape
     _clazz = list(set(y))
     _nb_clazz = len(_clazz)

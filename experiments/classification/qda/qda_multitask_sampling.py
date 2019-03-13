@@ -153,7 +153,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
     manager = ManagerWorkers(nb_process=nb_process, criterion=criterion)
     manager.executeAsync(model_type, lib_path_server)
     acc_u80, acc_u65 = dict(), dict()
-    for sampling in range(n_sampling):
+    for sampling in range(min(n_sampling, len(seeds))):
         X_learning, X_testing, y_learning, y_testing = \
             train_test_split(X, y, test_size=test_size, random_state=seeds[sampling])
         logger.info("Splits %s learning %s", sampling, y_learning)

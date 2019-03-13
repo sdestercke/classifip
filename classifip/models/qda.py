@@ -352,32 +352,6 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
     def infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
         return self.quadprogbb((-1 * Q), (-1 * q), mean_lower, mean_upper, eng_session, clazz)
 
-    ## Testing Optimal force brute
-
-    def __brute_force_search(self, clazz, query, lower, upper, inv, det, d):
-
-        def cost_Fx(x, query, inv):
-            return 0.5 * (x.T @ inv @ x) + query.T @ inv @ x
-
-        def forRecursive(lowers, uppers, level, L, optimal):
-            for current in np.array([lowers[level], uppers[level]]):
-                if level < L - 1:
-                    forRecursive(lowers, uppers, level + 1, L, np.append(optimal, current))
-                else:
-                    print("optimal value cost:", clazz, np.append(optimal, current),
-                          self.probability_density_gaussian(np.append(optimal, current), inv, det, query),
-                          cost_Fx(np.append(optimal, current), query, inv), flush=True)
-
-        forRecursive(lower, upper, 0, d, np.array([]))
-
-    def show_all_brute_optimal(self, query):
-        for clazz in self._clazz:
-            cov, inv, det = self.get_cov_by_clazz(clazz)
-            mean_lower = self._mean_lower[clazz]
-            mean_upper = self._mean_upper[clazz]
-            print("box", mean_lower, mean_upper, flush=True)
-            self.__brute_force_search(clazz, query, mean_lower, mean_upper, inv, det, self._p)
-
 
 class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
     """
@@ -486,9 +460,9 @@ class QuadraticDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
 
 class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
     """
-            Imprecise Euclidean Distance Discriminant implemented with a
-            imprecise gaussian distribution and conjugate exponential family.
-        """
+        Imprecise Euclidean Distance Discriminant implemented with a
+        imprecise gaussian distribution and conjugate exponential family.
+    """
 
     def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
         super(NaiveDiscriminant, self).__init__(init_matlab=False, add_path_matlab=add_path_matlab)
