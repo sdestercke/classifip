@@ -124,8 +124,8 @@ def performance_qda_regularized(in_path=None, out_path=None, cv_n_fold=10, seeds
     logger.info("[total:data-set:avgResults] (%s, %s, %s, %s)", in_path, np.mean(accuracy), best_alphas, accuracy)
 
 
-in_path = "/Users/salmuz/Downloads/datasets/iris.csv"  # sys.argv[1]
-performance_cv_accuracy(in_path, model_type='eda')
+sys.argv[1]
+performance_cv_accuracy(in_path, model_type='nda')
 
 # in_path = sys.argv[1]
 # out_path = sys.argv[2]
