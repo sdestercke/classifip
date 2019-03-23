@@ -75,8 +75,8 @@ def prediction(pid, tasks, queue, results, model_type, lib_path_server):
     print("Worker PID finished", pid, flush=True)
 
 
-def computing_training_testing_step(X_training, y_training, X_testing, y_testing, ell_current, manager, acc_u65,
-                                    acc_u80):
+def computing_training_testing_step(X_training, y_training, X_testing, y_testing, ell_current,
+                                    manager, acc_u65, acc_u80):
     n_test = len(y_testing)
     # Send training data model to every parallel process
     manager.addNewTraining(X=X_training, y=y_training, ell=ell_current)
@@ -103,10 +103,10 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
 
     logger = create_logger("computing_best_imprecise_mean_cv", True)
     logger.info('Training dataset (%s, %s, %s)', in_path, out_path, model_type)
-    logger.info('Parameters (ells, nbProcess, skip_nfold, cv_kfold_second) (%s, %s, %s, %s, %s, %s, %s)', from_ell,
+    logger.info('Parameters (ells, nbProcess, skip_nfold, cv_kfold_second) (%s, %s, %s, %s, %s, %s)', from_ell,
                 to_ell, by_ell, nb_process, skip_nfold, cv_kfold_second)
 
-    data = pd.read_csv(in_path)  # , header=None)
+    data = pd.read_csv(in_path, header=None)
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
 
@@ -166,20 +166,29 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
 
             # Computing optimal ells for using in testing step
             acc_ellu80 = max(ell_u80.values())
+            acc_ellu65 = max(ell_u65.values())
             ellu80_opts = [k for k, v in ell_u80.items() if v == acc_ellu80]
-            acc_u65[idx_kfold], acc_u80[idx_kfold], n_ell_opts = 0, 0, len(ellu80_opts)
+            ellu65_opts = [k for k, v in ell_u65.items() if v == acc_ellu65]
+            acc_u65[idx_kfold], acc_u80[idx_kfold] = 0, 0
+            n_ell80_opts, n_ell65_opts = len(ellu80_opts), len(ellu65_opts)
             for ellu80_opt in ellu80_opts:
-                logger.info("ELL_OPTIMAL_SELECT_SAMPLING %s", ellu80_opt)
-                acc_u65[idx_kfold], acc_u80[idx_kfold] = \
+                logger.info("ELL_OPTIMAL_CV_U80 %s", ellu80_opt)
+                _, acc_u80[idx_kfold] = \
                     computing_training_testing_step(X_learning, y_learning, X_testing, y_testing, ellu80_opt,
-                                                    manager, acc_u65[idx_kfold], acc_u80[idx_kfold])
+                                                    manager, 0, acc_u80[idx_kfold])
 
-            acc_u65[idx_kfold] = acc_u65[idx_kfold] / n_ell_opts
-            acc_u80[idx_kfold] = acc_u80[idx_kfold] / n_ell_opts
+            for ellu65_opt in ellu65_opts:
+                logger.info("ELL_OPTIMAL_CV_U65 %s", ellu65_opt)
+                acc_u65[idx_kfold], _ = \
+                    computing_training_testing_step(X_learning, y_learning, X_testing, y_testing, ellu65_opt,
+                                                    manager, acc_u65[idx_kfold], 0)
+
+            acc_u65[idx_kfold] = acc_u65[idx_kfold] / n_ell65_opts
+            acc_u80[idx_kfold] = acc_u80[idx_kfold] / n_ell80_opts
             writer.writerow([-999, idx_kfold, acc_u65[idx_kfold], acc_u80[idx_kfold]])
             file_csv.flush()
-            logger.debug("Partial-ell-2step (%s, %s, %s, %s)", -999, ellu80_opts, acc_u65[idx_kfold],
-                         acc_u80[idx_kfold])
+            logger.debug("Partial-ell-2step (u80, u65, accs) (%s, %s, %s, %s, %s)", -999, ellu80_opts, ellu65_opts,
+                         acc_u65[idx_kfold], acc_u80[idx_kfold])
         idx_kfold += 1
     manager.poisonPillTraining()
     file_csv.close()

@@ -18,7 +18,7 @@ class ManagerWorkers:
         self.workers = None
         self.tasks = Queue()
         self.results = Queue()
-        self.qeTraining = [JoinableQueue() for i in range(nb_process)]
+        self.qeTraining = [JoinableQueue() for _ in range(nb_process)]
         self.NUMBER_OF_PROCESSES = cpu_count() if nb_process is None else nb_process
         self.criterion_decision = criterion
 
@@ -139,7 +139,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
     logger.info('Training dataset (%s, %s, %s)', in_path, model_type, criterion)
     logger.info('Parameters (size, ells, nbProcess, sampling, nSkip) (%s, %s, %s, %s, %s, %s, %s)', test_size, from_ell,
                 to_ell, by_ell, nb_process, n_sampling, skip_n_sample)
-    data = pd.read_csv(in_path)  # , header=None)
+    data = pd.read_csv(in_path, header=None)
     X = data.iloc[:, :-1].values
     y = np.array(data.iloc[:, -1].tolist())
 
