@@ -2,7 +2,7 @@ from classifip.evaluation.measures import u65, u80
 from classifip.dataset.uci_data_set import export_data_set
 from qda_common import __factory_model, generate_seeds
 from sklearn.model_selection import KFold
-from classifip.utils import create_logger
+from classifip.utils import create_logger, normalize_minmax
 import numpy as np, pandas as pd, sys
 from sklearn.model_selection import train_test_split
 
@@ -10,12 +10,13 @@ QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab
 
 
 def performance_accuracy_hold_out(in_path=None, model_type="ilda", ell_optimal=0.1, lib_path_server=None,
-                                  seeds=None, DEBUG=False):
+                                  seeds=None, DEBUG=False, scaling=False):
     assert os.path.exists(in_path), "Without training data, cannot performing cross hold-out accuracy"
     data = pd.read_csv(in_path)
     logger = create_logger("performance_accuracy_hold_out", True)
     logger.info('Training dataset (%s, %s, %s)', in_path, model_type, ell_optimal)
     X = data.iloc[:, :-1].values
+    if scaling: X = normalize_minmax(X)
     y = data.iloc[:, -1].tolist()
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
     logger.info('Seeds used for accuracy %s', seeds)
@@ -42,13 +43,14 @@ def performance_accuracy_hold_out(in_path=None, model_type="ilda", ell_optimal=0
     logger.debug("Total-ell (%s, %s, %s, %s)", in_path, ell_optimal, mean_u65, mean_u80)
 
 
-def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optimal=0.1,
+def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optimal=0.1, scaling=False,
                                       lib_path_server=None, cv_n_fold=10, seeds=None, DEBUG=False):
     assert os.path.exists(in_path), "Without training data, cannot performing cross validation accuracy"
     data = pd.read_csv(in_path)
     logger = create_logger("performance_cv_accuracy_imprecise", True)
     logger.info('Training dataset (%s, %s, %s)', in_path, model_type, ell_optimal)
     X = data.iloc[:, :-1].values
+    if scaling: X = normalize_minmax(X)
     y = np.array(data.iloc[:, -1].tolist())
     avg_u65, avg_u80 = 0, 0
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds

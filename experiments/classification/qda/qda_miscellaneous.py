@@ -1,7 +1,7 @@
 from classifip.evaluation.measures import u65, u80
 from qda_common import __factory_model_precise, __factory_model, generate_seeds
 import numpy as np, pandas as pd, sys, time, os
-from classifip.utils import create_logger
+from classifip.utils import create_logger, normalize_minmax
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 
@@ -11,12 +11,13 @@ QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab
 
 
 def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, seeds=None, lib_path_server=None,
-                                   model_type_precise='lda', model_type_imprecise='ilda'):
+                                   model_type_precise='lda', model_type_imprecise='ilda', scaling=True):
     data = export_data_set('iris.data') if in_path is None else pd.read_csv(in_path)
     logger = create_logger("computing_precise_vs_imprecise", True)
     logger.info('Training dataset and models (%s, %s, %s, %s)', in_path, model_type_precise,
                 model_type_imprecise, ell_optimal)
     X = data.iloc[:, :-1].values
+    if scaling: X = normalize_minmax(X)
     y = np.array(data.iloc[:, -1].tolist())
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
     model_impr = __factory_model(model_type_imprecise, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)

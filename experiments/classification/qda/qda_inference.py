@@ -1,4 +1,4 @@
-from classifip.utils import create_logger
+from classifip.utils import create_logger, normalize_minmax
 from sklearn.model_selection import train_test_split
 from qda_common import __factory_model
 from sklearn.model_selection import KFold
@@ -7,7 +7,7 @@ import random, os, csv, sys, numpy as np, pandas as pd
 
 
 def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ieda", test_size=0.4,
-                                  from_ell=0.1, to_ell=1.0, by_ell=0.1, seed=None, lib_path_server=None):
+                                  from_ell=0.1, to_ell=1.0, by_ell=0.1, seed=None, lib_path_server=None, scaling=False):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
@@ -15,6 +15,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
     logger.info('Training dataset %s', in_path)
     data = pd.read_csv(in_path)  # , header=None)
     X = data.iloc[:, :-1].values
+    if scaling: X = normalize_minmax(X)
     y = np.array(data.iloc[:, -1].tolist())
 
     ell_u65, ell_u80 = dict(), dict()

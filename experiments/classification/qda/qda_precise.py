@@ -3,16 +3,17 @@ from qda_common import __factory_model_precise, generate_seeds
 from classifip.dataset.uci_data_set import export_data_set
 from sklearn.model_selection import KFold
 import numpy as np, pandas as pd, sys, os, csv
-from classifip.utils import create_logger
+from classifip.utils import create_logger, normalize_minmax
 from sklearn.model_selection import train_test_split
 
 
-def performance_hold_out(in_path=None, model_type='lda', test_pct=0.4, n_times=10, seeds=None):
+def performance_hold_out(in_path=None, model_type='lda', test_pct=0.4, n_times=10, seeds=None, scaling=False):
     assert os.path.exists(in_path), "Without training data, not testing"
     data = pd.read_csv(in_path, header=None)
     logger = create_logger("performance_hold_out", True)
     logger.info('Training data set %s, test percentage %s, model_type %s', in_path, test_pct, model_type)
     X = data.iloc[:, :-1].values
+    if scaling: X = normalize_minmax(X)
     y = data.iloc[:, -1].tolist()
     model = __factory_model_precise(model_type, solver="svd", store_covariance=True)
     mean_u65, mean_u80 = 0, 0
@@ -34,12 +35,13 @@ def performance_hold_out(in_path=None, model_type='lda', test_pct=0.4, n_times=1
     logger.info("[Total:data-set:avgResults] (%s, %s)", mean_u65 / n_times, mean_u80 / n_times)
 
 
-def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=None):
+def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=None, scaling=False):
     assert os.path.exists(in_path), "Without training data, not testing"
     data = pd.read_csv(in_path, header=None)
     logger = create_logger("performance_cv_accuracy", True)
     logger.info('Training data set %s, cv_n_fold %s, model_type %s', in_path, cv_n_fold, model_type)
     X = data.iloc[:, :-1].values
+    if scaling: X = normalize_minmax(X)
     y = np.array(data.iloc[:, -1].tolist())
     avg_u65, avg_u80 = 0, 0
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
@@ -70,13 +72,14 @@ def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=
 
 
 def performance_qda_regularized(in_path=None, out_path=None, cv_n_fold=10, seeds=None,
-                                from_alpha=0, to_alpha=2.0, by_alpha=0.01):
+                                from_alpha=0, to_alpha=2.0, by_alpha=0.01, scaling=False):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "Without output saving performance"
     data = pd.read_csv(in_path, header=None)
     logger = create_logger("performance_qda_regularized", True)
     logger.info('Training data set %s, cv_n_fold %s, model_type %s', in_path, cv_n_fold, "qda")
     X = data.iloc[:, :-1].values
+    if scaling: X = normalize_minmax(X)
     y = np.array(data.iloc[:, -1].tolist())
 
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds

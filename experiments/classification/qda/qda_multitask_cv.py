@@ -1,7 +1,7 @@
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from classifip.evaluation.measures import u65, u80
-from classifip.utils import create_logger
+from classifip.utils import create_logger, normalize_minmax
 import sys, random, os, csv, numpy as np, pandas as pd
 from qda_common import __factory_model, generate_seeds
 
@@ -97,7 +97,7 @@ def computing_training_testing_step(X_training, y_training, X_testing, y_testing
 
 def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=None, model_type="ilda",
                                   from_ell=0.1, to_ell=1.0, by_ell=0.1, seed=None, cv_kfold_first=10,
-                                  nb_process=2, skip_nfold=0, cv_kfold_second=10, seed_second=None):
+                                  nb_process=2, skip_nfold=0, cv_kfold_second=10, seed_second=None, scaling=False):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
@@ -108,6 +108,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
 
     data = pd.read_csv(in_path, header=None)
     X = data.iloc[:, :-1].values
+    if scaling: X = normalize_minmax(X)
     y = np.array(data.iloc[:, -1].tolist())
 
     # Seeding a random value for k-fold top learning-testing data

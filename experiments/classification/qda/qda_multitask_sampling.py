@@ -1,7 +1,7 @@
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from classifip.evaluation.measures import u65, u80
-from classifip.utils import create_logger
+from classifip.utils import create_logger, normalize_minmax
 import sys, random, os, csv, numpy as np, pandas as pd
 from qda_common import __factory_model, generate_seeds
 
@@ -131,7 +131,7 @@ def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optim
 
 def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, model_type="ilda", test_size=0.4,
                                   from_ell=0.1, to_ell=1.0, by_ell=0.1, seeds=None, lib_path_server=None,
-                                  nb_process=2, n_sampling=10, skip_n_sample=0, criterion="maximality"):
+                                  nb_process=2, n_sampling=10, skip_n_sample=0, criterion="maximality", scaling=False):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
@@ -141,6 +141,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
                 to_ell, by_ell, nb_process, n_sampling, skip_n_sample)
     data = pd.read_csv(in_path, header=None)
     X = data.iloc[:, :-1].values
+    if scaling: X = normalize_minmax(X)
     y = np.array(data.iloc[:, -1].tolist())
 
     # Seed for get back up if process is killed
