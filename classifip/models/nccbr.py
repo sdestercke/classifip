@@ -26,8 +26,6 @@ class NCCBR(object):
     def __init__(self):
         """Build an empty NCCBR structure
         """
-        
-
         self.feature_names=[]
         self.label_names=[]
         self.feature_values=dict()
@@ -127,7 +125,7 @@ class NCCBR(object):
                             ncc_epsilon/len(self.feature_count[count_string]))
                     
                     #computation of numerator (label=0)
-                    count_string_num=self.label_names[j]+'|out|'+feature
+                    count_string=self.label_names[j]+'|out|'+feature
                     num_items=float(sum(self.feature_count[count_string]))
                     lower=((self.feature_count[count_string]
                             [f_val_index]+ncc_s_param)/(num_items+ncc_s_param))
