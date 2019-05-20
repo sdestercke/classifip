@@ -1,3 +1,11 @@
+'''
+Created on 18 may 2018
+
+@author: Yonatan-Carlos Carranza-Alarcon
+
+About how to use the Imprecise Gaussian Discriminant.
+'''
+
 import classifip
 
 # We start by creating an instance of the base classifier we want to use
