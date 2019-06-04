@@ -6,7 +6,7 @@ print("Example of Ordinal regression learning - data set LEV \n")
 # model = classifip.models.nccof.NCCOF()
 model = classifip.models.ncclr.NCCLR()
 dataArff= classifip.dataset.arff.ArffFile()
-dataArff.load("/Users/salmuz/Downloads/datasets/iris_dense.xarff")
+dataArff.load("iris_dense.xarff")
 dataArff.discretize(discmet="eqfreq", numint=5)
 
 # Learning
@@ -33,6 +33,6 @@ for clazz, classifier in test[0].items():
     print(classifier.getmaximaldecision(ranking_utility))
 
 print("\nConstraint Satisfy Problem for making inference(reduction/propagation)")
-inference_csp = classifip.models.ncclr.inference_ranking_csp(test)
+inference_csp = model.predict_CSP(test)
 if inference_csp is None : print("\nWithout response CSP ranking.")
 else: print("\nCSP ranking response:", inference_csp)
