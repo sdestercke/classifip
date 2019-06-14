@@ -61,7 +61,7 @@ def computing_training_testing_step(learn_data_set, test_data_set, nb_labels, nc
 
 
 def computing_best_imprecise_mean(in_path=None, out_path=None, seed=None, nb_kFold=10,
-                                  nb_process=1, scaling=True, max_ncc_s_param=5):
+                                  nb_process=1, scaling=True, max_ncc_s_param=5, remove_features=None):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
@@ -82,14 +82,15 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, seed=None, nb_kFo
     ich, cph = dict(), dict()
     min_discretize, max_discretize = 5, 9
     for nb_disc in range(min_discretize, max_discretize):
-        for time in range(nb_kFold):  # 10-10 times cross-validation
-            data_learning = arff.ArffFile()
-            data_learning.load(in_path)
-            # training, testing = classifip.evaluation.train_test_split(dataArff, test_pct=pct_testing, random_seed=seed)
-            nb_labels = get_nb_labels_class(data_learning)
-            if scaling: normalize(data_learning, n_labels=nb_labels)
-            data_learning.discretize(discmet="eqfreq", numint=nb_disc)
+        data_learning = arff.ArffFile()
+        data_learning.load(in_path)
+        if remove_features is not None:
+            for r_feature in remove_features: data_learning.remove_col(r_feature)
+        nb_labels = get_nb_labels_class(data_learning)
+        if scaling: normalize(data_learning, n_labels=nb_labels)
+        data_learning.discretize(discmet="eqfreq", numint=nb_disc)
 
+        for time in range(nb_kFold):  # 10-10 times cross-validation
             logger.info("Number interval for discreteness and labels (%1d, %1d)." % (nb_disc, nb_labels))
             cv_kfold = k_fold_cross_validation(data_learning, nb_kFold, randomise=True, random_seed=seed[time])
 
@@ -119,7 +120,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, seed=None, nb_kFo
     logger.debug("Results Final: %s, %s", ich, cph)
 
 
-in_path = sys.argv[1]
-out_path = sys.argv[2]
+in_path = "/Users/salmuz/Downloads/datasets_mlc/nuswide-cVLADplus.arff"
+out_path = "/Users/salmuz/Downloads/results_iris.csv"
 # QPBB_PATH_SERVER = []  # executed in host
-computing_best_imprecise_mean(in_path=in_path, out_path=out_path, nb_process=2)
+computing_best_imprecise_mean(in_path=in_path, out_path=out_path, nb_process=1)
