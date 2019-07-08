@@ -224,7 +224,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                     if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0:  # precise 10e-18 instead 0
                         nopt_clazz.add(clazz) # labels indifferent to maximal-label-choice for assessment maximility
                     else:
-                        del precise_probas[clazz]
+                        precise_probas.pop(clazz, None)
                 del precise_probas[max_clazz]
                 Z.add(max_clazz)
                 nopt_clazz.add(max_clazz)
