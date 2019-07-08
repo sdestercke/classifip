@@ -214,8 +214,6 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             Z = set([])
             while len(C - Z) > 0:
                 max_clazz = max(precise_probas, key=precise_probas.get)
-                print("---preciseprob-->", precise_probas)
-                print("maxi", max_clazz)
                 mean_lower = self._mean_lower[max_clazz]
                 mean_upper = self._mean_upper[max_clazz]
                 _, inv, det = self.get_cov_by_clazz(max_clazz)
