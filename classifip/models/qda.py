@@ -22,6 +22,7 @@ def is_sdp_symmetric(x):
     return is_pos_def(x) and check_symmetric(x)
 
 
+# First version maximality criterion
 def inference_maximal_criterion(lower, upper, clazz):
     pairwise_comparison = []
     # O(n^2), n: number of classes
@@ -41,9 +42,9 @@ def inference_maximal_criterion(lower, upper, clazz):
         else:
             down_min[pairwise[1]] = 0
 
-    maximal_elements =  list(top_max.keys())
+    maximal_elements = list(top_max.keys())
     # If there is no maximals, so maximal elements are all classes.
-    return clazz if len(maximal_elements) == 0 else  maximal_elements
+    return clazz if len(maximal_elements) == 0 else maximal_elements
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
@@ -99,6 +100,10 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 self._gp_icov[clazz] = linalg.pinv(cov_clazz)
                 eig_values, _ = linalg.eig(cov_clazz)
                 self._gp_dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
+            # numeric problems if det is equal 0, then _det should be so little ~0
+            if self._gp_dcov[clazz] == 0: self._gp_dcov[clazz] = 1e-7
+            # verify if pseudo-inverse matrix is semi-definite positive symmetric
+            # @review: numerical tolerance 1e-7 all matrix are symmetric, is good so much decimal precision?
             self._gp_sdp[clazz] = is_sdp_symmetric(self._gp_icov[clazz])
         return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
 
@@ -123,7 +128,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         :param y:
         :return:
         """
-        assert ell > 10^-6, "Using a positive value ELL, otherwise using precise method LDA/QDA."
+        assert ell > 10 ^ -6, "Using a positive value ELL, otherwise using precise method LDA/QDA."
         self._ell = ell
         self._gp_mean, self._gp_sdp = dict(), dict()
         self._gp_cov, self._gp_icov, self._gp_dcov = dict(), dict(), dict()
@@ -171,6 +176,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         """
         assert criterion == "maximality" or criterion == "interval_dominance", "Decision criterion does not exist."
         bounds = dict((clazz, dict()) for clazz in self._clazz)
+        precise_probas = dict()
         eng_session = self._eng
 
         def __get_bounds(clazz, bound="inf"):
@@ -195,22 +201,55 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 __put_bounds(prob, estimator, clazz, bound)
             return __get_bounds(clazz, bound)
 
-        lower, upper = [], []
-        for clazz in self._clazz:
-            mean_lower = self._mean_lower[clazz]
-            mean_upper = self._mean_upper[clazz]
-            _, inv, det = self.get_cov_by_clazz(clazz)
-            p_inf, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='inf')
-            p_up, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='sup')
-            lower.append(p_inf * self._prior[clazz])
-            upper.append(p_up * self._prior[clazz])
+        if criterion == "maximality":
+            for clazz in self._clazz:
+                mean_lower = self._mean_lower[clazz]
+                mean_upper = self._mean_upper[clazz]
+                _, inv, det = self.get_cov_by_clazz(clazz)
+                p_sub, estimator = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='sup')
+                __put_bounds(p_sub, estimator, clazz, "sup")
+                precise_probas[clazz] = self.probability_density_gaussian(self._gp_mean[clazz], inv, det, query)
 
+            C = set(self._clazz)
+            Z = set([])
+            while len(C - Z) > 0:
+                max_clazz = max(precise_probas, key=precise_probas.get)
+                print("---preciseprob-->", precise_probas)
+                print("maxi", max_clazz)
+                mean_lower = self._mean_lower[max_clazz]
+                mean_upper = self._mean_upper[max_clazz]
+                _, inv, det = self.get_cov_by_clazz(max_clazz)
+                p_inf, _ = __probability(self, query, max_clazz, inv, det, mean_lower, mean_upper, bound='inf')
+                nopt_clazz = set([])
+                for clazz in C - {max_clazz}:
+                    p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
+                    if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0:  # precise 10e-18 instead 0
+                        nopt_clazz.add(clazz) # labels indifferent to maximal-label-choice for assessment maximility
+                    else:
+                        del precise_probas[clazz]
+                del precise_probas[max_clazz]
+                Z.add(max_clazz)
+                nopt_clazz.add(max_clazz)
+                C = nopt_clazz.copy()
 
-        if criterion == "interval_dominance":
+            return list(C), bounds
+
+        elif criterion == "interval_dominance":
+            lower, upper = [], []
+            for clazz in self._clazz:
+                mean_lower = self._mean_lower[clazz]
+                mean_upper = self._mean_upper[clazz]
+                _, inv, det = self.get_cov_by_clazz(clazz)
+                p_inf, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='inf')
+                p_up, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='sup')
+                lower.append(p_inf * self._prior[clazz])
+                upper.append(p_up * self._prior[clazz])
+
             score = Scores(np.c_[lower, upper])
             return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
         else:
-            return inference_maximal_criterion(lower, upper, self._clazz), bounds
+            raise Exception("Decision criterion not implemented or another bug!!")
+
 
     def get_bound_means(self, clazz):
         return self._mean_lower[clazz], self._mean_upper[clazz]
@@ -409,7 +448,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         self._logger = create_logger("ILDA", DEBUG)
         if DEBUG: solvers.options['show_progress'] = True
 
-    def learn(self, learn_data_set=None, ell=2, X=None, y=None):
+    def learn(self, learn_data_set=None, ell=None, X=None, y=None):
         self._is_compute_total_cov = False
         super(LinearDiscriminant, self).learn(learn_data_set, ell, X, y)
 
@@ -421,7 +460,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             _cov, _inv, _det = np.zeros((self._p, self._p)), 0, 0  # estimation of empirical total covariance matrix
             for clazz_gp in self._clazz:
                 covClazz, _, _ = super(LinearDiscriminant, self).get_cov_by_clazz(clazz_gp)
-                _nb_instances_by_clazz = self._nb_by_clazz(clazz)
+                _nb_instances_by_clazz = self._nb_by_clazz(clazz_gp)
                 _cov += covClazz * (_nb_instances_by_clazz - 1)  # biased estimator
             _cov = _cov / (self._N - self._nb_clazz)  # unbiased estimator group
 
@@ -434,12 +473,15 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
                 eig_values, _ = linalg.eig(_cov)
                 _det = np.product(eig_values[(eig_values > 1e-12)])
 
-            _sdp_sys = is_sdp_symmetric(self._gp_icov[clazz])
+            # numeric problems if det is equal 0, then _det should be so little ~0
+            if _det == 0: _det = 1e-7
+
+            _sdp_sys = is_sdp_symmetric(_inv)
             for clazz_gp in self._clazz:
                 self._gp_cov[clazz_gp] = _cov
                 self._gp_icov[clazz_gp] = _inv
                 self._gp_dcov[clazz_gp] = _det
-                self._gp_sdp[clazz] = _sdp_sys
+                self._gp_sdp[clazz_gp] = _sdp_sys
 
             self._is_compute_total_cov = True
         return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]

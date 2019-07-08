@@ -16,7 +16,7 @@ data = classifip.dataset.uci_data_set.export_data_set('iris.data')
 # Learning
 X = data.iloc[:, :-1].values
 y = data.iloc[:, -1].tolist()
-model.learn(X, y, ell=5)
+model.learn(X=X, y=y, ell=5)
 
 # Evaluation : we can set the method for minimize convex problem with quadratic
 test, _ = model.evaluate(query=X[2], method="quadratic")
