@@ -61,7 +61,7 @@ def output_paper_zone_im_precise(is_imprecise=True, model_type="ieda", in_train=
                                  hgrid=0.1, features=None, criterion="maximality"):
     data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
     features = list([0, 1]) if features is None else features
-    model = __factory_model(model_type, DEBUG=True) if is_imprecise else None
+    model = __factory_model(model_type, DEBUG=False) if is_imprecise else None
     __test_imprecise_model(model, data, features=features, hgrid=hgrid, ell=ell,
                            query=None, is_imprecise=is_imprecise,
                            cmap_color=plt.cm.gist_ncar, criterion=criterion)
@@ -72,7 +72,6 @@ def output_paper_zone_im_precise(is_imprecise=True, model_type="ieda", in_train=
 # _test_IQDA()
 # _test_INaiveDA()
 # output_paper_result()
-output_paper_zone_im_precise(model_type='iqda', hgrid=0.01, ell= 5,
-                             criterion="maximality")
+output_paper_zone_im_precise(model_type='iqda', hgrid=0.01, ell=5, criterion="maximality")
 # output_paper_result()
 

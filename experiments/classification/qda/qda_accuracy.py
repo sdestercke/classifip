@@ -3,8 +3,9 @@ from classifip.dataset.uci_data_set import export_data_set
 from qda_common import __factory_model, generate_seeds
 from sklearn.model_selection import KFold
 from classifip.utils import create_logger, normalize_minmax
-import numpy as np, pandas as pd, sys
+import numpy as np, pandas as pd, sys, os
 from sklearn.model_selection import train_test_split
+from qda_manager import computing_training_testing_step, ManagerWorkers
 
 QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
 
@@ -44,7 +45,7 @@ def performance_accuracy_hold_out(in_path=None, model_type="ilda", ell_optimal=0
 
 
 def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optimal=0.1, scaling=False,
-                                      lib_path_server=None, cv_n_fold=10, seeds=None, DEBUG=False):
+                                      lib_path_server=None, cv_n_fold=10, seeds=None, nb_process=10):
     assert os.path.exists(in_path), "Without training data, cannot performing cross validation accuracy"
     data = pd.read_csv(in_path)
     logger = create_logger("performance_cv_accuracy_imprecise", True)
@@ -55,30 +56,21 @@ def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optim
     avg_u65, avg_u80 = 0, 0
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
     logger.info('Seeds used for accuracy %s', seeds)
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=DEBUG)
+
+    manager = ManagerWorkers(nb_process=nb_process)
+    manager.executeAsync(model_type, lib_path_server)
     for time in range(cv_n_fold):
         kf = KFold(n_splits=cv_n_fold, random_state=seeds[time], shuffle=True)
         mean_u65, mean_u80 = 0, 0
         for idx_train, idx_test in kf.split(y):
-            X_cv_train, y_cv_train = X[idx_train], y[idx_train]
-            X_cv_test, y_cv_test = X[idx_test], y[idx_test]
-            model.learn(X=X_cv_train, y=y_cv_train, ell=ell_optimal)
-            sum_u65, sum_u80 = 0, 0
-            n_test, _ = X_cv_test.shape
-            for i, test in enumerate(X_cv_test):
-                evaluate, _ = model.evaluate(test)
-                logger.debug("(testing, ell_current, prediction, ground-truth) (%s, %s, %s, %s)",
-                             i, ell_optimal, evaluate, y_cv_test[i])
-                if y_cv_test[i] in evaluate:
-                    sum_u65 += u65(evaluate)
-                    sum_u80 += u80(evaluate)
-            logger.debug("Partial-kfold (%s, %s, %s, %s)", ell_optimal, time, sum_u65 / n_test, sum_u80 / n_test)
-            mean_u65 += sum_u65 / n_test
-            mean_u80 += sum_u80 / n_test
-        logger.info("Time, seed, u65, u80 (%s, %s, %s, %s)", time, seeds[time], mean_u65 / cv_n_fold,
-                    mean_u80 / cv_n_fold)
+            mean_u65, mean_u80 = computing_training_testing_step(X[idx_train], y[idx_train], X[idx_test],
+                                                                 y[idx_test], ell_optimal, manager,
+                                                                 mean_u65, mean_u80)
+            logger.debug("Partial-kfold (%s, %s, %s, %s)", ell_optimal, time, mean_u65, mean_u80)
+        logger.info("Time, seed, u65, u80 (%s, %s, %s, %s)", time, seeds[time], mean_u65/cv_n_fold, mean_u80/cv_n_fold)
         avg_u65 += mean_u65 / cv_n_fold
         avg_u80 += mean_u80 / cv_n_fold
+    manager.poisonPillTraining()
     logger.debug("Total-ell (%s, %s, %s, %s)", in_path, ell_optimal, avg_u65 / cv_n_fold, avg_u80 / cv_n_fold)
 
 
@@ -86,4 +78,4 @@ in_path = sys.argv[1]
 ell_optimal = float(sys.argv[2])
 # QPBB_PATH_SERVER = []
 performance_cv_accuracy_imprecise(in_path=in_path, ell_optimal=ell_optimal, model_type="ilda",
-                                  lib_path_server=QPBB_PATH_SERVER)
+                                  lib_path_server=QPBB_PATH_SERVER, nb_process=2)

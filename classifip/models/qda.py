@@ -25,11 +25,15 @@ def is_sdp_symmetric(x):
 # First version maximality criterion
 def inference_maximal_criterion(lower, upper, clazz):
     pairwise_comparison = []
+    pairwise_indifferent = []
     # O(n^2), n: number of classes
     for idl, l in enumerate(lower):
         for idu, u in enumerate(upper):
-            if idl != idu and l - u > 0:
-                pairwise_comparison.append([clazz[idl], clazz[idu]])
+            if idl != idu:
+                if l - u > 0:
+                    pairwise_comparison.append([clazz[idl], clazz[idu]])
+                elif lower[idu] - upper[idl] <= 0:
+                    pairwise_indifferent.append([clazz[idl], clazz[idu]])
 
     top_max = dict()
     down_min = dict()
@@ -41,6 +45,13 @@ def inference_maximal_criterion(lower, upper, clazz):
             down_min[pairwise[1]] = 0
         else:
             down_min[pairwise[1]] = 0
+
+    for pairwise in pairwise_indifferent:
+        if pairwise[0] in top_max or pairwise[1] in top_max:
+            if pairwise[0] not in down_min and pairwise[0] not in top_max:
+                top_max[pairwise[0]] = 1
+            if pairwise[1] not in down_min and pairwise[1] not in top_max:
+                top_max[pairwise[1]] = 1
 
     maximal_elements = list(top_max.keys())
     # If there is no maximals, so maximal elements are all classes.
@@ -174,7 +185,6 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 otherwise maximality criterion
         :return: tuple composed of set-valued categories and (lower,upper) bound probabilities.
         """
-        assert criterion == "maximality" or criterion == "interval_dominance", "Decision criterion does not exist."
         bounds = dict((clazz, dict()) for clazz in self._clazz)
         precise_probas = dict()
         eng_session = self._eng
@@ -222,7 +232,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 for clazz in C - {max_clazz}:
                     p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
                     if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0:  # precise 10e-18 instead 0
-                        nopt_clazz.add(clazz) # labels indifferent to maximal-label-choice for assessment maximility
+                        nopt_clazz.add(clazz)  # labels indifferent to maximal-label-choice for assessment maximility
                     else:
                         precise_probas.pop(clazz, None)
                 del precise_probas[max_clazz]
@@ -232,7 +242,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
             return list(C), bounds
 
-        elif criterion == "interval_dominance":
+        elif criterion == "interval_dominance" or criterion == "maximality_v1":
             lower, upper = [], []
             for clazz in self._clazz:
                 mean_lower = self._mean_lower[clazz]
@@ -243,11 +253,13 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 lower.append(p_inf * self._prior[clazz])
                 upper.append(p_up * self._prior[clazz])
 
-            score = Scores(np.c_[lower, upper])
-            return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
+            if criterion == "interval_dominance":
+                score = Scores(np.c_[lower, upper])
+                return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
+            else:
+                return inference_maximal_criterion(lower, upper, self._clazz), bounds
         else:
-            raise Exception("Decision criterion not implemented or another bug!!")
-
+            raise Exception("Decision criterion not implemented yet or another bug!!")
 
     def get_bound_means(self, clazz):
         return self._mean_lower[clazz], self._mean_upper[clazz]
