@@ -107,6 +107,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
             logger.debug("Partial-ell-2step (u80, u65, accs) (%s, %s, %s, %s, %s)", -999, ellu80_opts, ellu65_opts,
                          acc_u65[idx_kfold], acc_u80[idx_kfold])
         idx_kfold += 1
+    writer.writerow([-9999, -9, np.mean(list(acc_u65.values())), np.mean(list(acc_u80.values()))])
     manager.poisonPillTraining()
     file_csv.close()
     logger.debug("Total-accuracy (%s, %s, %s)", in_path, acc_u65, acc_u80)

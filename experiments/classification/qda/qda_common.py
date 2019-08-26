@@ -28,10 +28,13 @@ class BaseEstimator:
         _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
         return _const * np.exp(_exp)
 
-    def predict(self, query):
-        pbs = np.array([self.pdf(query[0], self._means[clazz], self._icov[clazz], self._dcov[clazz]) * self._prior[clazz] \
+    def predict(self, queries):
+        predict_clazz = list()
+        for query in queries:
+            pbs = np.array([self.pdf(query, self._means[clazz], self._icov[clazz], self._dcov[clazz]) * self._prior[clazz] \
                         for clazz in self._clazz])
-        return [self._clazz[pbs.argmax()]]
+            predict_clazz.append(self._clazz[pbs.argmax()])
+        return predict_clazz
 
 
 class EuclideanDiscriminantPrecise(BaseEstimator):

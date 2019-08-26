@@ -106,18 +106,28 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
                 logger.debug("Partial-ell-sampling (%s, %s, %s, %s)", ell_current, sampling, ell_u65, ell_u80)
             logger.debug("Total-ell-sampling (%s, %s, %s, %s)", in_path, sampling, ell_u65, ell_u80)
 
+            # Computing optimal ells for using in testing step
             acc_ellu80 = max(ell_u80.values())
+            acc_ellu65 = max(ell_u65.values())
             ellu80_opts = [k for k, v in ell_u80.items() if v == acc_ellu80]
-
-            n_ell_opts = len(ellu80_opts)
+            ellu65_opts = [k for k, v in ell_u65.items() if v == acc_ellu65]
             acc_u65[sampling], acc_u80[sampling] = 0, 0
+            n_ell80_opts, n_ell65_opts = len(ellu80_opts), len(ellu65_opts)
+
             for ellu80_opt in ellu80_opts:
-                logger.info("ELL_OPTIMAL_SELECT_SAMPLING %s", ellu80_opt)
-                acc_u65[sampling], acc_u80[sampling] = \
+                logger.info("ELL_OPTIMAL_SAMPLING_U80 %s", ellu80_opt)
+                _, acc_u80[sampling] = \
                     computing_training_testing_step(X_learning, y_learning, X_testing, y_testing, ellu80_opt,
-                                                    manager, acc_u65[sampling], acc_u80[sampling])
-            acc_u65[sampling] = acc_u65[sampling] / n_ell_opts
-            acc_u80[sampling] = acc_u80[sampling] / n_ell_opts
+                                                    manager, 0, acc_u80[sampling])
+
+            for ellu65_opt in ellu65_opts:
+                logger.info("ELL_OPTIMAL_SAMPLING_U65 %s", ellu65_opt)
+                acc_u65[sampling], _ = \
+                    computing_training_testing_step(X_learning, y_learning, X_testing, y_testing, ellu65_opt,
+                                                    manager, acc_u65[sampling], 0)
+
+            acc_u65[sampling] = acc_u65[sampling] / n_ell65_opts
+            acc_u80[sampling] = acc_u80[sampling] / n_ell80_opts
             writer.writerow([-999, sampling, acc_u65[sampling], acc_u80[sampling]])
             file_csv.flush()
             logger.debug("Partial-ell-2step (%s, %s, %s, %s)", -999, ellu80_opts, acc_u65[sampling], acc_u80[sampling])

@@ -140,7 +140,8 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
     newClazz = __generate_all_multi_clazz(_clazz) if new_multi_clazz is None else new_multi_clazz
     z = np.array([])
     print("[DEBUG] How many queries:", len(yy.ravel()))
-    for query in np.c_[xx.ravel(), yy.ravel()]:
+    for idx, query in enumerate(np.c_[xx.ravel(), yy.ravel()]):
+        print("[Query] # current query:", idx)
         z = np.append(z, prediction(model, newClazz, clazz_by_index, query, criterion))
 
     y_colors = [clazz_by_index[clazz] for clazz in y]
