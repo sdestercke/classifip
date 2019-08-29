@@ -63,17 +63,17 @@ def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=Non
     assert os.path.exists(in_path), "Without training data, not testing"
     data = pd.read_csv(in_path, header=None)
     logger = create_logger("computing_time_prediction", True)
-    logger.info('Training dataset %s with maximality version %s', in_path, criterion)
+    logger.info('Training dataset %s with maximality version %s ann model %s', in_path, criterion, model_type)
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].tolist()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
     model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
     model.learn(X=X_train, y=y_train, ell=ell_optimal)
-    sum_time = 0
     n, _ = X_test.shape
     avg = np.array([])
     for k in range(k_repetition):
         logger.info("%s-fold repetition randomly", k)
+        sum_time = 0
         for i, test in enumerate(X_test):
             start = time.time()
             evaluate, _ = model.evaluate(test, criterion=criterion)
