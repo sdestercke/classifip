@@ -59,6 +59,7 @@ def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=
             sum_u65, sum_u80 = 0, 0
             for i, test in enumerate(X_cv_test):
                 evaluate = model.predict([test])
+                logger.debug("(testing, prediction, ground-truth) (%s, %s, %s)", i, evaluate, y_cv_test[i])
                 if y_cv_test[i] in evaluate:
                     sum_u65 += u65(evaluate)
                     sum_u80 += u80(evaluate)

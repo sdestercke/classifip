@@ -469,7 +469,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         if not self._is_compute_total_cov:
             _cov, _inv, _det = np.zeros((self._p, self._p)), 0, 0  # estimation of empirical total covariance matrix
             for clazz_gp in self._clazz:
-                covClazz, _, _ = super(LinearDiscriminant, self).get_cov_by_clazz(clazz_gp)
+                covClazz = super(LinearDiscriminant, self)._cov_by_clazz(clazz_gp)
                 _nb_instances_by_clazz = self._nb_by_clazz(clazz_gp)
                 _cov += covClazz * (_nb_instances_by_clazz - 1)  # biased estimator
             _cov = _cov / (self._N - self._nb_clazz)  # unbiased estimator group

@@ -58,7 +58,8 @@ def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, 
                  model_type_precise, avg_imprecise / n_real_times, avg_precise / n_real_times)
 
 
-def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=None, model_type="ilda"):
+def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=None, model_type="ilda",
+                              criterion="maximality", k_repetition=10):
     assert os.path.exists(in_path), "Without training data, not testing"
     data = pd.read_csv(in_path, header=None)
     logger = create_logger("computing_time_prediction", True)
@@ -70,13 +71,18 @@ def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=Non
     model.learn(X=X_train, y=y_train, ell=ell_optimal)
     sum_time = 0
     n, _ = X_test.shape
-    for i, test in enumerate(X_test):
-        start = time.time()
-        evaluate, _ = model.evaluate(test)
-        end = time.time()
-        logger.info("Evaluate %s, Ground-truth %s, Time %s ", evaluate, y_test[i], (end - start))
-        sum_time += (end - start)
-    logger.info("Total time (%s, %s) and average %s of %s testing", in_path, sum_time, sum_time / n, n)
+    avg = np.array([])
+    for k in range(k_repetition):
+        logger.info("%s-fold repetition randomly", k)
+        for i, test in enumerate(X_test):
+            start = time.time()
+            evaluate, _ = model.evaluate(test, criterion=criterion)
+            end = time.time()
+            logger.info("Evaluate %s, Ground-truth %s, Time %s ", evaluate, y_test[i], (end - start))
+            sum_time += (end - start)
+        avg = np.append(avg, sum_time/n)
+    logger.info("Total time (%s, %s) and average %s and sd %s of %s testing", in_path, avg,
+                np.mean(avg), np.std(avg), n)
 
 
 in_path = sys.argv[1]
