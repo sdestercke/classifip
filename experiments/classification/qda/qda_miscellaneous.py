@@ -63,7 +63,7 @@ def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=Non
     assert os.path.exists(in_path), "Without training data, not testing"
     data = pd.read_csv(in_path, header=None)
     logger = create_logger("computing_time_prediction", True)
-    logger.info('Training dataset %s', in_path)
+    logger.info('Training dataset %s with maximality version %s', in_path, criterion)
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].tolist()
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
