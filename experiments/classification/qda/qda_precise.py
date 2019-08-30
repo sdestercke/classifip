@@ -7,18 +7,32 @@ from classifip.utils import create_logger, normalize_minmax
 from sklearn.model_selection import train_test_split
 
 
-def performance_hold_out(in_path=None, model_type='lda', test_pct=0.4, n_times=10, seeds=None, scaling=False):
+def performance_hold_out(in_path=None,
+                         out_path=None,
+                         model_type='lda',
+                         test_pct=0.4,
+                         n_times=10,
+                         seeds=None,
+                         scaling=False):
     assert os.path.exists(in_path), "Without training data, not testing"
-    data = pd.read_csv(in_path, header=None)
+    assert os.path.exists(out_path), "Without output saving performance"
+
     logger = create_logger("performance_hold_out", True)
     logger.info('Training data set %s, test percentage %s, model_type %s', in_path, test_pct, model_type)
+
+    data = pd.read_csv(in_path, header=None)
     X = data.iloc[:, :-1].values
     if scaling: X = normalize_minmax(X)
     y = data.iloc[:, -1].tolist()
-    model = __factory_model_precise(model_type, solver="svd", store_covariance=True)
-    mean_u65, mean_u80 = 0, 0
+
     seeds = generate_seeds(n_times) if seeds is None else seeds
     logger.info('Seeds generated %s', seeds)
+
+    file_csv = open(out_path, 'w')
+    writer = csv.writer(file_csv)
+
+    model = __factory_model_precise(model_type, store_covariance=True)
+    mean_u65, mean_u80 = np.array([]), np.array([])
     for i in range(0, n_times):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_pct, random_state=seeds[i])
         sum_u65, sum_u80 = 0, 0
@@ -29,10 +43,13 @@ def performance_hold_out(in_path=None, model_type='lda', test_pct=0.4, n_times=1
             if y_test[j] in evaluate:
                 sum_u65 += u65(evaluate)
                 sum_u80 += u80(evaluate)
-        logger.info("Time, u65, u80 (%s, %s, %s)", i, sum_u65 / n, sum_u80 / n)
-        mean_u65 += sum_u65 / n
-        mean_u80 += sum_u80 / n
-    logger.info("[Total:data-set:avgResults] (%s, %s)", mean_u65 / n_times, mean_u80 / n_times)
+        logger.info("time, u65, u80 (%s, %s, %s)", i, sum_u65 / n, sum_u80 / n)
+        mean_u65 = np.append(mean_u65, sum_u65 / n)
+        mean_u80 = np.append(mean_u80, sum_u80 / n)
+        writer.writerow([-999, i, mean_u65[i], mean_u80[i]])
+        file_csv.flush()
+    file_csv.close()
+    logger.info("[total:data-set:avgResults] (%s, %s)", np.mean(mean_u65), np.mean(mean_u80))
 
 
 def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=None, scaling=False):
@@ -125,11 +142,17 @@ def performance_qda_regularized(in_path=None, out_path=None, cv_n_fold=10, seeds
             if y_testing[i] in evaluate: accuracy[ikfold] += u80(evaluate) / bn_test
         logger.info("[2kfold:best_model:seed:accuracy] (%s, %s, %s)", ikfold, alphas[idx_best], accuracy[ikfold])
         ikfold += 1
+    file_csv.close()
     logger.info("[total:data-set:avgResults] (%s, %s, %s, %s)", in_path, np.mean(accuracy), best_alphas, accuracy)
 
 
 in_path = sys.argv[1]
-performance_cv_accuracy(in_path, model_type='nda')
+out_path = sys.argv[2]
+test_pct = float(sys.argv[3])/100
+performance_hold_out(in_path, out_path, model_type='qda', test_pct=test_pct)
+
+# in_path = sys.argv[1]
+# performance_cv_accuracy(in_path, model_type='nda')
 
 # in_path = sys.argv[1]
 # out_path = sys.argv[2]
