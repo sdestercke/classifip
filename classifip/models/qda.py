@@ -118,10 +118,46 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             self._gp_sdp[clazz] = is_sdp_symmetric(self._gp_icov[clazz])
         return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
 
-    def probability_density_gaussian(self, mean, inv_cov, det_cov, query):
-        _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
-        _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
-        return _const * np.exp(_exp)
+    def probability_density_gaussian(self, mean, inv_cov, det_cov, query, log_p=False):
+        """
+        This method calculate the multivariate Gaussian probability of event (query)
+        when the covariance matrix is positive semi-definite matrix.
+        .. warning::
+            This one does not take into consideration if the covariance matrix is singular,
+            that means that the multivariate Gaussian is degenerate and the calculation must be
+            done differently.
+                f(x)= \det^{*}(2\pi*\Sigma)^{-\frac {1}{2}} * exp(-0.5*(x -\mu)^T \Sigma^{+} (x - \mu))
+            where:
+                det^{*} is the pseudo-determinant of Sigma, and
+                Sigma^{+} is the generalized inverse
+        :param mean:
+        :param inv_cov:
+        :param det_cov:
+        :param query:
+        :param log_p:
+        :return:
+        """
+        _log_exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
+        _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, 14 / 2)
+
+        if log_p:
+            return np.log(_const) + _log_exp
+        else:
+            # warning fixed: overflow encountered in exp(x)=inf (and) higher negatives values, then exp(x)=0
+            _exp = np.exp(_log_exp)
+            if _exp == np.inf:  # putting a higher value to exp(-0.5*(x-mu)Sigma(x-mu))
+                _exp = pow(sys.float_info.max, 0.5)
+                self._logger.info("[Warning:overflow exp] (_const, _log_exp) (%s, %s)", _const, _log_exp)
+            elif _exp == 0.0:
+                _exp = pow(sys.float_info.min, 0.5)
+                self._logger.info("[Warning:approx_zero exp] (_const, _log_exp) (%s, %s)", _const, _log_exp)
+
+            _prob = _const * _exp
+            if _prob == np.inf:  # putting a higher value to Gaussian probability of event P(X=query)
+                _prob = sys.float_info.max
+                self._logger.info("[Warning:overflow probability]  (_exp, _prob) (%s, %s)", _exp, _prob)
+
+            return _prob
 
     def fit_max_likelihood(self, query):
         means, probabilities = dict(), dict()
@@ -175,7 +211,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             self._mean_lower[clazz] = (-self._ell + nb_by_clazz * mean) / nb_by_clazz
             self._mean_upper[clazz] = (self._ell + nb_by_clazz * mean) / nb_by_clazz
 
-    def evaluate(self, query, method="quadratic", criterion="maximality"):
+    def evaluate(self, query, method="quadratic", criterion="maximality", log_probability=False):
         """
         This method is ..
 
@@ -183,6 +219,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         :param method: optimization method for computing optimal upper bound mean.
         :param criterion: interval_dominance if criterion decision performs with Interval dominance,
                 otherwise maximality criterion
+        :param log_probability: calculate the maximality decision with log probability
         :return: tuple composed of set-valued categories and (lower,upper) bound probabilities.
         """
         bounds = dict((clazz, dict()) for clazz in self._clazz)
@@ -195,19 +232,19 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         def __put_bounds(probability, estimator, clazz, bound="inf"):
             bounds[clazz][bound] = (probability, estimator)
 
-        def __probability(_self, query, clazz, inv, det, mean_lower, mean_upper, bound="inf"):
+        def __probability(_self, query, clazz, inv, det, mean_lower, mean_upper, bound="inf", log_p=False):
 
             if __get_bounds(clazz, bound) is None:
                 q = -1 * (query.T @ inv)
-                self._logger.debug("[BOUND_ESTIMATION:%s] Q matrix: %s", bound, inv)
-                self._logger.debug("[BOUND_ESTIMATION:%s] q vector: %s", bound, q)
-                self._logger.debug("[BOUND_ESTIMATION:%s] Lower Bound: %s", bound, mean_lower)
-                self._logger.debug("[BOUND_ESTIMATION:%s] Upper Bound %s", bound, mean_upper)
+                _self._logger.debug("[BOUND_ESTIMATION:%s] Q matrix: %s", bound, inv)
+                _self._logger.debug("[BOUND_ESTIMATION:%s] q vector: %s", bound, q)
+                _self._logger.debug("[BOUND_ESTIMATION:%s] Lower Bound: %s", bound, mean_lower)
+                _self._logger.debug("[BOUND_ESTIMATION:%s] Upper Bound %s", bound, mean_upper)
                 if bound == "inf":
                     estimator = _self.infimum_estimation(inv, q, mean_lower, mean_upper, eng_session, clazz)
                 else:
                     estimator = _self.supremum_estimation(inv, q, mean_lower, mean_upper, clazz, method)
-                prob = _self.probability_density_gaussian(np.array(estimator), inv, det, query)
+                prob = _self.probability_density_gaussian(np.array(estimator), inv, det, query, log_p=log_p)
                 __put_bounds(prob, estimator, clazz, bound)
             return __get_bounds(clazz, bound)
 
@@ -215,8 +252,10 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             for clazz in self._clazz:
                 mean_lower = self._mean_lower[clazz]
                 mean_upper = self._mean_upper[clazz]
-                _, inv, det = self.get_cov_by_clazz(clazz)
-                p_sub, estimator = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='sup')
+                cov, inv, det = self.get_cov_by_clazz(clazz)
+                p_sub, estimator = __probability(self, query, clazz, inv, det,
+                                                 mean_lower, mean_upper,
+                                                 bound='sup', log_p=log_probability)
                 __put_bounds(p_sub, estimator, clazz, "sup")
                 precise_probas[clazz] = self.probability_density_gaussian(self._gp_mean[clazz], inv, det, query)
 
@@ -226,13 +265,23 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 max_clazz = max(precise_probas, key=precise_probas.get)
                 mean_lower = self._mean_lower[max_clazz]
                 mean_upper = self._mean_upper[max_clazz]
-                _, inv, det = self.get_cov_by_clazz(max_clazz)
-                p_inf, _ = __probability(self, query, max_clazz, inv, det, mean_lower, mean_upper, bound='inf')
+                cov, inv, det = self.get_cov_by_clazz(max_clazz)
+                p_inf, _ = __probability(self, query, max_clazz, inv, det,
+                                         mean_lower, mean_upper,
+                                         bound='inf', log_p=log_probability)
                 nopt_clazz = set([])
                 for clazz in C - {max_clazz}:
                     p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
-                    if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0:  # precise 10e-18 instead 0
-                        nopt_clazz.add(clazz)  # labels indifferent to maximal-label-choice for assessment maximility
+
+                    # if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0: # precise 10e-18 instead 0
+                    maximility = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
+                    if log_probability:
+                        maximility= (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
+
+                    self._logger.info("Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
+                                       max_clazz, clazz, maximility)
+                    if maximility: #labels indifferent to maximal-label-choice for assessment maximility
+                        nopt_clazz.add(clazz)
                     else:
                         precise_probas.pop(clazz, None)
                 del precise_probas[max_clazz]
@@ -243,6 +292,9 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             return list(C), bounds
 
         elif criterion == "interval_dominance" or criterion == "maximality_v1":
+            if log_probability:
+                raise Exception("Criterion decision does not support with log-probability!!")
+
             lower, upper = [], []
             for clazz in self._clazz:
                 mean_lower = self._mean_lower[clazz]
@@ -284,7 +336,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
         """
         .. warning::
-            * One case which does not convergence with quadratic method
+            * this case does not convergence with quadratic method
                 Q = np.array([[19.42941344,  -12.9899322, -5.1907171,   -0.25782677],
                               [-12.9899322,  15.97805787, 1.87087712,   -6.72150886],
                               [-5.1907171,   1.87087712,  36.99333345,  -16.21139038],
