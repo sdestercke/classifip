@@ -89,7 +89,7 @@ def plot2D_classification(model, query=None, colors=None, markers=None):
 
         s_plot = plt.subplot()
         for clazz in _clazz:
-            cov, inv, det = model.get_cov_by_clazz(clazz)
+            cov, inv = model.get_cov_by_clazz(clazz)
             mean = model.get_mean_by_clazz(clazz)
             plot_ellipse(s_plot, mean, cov, colors[clazz])
 
@@ -124,7 +124,7 @@ def prediction(model, newClazz, clazz_by_index, query, criterion):
 
 
 def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None, markers=None,
-                             criterion="maximality"):
+                             criterion="maximality", savefig=False):
     markers = list(['+', '*', 'v', 'o', '-', '.', ',']) if markers is None else markers
     X, y = __check_data_available(model.get_data())
     _clazz = model.get_clazz()
@@ -148,9 +148,11 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
     z = np.array(z)
     z = z.reshape(xx.shape)
     cmap_color = plt.cm.viridis if cmap_color is None else plt.cm.get_cmap(cmap_color, _nb_clazz + len(newClazz))
-    plt.contourf(xx, yy, z, alpha=0.4, cmap=cmap_color)
+    plt.contourf(xx, yy, z, alpha=0.8, cmap=cmap_color)
     for row in range(0, len(y)):
         plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker=markers[clazz_by_index[y[row]]], edgecolor='k')
+    if savefig:
+        plt.savefig('model_plot.pdf', format='pdf', bbox_inches='tight')
     plt.show()
 
 

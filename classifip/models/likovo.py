@@ -4,7 +4,6 @@ from scipy.spatial import kdtree, distance
 from ..representations.credalset import CredalSet
 import numpy as np
 from scipy.sparse import dok_matrix
-from scipy.misc import comb
 from math import fabs
 
 def class_to_prefmat(observed,labels):

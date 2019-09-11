@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from cvxopt import solvers, matrix
 from numpy import linalg
+from scipy.stats import multivariate_normal
 from ..utils import create_logger, is_level_debug
 from classifip.representations.voting import Scores
 
@@ -78,10 +79,9 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         self._nb_clazz = None
         self._prior = dict()
         # icov: inverse covariance,
-        # dcov: determinant covariance,
         # sdp: bool if it's semi-definite positive symmetric
         self._gp_mean, self._gp_sdp = dict(), dict()
-        self._gp_cov, self._gp_icov, self._gp_dcov = dict(), dict(), dict()
+        self._gp_cov, self._gp_icov = dict(), dict()
         self._mean_lower, self._mean_upper = None, None
         self.__nb_rebuild_opt = 0
         self._logger = None
@@ -106,65 +106,46 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             self._gp_cov[clazz] = cov_clazz
             if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
                 self._gp_icov[clazz] = linalg.inv(cov_clazz)
-                self._gp_dcov[clazz] = linalg.det(cov_clazz)
-            else:  # computing pseudo inverse/determinant to a singular covariance matrix
+            else:  # computing pseudo-inverse of a singular covariance matrix
                 self._gp_icov[clazz] = linalg.pinv(cov_clazz)
-                eig_values, _ = linalg.eig(cov_clazz)
-                self._gp_dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
-            # numeric problems if det is equal 0, then _det should be so little ~0
-            if self._gp_dcov[clazz] == 0: self._gp_dcov[clazz] = 1e-7
+
             # verify if pseudo-inverse matrix is semi-definite positive symmetric
             # @review: numerical tolerance 1e-7 all matrix are symmetric, is good so much decimal precision?
             self._gp_sdp[clazz] = is_sdp_symmetric(self._gp_icov[clazz])
-        return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
+        return self._gp_cov[clazz], self._gp_icov[clazz]
 
-    def probability_density_gaussian(self, mean, inv_cov, det_cov, query, log_p=False):
+    def probability_density_gaussian(self, mean, cov, query, log_p=False):
         """
         This method calculate the multivariate Gaussian probability of event (query)
         when the covariance matrix is positive semi-definite matrix.
-        .. warning::
-            This one does not take into consideration if the covariance matrix is singular,
-            that means that the multivariate Gaussian is degenerate and the calculation must be
-            done differently.
-                f(x)= \det^{*}(2\pi*\Sigma)^{-\frac {1}{2}} * exp(-0.5*(x -\mu)^T \Sigma^{+} (x - \mu))
-            where:
-                det^{*} is the pseudo-determinant of Sigma, and
-                Sigma^{+} is the generalized inverse
-        :param mean:
-        :param inv_cov:
-        :param det_cov:
-        :param query:
-        :param log_p:
-        :return:
+
+        This one also does take into consideration if the covariance matrix is singular,
+        that means that the multivariate Gaussian is degenerate and the calculation must be
+        done differently.
+            f(x)= \det^{*}(2\pi*\Sigma)^{-\frac {1}{2}} * exp(-0.5*(x -\mu)^T \Sigma^{+} (x - \mu))
+        where:
+            det^{*} is the pseudo-determinant of Sigma, and
+            Sigma^{+} is the generalized inverse
+
+        :param mean: mean of
+        :param cov: covariance matrix (positive semi-definite or singular)
+        :param query: event of multivariate Gaussian probability
+        :param log_p: boolean if it is log-probability or just probability
+        :return: the probability of 'query' event
         """
-        _log_exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
-        _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, 14 / 2)
-
         if log_p:
-            return np.log(_const) + _log_exp
+            probability = multivariate_normal.logpdf(query, mean=mean, cov=cov, allow_singular=True)
         else:
-            # warning fixed: overflow encountered in exp(x)=inf (and) higher negatives values, then exp(x)=0
-            _exp = np.exp(_log_exp)
-            if _exp == np.inf:  # putting a higher value to exp(-0.5*(x-mu)Sigma(x-mu))
-                _exp = pow(sys.float_info.max, 0.5)
-                self._logger.info("[Warning:overflow exp] (_const, _log_exp) (%s, %s)", _const, _log_exp)
-            elif _exp == 0.0:
-                _exp = pow(sys.float_info.min, 0.5)
-                self._logger.info("[Warning:approx_zero exp] (_const, _log_exp) (%s, %s)", _const, _log_exp)
-
-            _prob = _const * _exp
-            if _prob == np.inf:  # putting a higher value to Gaussian probability of event P(X=query)
-                _prob = sys.float_info.max
-                self._logger.info("[Warning:overflow probability]  (_exp, _prob) (%s, %s)", _exp, _prob)
-
-            return _prob
+            probability = multivariate_normal.pdf(query, mean=mean, cov=cov, allow_singular=True)
+        self._logger.debug("Computing the (log-)probability (%s, %s):", log_p, probability)
+        return probability
 
     def fit_max_likelihood(self, query):
         means, probabilities = dict(), dict()
         for clazz in self._clazz:
-            cov, inv, det = self.get_cov_by_clazz(clazz)
+            cov, inv = self.get_cov_by_clazz(clazz)
             means[clazz] = self.get_mean_by_clazz(clazz)
-            probabilities[clazz] = self.probability_density_gaussian(means[clazz], inv, det, query)
+            probabilities[clazz] = self.probability_density_gaussian(means[clazz], cov, query)
         return means, probabilities
 
     def learn(self, learn_data_set=None, ell=2, X=None, y=None):
@@ -178,7 +159,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         assert ell > 10 ^ -6, "Using a positive value ELL, otherwise using precise method LDA/QDA."
         self._ell = ell
         self._gp_mean, self._gp_sdp = dict(), dict()
-        self._gp_cov, self._gp_icov, self._gp_dcov = dict(), dict(), dict()
+        self._gp_cov, self._gp_icov = dict(), dict()
         self._mean_lower, self._mean_upper = dict(), dict()
 
         # transformation of Arff data to feature matrix and vector category
@@ -232,7 +213,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         def __put_bounds(probability, estimator, clazz, bound="inf"):
             bounds[clazz][bound] = (probability, estimator)
 
-        def __probability(_self, query, clazz, inv, det, mean_lower, mean_upper, bound="inf", log_p=False):
+        def __probability(_self, query, clazz, inv, cov, mean_lower, mean_upper, bound="inf", log_p=False):
 
             if __get_bounds(clazz, bound) is None:
                 q = -1 * (query.T @ inv)
@@ -244,7 +225,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                     estimator = _self.infimum_estimation(inv, q, mean_lower, mean_upper, eng_session, clazz)
                 else:
                     estimator = _self.supremum_estimation(inv, q, mean_lower, mean_upper, clazz, method)
-                prob = _self.probability_density_gaussian(np.array(estimator), inv, det, query, log_p=log_p)
+                prob = _self.probability_density_gaussian(np.array(estimator), cov, query, log_p=log_p)
                 __put_bounds(prob, estimator, clazz, bound)
             return __get_bounds(clazz, bound)
 
@@ -252,12 +233,14 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             for clazz in self._clazz:
                 mean_lower = self._mean_lower[clazz]
                 mean_upper = self._mean_upper[clazz]
-                cov, inv, det = self.get_cov_by_clazz(clazz)
-                p_sub, estimator = __probability(self, query, clazz, inv, det,
+                cov, inv = self.get_cov_by_clazz(clazz)
+                p_sub, estimator = __probability(self, query, clazz, inv, cov,
                                                  mean_lower, mean_upper,
                                                  bound='sup', log_p=log_probability)
                 __put_bounds(p_sub, estimator, clazz, "sup")
-                precise_probas[clazz] = self.probability_density_gaussian(self._gp_mean[clazz], inv, det, query)
+                precise_probas[clazz] = self.probability_density_gaussian(self._gp_mean[clazz],
+                                                                          cov, query,
+                                                                          log_p=log_probability)
 
             C = set(self._clazz)
             Z = set([])
@@ -265,8 +248,8 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 max_clazz = max(precise_probas, key=precise_probas.get)
                 mean_lower = self._mean_lower[max_clazz]
                 mean_upper = self._mean_upper[max_clazz]
-                cov, inv, det = self.get_cov_by_clazz(max_clazz)
-                p_inf, _ = __probability(self, query, max_clazz, inv, det,
+                cov, inv = self.get_cov_by_clazz(max_clazz)
+                p_inf, _ = __probability(self, query, max_clazz, inv, cov,
                                          mean_lower, mean_upper,
                                          bound='inf', log_p=log_probability)
                 nopt_clazz = set([])
@@ -276,11 +259,12 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                     # if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0: # precise 10e-18 instead 0
                     maximility = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
                     if log_probability:
-                        maximility= (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
+                        maximility = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
 
-                    self._logger.info("Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
+                    self._logger.debug("Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
                                        max_clazz, clazz, maximility)
-                    if maximility: #labels indifferent to maximal-label-choice for assessment maximility
+                    # (maximility:true) labels indifferent to maximal-label-choice for assessment maximility
+                    if maximility:
                         nopt_clazz.add(clazz)
                     else:
                         precise_probas.pop(clazz, None)
@@ -299,9 +283,9 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             for clazz in self._clazz:
                 mean_lower = self._mean_lower[clazz]
                 mean_upper = self._mean_upper[clazz]
-                _, inv, det = self.get_cov_by_clazz(clazz)
-                p_inf, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='inf')
-                p_up, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='sup')
+                cov, inv = self.get_cov_by_clazz(clazz)
+                p_inf, _ = __probability(self, query, clazz, inv, cov, mean_lower, mean_upper, bound='inf')
+                p_up, _ = __probability(self, query, clazz, inv, cov, mean_lower, mean_upper, bound='sup')
                 lower.append(p_inf * self._prior[clazz])
                 upper.append(p_up * self._prior[clazz])
 
@@ -329,6 +313,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         if _n > 1:
             return _sub_data.cov().as_matrix()
         ## Bug: Impossible to compute covariance of just ONE instance
+        ## assuming an identity covariance matrix
         ## e.g. _sub_data.shape = (1, 8)
         else:
             return np.eye(_p, dtype=np.dtype('d'))
@@ -469,8 +454,7 @@ class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         if clazz not in self._gp_cov:
             self._gp_cov[clazz] = np.identity(self._p)
             self._gp_icov[clazz] = np.identity(self._p)
-            self._gp_dcov[clazz] = 1
-        return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
+        return self._gp_cov[clazz], self._gp_icov[clazz]
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
         optimal = np.zeros(self._p)
@@ -519,7 +503,8 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         :return: cov, inv, det of empirical total covariance matrix
         """
         if not self._is_compute_total_cov:
-            _cov, _inv, _det = np.zeros((self._p, self._p)), 0, 0  # estimation of empirical total covariance matrix
+            # estimation of empirical total covariance matrix
+            _cov, _inv = np.zeros((self._p, self._p)), np.zeros((self._p, self._p))
             for clazz_gp in self._clazz:
                 covClazz = super(LinearDiscriminant, self)._cov_by_clazz(clazz_gp)
                 _nb_instances_by_clazz = self._nb_by_clazz(clazz_gp)
@@ -529,24 +514,17 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             # Hint: Improving this method using the SVD method for computing pseudo-inverse matrix
             if linalg.cond(_cov) < 1 / sys.float_info.epsilon:
                 _inv = linalg.inv(_cov)
-                _det = linalg.det(_cov)
-            else:  # computing pseudo inverse/determinant to a singular covariance matrix
+            else:  # computing pseudo-inverse matrix with a singular-value decomposition (SVD)
                 _inv = linalg.pinv(_cov)
-                eig_values, _ = linalg.eig(_cov)
-                _det = np.product(eig_values[(eig_values > 1e-12)])
-
-            # numeric problems if det is equal 0, then _det should be so little ~0
-            if _det == 0: _det = 1e-7
 
             _sdp_sys = is_sdp_symmetric(_inv)
             for clazz_gp in self._clazz:
                 self._gp_cov[clazz_gp] = _cov
                 self._gp_icov[clazz_gp] = _inv
-                self._gp_dcov[clazz_gp] = _det
                 self._gp_sdp[clazz_gp] = _sdp_sys
 
             self._is_compute_total_cov = True
-        return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
+        return self._gp_cov[clazz], self._gp_icov[clazz]
 
 
 class QuadraticDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
@@ -582,5 +560,4 @@ class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
             diagonal[...] = save
             self._gp_cov[clazz] = cov_clazz
             self._gp_icov[clazz] = linalg.inv(cov_clazz)
-            self._gp_dcov[clazz] = linalg.det(cov_clazz)
-        return self._gp_cov[clazz], self._gp_icov[clazz], self._gp_dcov[clazz]
+        return self._gp_cov[clazz], self._gp_icov[clazz]
