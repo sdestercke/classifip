@@ -312,11 +312,11 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         _n, _p = _sub_data.shape
         if _n > 1:
             return _sub_data.cov().as_matrix()
-        ## Bug: Impossible to compute covariance of just ONE instance
-        ## assuming an identity covariance matrix
-        ## e.g. _sub_data.shape = (1, 8)
         else:
-            return np.eye(_p, dtype=np.dtype('d'))
+            ## Bug: Impossible to compute covariance of just ONE instance
+            ## assuming an identity covariance matrix
+            ## e.g. _sub_data.shape = (1, 8)
+            raise Exception("it has only 1 sample in class, covariance is ill defined.")
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
         """

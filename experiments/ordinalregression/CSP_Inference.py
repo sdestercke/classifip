@@ -3,6 +3,7 @@ import random
 import sys
 import numpy as np
 from constraint import *
+from classifip.evaluation.measures import correctness_measure, completeness_measure
 
 def testing_CSP():
     problem = Problem()
@@ -27,34 +28,6 @@ def kendall_tau(y_idx_true, y_idx_predict, M):
 def spearman_distance(y_idx_true, y_idx_predict):
     return np.power(np.array(y_idx_true) - np.array(y_idx_predict), 2)
 
-def correctness_measure(y_true, y_predicts):
-    # print("Inference [true,predict]:", y_true, y_predicts)
-    y_true = y_true.split(">")
-    if y_predicts is None: return 0.0;
-    k = len(y_true)
-    sum_dist = 0
-    for idx, label in enumerate(y_true):
-        min_dist = np.array([], dtype=int)
-        for y_predict in y_predicts:
-            min_dist = np.append(min_dist, abs(idx-y_predict[label]))
-        sum_dist += np.min(min_dist)
-    return 1 - sum_dist/(0.5*k*k)
-
-def completeness_measure(y_true, y_predicts):
-    y_true = y_true.split(">")
-    k = len(y_true)
-    R = 0
-    if y_predicts is not None:
-        learn_ranks = dict()
-        for y_predict in y_predicts:
-            for idx, label in enumerate(y_true):
-                if label not in learn_ranks:
-                    learn_ranks[label] = np.array([], dtype=int)
-                learn_ranks[label] = np.append(learn_ranks[label], y_predict[label])
-        # learning ranking models: learn_ranks
-        for key, _ in learn_ranks.items():
-            R += len(np.unique(learn_ranks[key]))
-    return (k*k-R)/(k*k-k)
 
 def experiment_01():
     model = classifip.models.ncclr.NCCLR()
@@ -84,10 +57,10 @@ def experiment_01():
                 avg_correctness = 0
                 avg_completeness = 0
                 for idx, pBox in enumerate(evaluate_pBox):
-                    print("Testing", set_test[idx])
                     predicts = model.predict_CSP([pBox])
-                    avg_correctness += correctness_measure(set_test.data[idx][-1], predicts[0])
-                    avg_completeness += completeness_measure(set_test.data[idx][-1], predicts[0])
+                    y_ground_truth = set_test.data[idx][-1].split(">")
+                    avg_correctness += correctness_measure(y_ground_truth, predicts[0])
+                    avg_completeness += completeness_measure(y_ground_truth, predicts[0])
                 avg_cv_correctness += avg_correctness/len(set_test.data)
                 avg_cv_completeness += avg_completeness/len(set_test.data)
             avg_accuracy[str(nb_int)][str(ncc_imprecise)] = \

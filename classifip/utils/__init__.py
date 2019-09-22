@@ -35,3 +35,22 @@ def normalize_minmax(data_set):
             else:
                 row[i] = 1
     return data_set
+
+
+def timeit(method):
+    import time
+    def timed(*args, **kwargs):
+        DEBUG = args[0].DEBUG if len(args) > 0 and hasattr(args[0], "DEBUG") else True
+        if DEBUG:
+            ts = time.time()
+            result = method(*args, **kwargs)
+            te = time.time()
+            print(
+                "%s - %r  %2.2f ms"
+                % (time.strftime("%Y-%m-%d %X"), method.__name__, (te - ts) * 1000)
+            )
+            return result
+        else:
+            return method(*args, **kwargs)
+
+    return timed
