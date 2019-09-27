@@ -1,6 +1,6 @@
 from classifip.evaluation.measures import u65, u80
 from qda_common import __factory_model
-from multiprocessing import Process, Queue, cpu_count, JoinableQueue
+from multiprocessing import Process, Queue, cpu_count, JoinableQueue, Manager
 
 
 class ManagerWorkers:
@@ -8,7 +8,8 @@ class ManagerWorkers:
     def __init__(self, nb_process, criterion="maximality"):
         self.workers = None
         self.tasks = Queue()
-        self.results = Queue()
+        self.manager = Manager()
+        self.results = self.manager.list()
         self.qeTraining = [JoinableQueue() for _ in range(nb_process)]
         self.NUMBER_OF_PROCESSES = cpu_count() if nb_process is None else nb_process
         self.criterion_decision = criterion
@@ -63,7 +64,7 @@ def prediction(pid, tasks, queue, results, model_type, lib_path_server, criterio
             if task['y_test'] in evaluate:
                 sum65 += u65(evaluate)
                 sum80 += u80(evaluate)
-        results.put(dict({'u65': sum65, 'u80': sum80}))
+        results.append(dict({'u65': sum65, 'u80': sum80}))
         queue.task_done()
     print("Worker PID finished", pid, flush=True)
 
@@ -79,10 +80,11 @@ def computing_training_testing_step(X_training, y_training, X_testing, y_testing
     manager.poisonPillWorkers()
     manager.joinTraining()  # wait all process for computing results
 
+    # @salmuz-bug: warning when the process are so speed and a result is not well recovery from a job
     # Recovery all inference data of all parallel process
     shared_results = manager.getResults()
-    shared_results.put('STOP')  ## stop loop queue
-    for utility in iter(shared_results.get, 'STOP'):
+    for _ in range(manager.NUMBER_OF_PROCESSES):
+        utility = shared_results.pop()
         acc_u65 += utility['u65'] / n_test
         acc_u80 += utility['u80'] / n_test
     return acc_u65, acc_u80
