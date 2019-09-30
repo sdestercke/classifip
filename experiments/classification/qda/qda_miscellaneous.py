@@ -66,8 +66,8 @@ def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=Non
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].tolist()
     seeds = generate_seeds(k_repetition) if seeds is None else seeds
-    logger.info('Training dataset %s with maximality version %s and model %s and seeds %s',
-                in_path, criterion, model_type, seeds)
+    logger.info('Training dataset %s with maximality version (%s) and model (%s), ell_optimal (%s) and seeds %s',
+                in_path, criterion, model_type, ell_optimal, seeds)
     model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
     avg = np.array([])
     for k in range(k_repetition):
@@ -94,5 +94,7 @@ computing_precise_vs_imprecise(in_path=in_path, ell_optimal=ell_optimal,
                                model_type_precise='lda', model_type_imprecise='ilda',
                                lib_path_server=QPBB_PATH_SERVER)
 
-# computing_time_prediction(in_path=in_path, ell_optimal=ell_optimal, model_type="ilda",
-#                           lib_path_server=QPBB_PATH_SERVER)
+# in_path = sys.argv[1]
+# ell_optimal = float(sys.argv[2])
+computing_time_prediction(in_path=in_path, ell_optimal=ell_optimal, model_type="ilda",
+                           lib_path_server=QPBB_PATH_SERVER, criterion='maximality_v1')
