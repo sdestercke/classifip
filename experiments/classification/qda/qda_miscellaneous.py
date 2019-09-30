@@ -59,20 +59,22 @@ def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, 
 
 
 def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=None, model_type="ilda",
-                              criterion="maximality", k_repetition=10):
+                              criterion="maximality", k_repetition=10, seeds=None):
     assert os.path.exists(in_path), "Without training data, not testing"
     data = pd.read_csv(in_path, header=None)
     logger = create_logger("computing_time_prediction", True)
-    logger.info('Training dataset %s with maximality version %s ann model %s', in_path, criterion, model_type)
     X = data.iloc[:, :-1].values
     y = data.iloc[:, -1].tolist()
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+    seeds = generate_seeds(k_repetition) if seeds is None else seeds
+    logger.info('Training dataset %s with maximality version %s and model %s and seeds %s',
+                in_path, criterion, model_type, seeds)
     model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
-    model.learn(X=X_train, y=y_train, ell=ell_optimal)
-    n, _ = X_test.shape
     avg = np.array([])
     for k in range(k_repetition):
-        logger.info("%s-fold repetition randomly", k)
+        logger.info("%s-fold repetition randomly, seed %s", k, seeds[k])
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seeds[k])
+        model.learn(X=X_train, y=y_train, ell=ell_optimal)
+        n, _ = X_test.shape
         sum_time = 0
         for i, test in enumerate(X_test):
             start = time.time()
