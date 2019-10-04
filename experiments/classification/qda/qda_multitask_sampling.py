@@ -3,7 +3,7 @@ from sklearn.model_selection import KFold
 from classifip.evaluation.measures import u65, u80
 from classifip.utils import create_logger, normalize_minmax
 import sys, random, os, csv, numpy as np, pandas as pd
-from qda_common import __factory_model, generate_seeds
+from qda_common import __factory_model, generate_seeds, generate_sample_cross_validation
 from qda_manager import computing_training_testing_step, ManagerWorkers
 
 ## Server env:
@@ -78,19 +78,20 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
         if skip_n_sample != 0 and sampling > skip_n_sample: from_ell = 0.01
         # n-Skipping sampling testing (purpose for parallel computing)
         if sampling >= skip_n_sample:
-            kf = KFold(n_splits=cv_nfold, random_state=None, shuffle=True)
-            ell_u65, ell_u80, splits = dict(), dict(), list([])
-            for idx_train, idx_test in kf.split(y_learning):
-                splits.append((idx_train, idx_test))
-                logger.info("Sampling %s Splits %s train %s", sampling, len(splits), idx_train)
-                logger.info("Sampling %s Splits %s test %s", sampling, len(splits), idx_test)
+            ell_u65, ell_u80 = dict(), dict()
+            splits = generate_sample_cross_validation(y_learning, cv_nfold, 2)
+
+            for index, value in enumerate(splits):
+                idx_train, idx_test = value
+                logger.info("Sampling %s Splits %s train %s", sampling, index, idx_train)
+                logger.info("Sampling %s Splits %s test %s", sampling, index, idx_test)
 
             for ell_current in np.arange(from_ell, to_ell, by_ell):
                 ell_u65[ell_current], ell_u80[ell_current] = 0, 0
                 logger.info("ELL_CURRENT %s", ell_current)
                 for idx_train, idx_test in splits:
-                    logger.info("Splits train %s", idx_train)
-                    logger.info("Splits test %s", idx_test)
+                    logger.info("Splits class train %s", y_learning[idx_train])
+                    logger.info("Splits class test %s", y_learning[idx_test])
                     X_cv_train, y_cv_train = X_learning[idx_train], y_learning[idx_train]
                     X_cv_test, y_cv_test = X_learning[idx_test], y_learning[idx_test]
                     # Computing accuracy testing for cross-validation step
