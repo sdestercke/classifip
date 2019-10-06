@@ -379,7 +379,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 raise Exception("Yet doesn't exist optimisation implemented")
 
             if solution['status'] != 'optimal':
-                self._logger.debug("[Solution-not-Optimal] %s", solution)
+                self._logger.info("[Solution-not-Optimal] %s", solution)
                 raise Exception("Not exist solution optimal!!")
 
             return [v for v in solution['x']]
@@ -506,7 +506,11 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             # estimation of empirical total covariance matrix
             _cov, _inv = np.zeros((self._p, self._p)), np.zeros((self._p, self._p))
             for clazz_gp in self._clazz:
-                covClazz = super(LinearDiscriminant, self)._cov_by_clazz(clazz_gp)
+                try:
+                    covClazz = super(LinearDiscriminant, self)._cov_by_clazz(clazz_gp)
+                except Exception as e: # if class does not have  1 instance, so matrix-covariance 0
+                    self._logger.info("Class %s with one instance, exception: %s", clazz_gp, e)
+                    covClazz = 0
                 _nb_instances_by_clazz = self._nb_by_clazz(clazz_gp)
                 _cov += covClazz * (_nb_instances_by_clazz - 1)  # biased estimator
             _cov = _cov / (self._N - self._nb_clazz)  # unbiased estimator group
