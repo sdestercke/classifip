@@ -79,7 +79,9 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
         # n-Skipping sampling testing (purpose for parallel computing)
         if sampling >= skip_n_sample:
             ell_u65, ell_u80 = dict(), dict()
-            splits = generate_sample_cross_validation(y_learning, cv_nfold, 2)
+            minimum_label_by_fold = 2 if model_type in ["iqda", "inda"] else 0
+            logger.info("Minimum labels for sub-population by fold %s", minimum_label_by_fold)
+            splits = generate_sample_cross_validation(y_learning, cv_nfold, minimum_label_by_fold)
 
             for index, value in enumerate(splits):
                 idx_train, idx_test = value
@@ -90,6 +92,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
                 ell_u65[ell_current], ell_u80[ell_current] = 0, 0
                 logger.info("ELL_CURRENT %s", ell_current)
                 for idx_train, idx_test in splits:
+                    logger.info("Splits step train and test (%s, %s)", len(idx_train), len(idx_test))
                     X_cv_train, y_cv_train = X_learning[idx_train], y_learning[idx_train]
                     X_cv_test, y_cv_test = X_learning[idx_test], y_learning[idx_test]
                     # Computing accuracy testing for cross-validation step
