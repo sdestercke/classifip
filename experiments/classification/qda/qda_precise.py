@@ -28,7 +28,7 @@ def performance_hold_out(in_path=None,
     seeds = generate_seeds(n_times) if seeds is None else seeds
     logger.info('Seeds generated %s', seeds)
 
-    file_csv = open(out_path, 'w')
+    file_csv = open(out_path, 'a')
     writer = csv.writer(file_csv)
 
     model = __factory_model_precise(model_type, store_covariance=True)
@@ -76,7 +76,7 @@ def performance_cv_accuracy(in_path=None, model_type='lda', cv_n_fold=10, seeds=
             sum_u65, sum_u80 = 0, 0
             for i, test in enumerate(X_cv_test):
                 evaluate = model.predict([test])
-                logger.debug("(testing, prediction, ground-truth) (%s, %s, %s)", i, evaluate, y_cv_test[i])
+                # logger.debug("(testing, prediction, ground-truth) (%s, %s, %s)", i, evaluate, y_cv_test[i])
                 if y_cv_test[i] in evaluate:
                     sum_u65 += u65(evaluate)
                     sum_u80 += u80(evaluate)
@@ -146,10 +146,10 @@ def performance_qda_regularized(in_path=None, out_path=None, cv_n_fold=10, seeds
     logger.info("[total:data-set:avgResults] (%s, %s, %s, %s)", in_path, np.mean(accuracy), best_alphas, accuracy)
 
 
-in_path = sys.argv[1]
-out_path = sys.argv[2]
-test_pct = float(sys.argv[3])/100
-performance_hold_out(in_path, out_path, model_type='qda', test_pct=test_pct)
+in_path_data = sys.argv[1]
+out_path_results = sys.argv[2]
+test_pct_par = float(sys.argv[3])/100
+performance_hold_out(in_path_data, out_path_results, model_type='qda', test_pct=test_pct_par)
 
 # in_path = sys.argv[1]
 # performance_cv_accuracy(in_path, model_type='nda')
