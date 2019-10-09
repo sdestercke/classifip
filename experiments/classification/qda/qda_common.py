@@ -1,6 +1,6 @@
 from classifip.models.qda import EuclideanDiscriminant, LinearDiscriminant, QuadraticDiscriminant, NaiveDiscriminant
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
-import random, xxhash, numpy as np, pandas as pd, sys
+import random, numpy as np, pandas as pd, sys
 from sklearn.model_selection import KFold
 from collections import Counter
 from numpy import linalg
@@ -75,7 +75,7 @@ MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant,
 def __factory_model(model_type, **kwargs):
     try:
         return MODEL_TYPES[model_type.lower()](**kwargs)
-    except:
+    except Exception as _:
         raise Exception("Selected model does not exist")
 
 
@@ -87,7 +87,7 @@ def __factory_model_precise(model_type, **kwargs):
     try:
         if model_type == 'lda': kwargs["solver"] = "svd";
         return MODEL_TYPES_PRECISE[model_type.lower()](**kwargs)
-    except:
+    except Exception as _:
         raise Exception("Selected model does not exist")
 
 

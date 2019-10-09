@@ -56,7 +56,8 @@ def correctness_measure(y_true, y_predicts):
              {'L2': 9, 'L3': 10, 'L1': 8, 'L10': 7, 'L11': 4, 'L9': 6, 'L4': 5, 'L5': 3, 'L6': 1, 'L7': 2, 'L8': 0}
              {'L2': 9, 'L3': 10, 'L1': 8, 'L10': 7, 'L11': 4, 'L9': 6, 'L4': 5, 'L5': 3, 'L6': 1, 'L7': 0, 'L8': 2},...]
     """
-    if y_predicts is None: return 0.0;
+    if y_predicts is None:
+        return 0.0
     k = len(y_true)
     sum_dist = 0
     for idx, label in enumerate(y_true):
@@ -106,3 +107,33 @@ def completeness_measure(y_true, y_predicts):
         for ranks in learn_ranks.values():
             R += len(ranks)
     return (k * k - R) / (k * k - k)
+
+
+def kendall_tau(y_true, y_predict, M):
+    """
+        Kendal tau correlation measure
+
+        Attributes:
+
+        :param y_true: dictionary set of ground-truth ranking by label
+        :param y_predict: dictionary set of ranking predictions
+        :param M: number of labels
+        :return:
+
+       Example:
+
+        y_true = {'L2': 9, 'L3': 3, 'L1': 8, 'L9': 6, 'L4': 5, 'L5': 3, 'L6': 2, 'L7': 0, 'L8': 1}
+        y_predicts = {'L2': 9, 'L3': 3, 'L1': 8, 'L9': 6, 'L4': 5, 'L5': 3, 'L6': 1, 'L7': 2, 'L8': 0}
+        M = 9
+    """
+    C, D = 0, 0
+    for idx in range(M):
+        for idy in range(idx + 1, M):
+            if (y_true[idx] < y_true[idy] and y_predict[idx] < y_predict[idy]) or \
+                    (y_true[idx] > y_true[idy] and y_predict[idx] > y_predict[idy]):
+                C += 1
+            if (y_true[idx] < y_true[idy] and y_predict[idx] > y_predict[idy]) or \
+                    (y_true[idx] > y_true[idy] and y_predict[idx] < y_predict[idy]):
+                D += 1
+    return (C - D) / (M * (M - 1) / 2)
+

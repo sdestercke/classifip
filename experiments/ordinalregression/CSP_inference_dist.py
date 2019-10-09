@@ -1,339 +1,193 @@
-import classifip
-import random
-import numpy as np
-from constraint import *
+import numpy as np, random, os, time, sys
+from classifip.utils import create_logger
+from CSP_common import *
+from classifip.models.ncclr import NCCLR
 from classifip.evaluation.measures import correctness_measure, completeness_measure
-import matplotlib.pyplot as plt
-from datetime import datetime
-import json
-import math
-import os
-import sys
+from classifip.dataset.arff import ArffFile
+from classifip.evaluation import k_fold_cross_validation
 import multiprocessing
 from functools import partial
 
-NBRCORES = 10
+logger = create_logger("computing_best_min_s_cross_validation", True)
+
 
 def parallel_prediction_csp(model, test_data, evaluatePBOX):
-    idx, pbox = evaluatePBOX
+    idx, pBox = evaluatePBOX
+    predicts = model.inference_CSP([pBox])
+    y_ground_truth = test_data[idx][-1].split(">")
+    correctness = correctness_measure(y_ground_truth, predicts[0])
+    completeness = completeness_measure(y_ground_truth, predicts[0])
+    is_coherent = False
+    # verify if the prediction is coherent
     pid = multiprocessing.current_process().name
-    # print("Start ==> ", pid, idx, flush = True)
-    predicts = model.predict_CSP([pbox])
-    correctness = correctness_measure(test_data[idx][-1].split(">"), predicts[0]) / len(test_data)
-    completeness = completeness_measure(test_data[idx][-1].split(">"), predicts[0]) / len(test_data)
-    # print("End ==> ", pid, correctness, completeness, flush = True)
-    return(correctness, completeness)
+
+    def _pinfo(message, kwargs):
+        print("[" + pid + "]" + time.strftime('%x %X %Z'), "-", message % kwargs, flush=True)
+
+    if predicts[0] is not None:
+        is_coherent = True
+        _desc_features = ",".join([
+            '{0:.18f}'.format(feature) if str(feature).upper().find("E-") > 0 else str(feature)
+            for feature in test_data[idx][:-1]
+        ])
+        _pinfo("(ground_truth, nb_predictions) (%s, %s) ", (y_ground_truth, len(predicts[0])))
+        _pinfo("INSTANCE-COHERENT ( %s ) %s", (_desc_features, correctness))
+    else:
+        incoherent_prediction = []
+        for clazz, classifier in pBox.items():
+            maxDecision = classifier.getmaximaldecision(model.ranking_utility)
+            incoherent_prediction.append({clazz: np.where(maxDecision > 0)[0]})
+        _pinfo("Solution incoherent (ground-truth, prediction) (%s, %s)", (y_ground_truth, incoherent_prediction))
+
+    return correctness, completeness, is_coherent
 
 
-def testing_CSP():
-    problem = Problem()
-    problem.addVariable("a", [2])
-    problem.addVariable("c", [1])
-    problem.addVariable("b", [2])
-    problem.addConstraint(AllDifferentConstraint())
-    print(problem.getSolutions())
+def computing_training_testing_step(training, testing, s_current):
+    # learning model
+    model = NCCLR()
+    model.learn(training)
+    # testing model
+    evaluate_pBox = model.evaluate(testing.data, ncc_s_param=s_current)
+    # inference constraint satisfaction problem
+    target_function = partial(parallel_prediction_csp, model, testing.data)
+    acc_comp_var = POOL.map(target_function, enumerate(evaluate_pBox))
+    # computing correctness and completeness on testing data set
+    avg_cv_correctness, avg_cv_completeness, inc_coherent = 0, 0, 0
+    for correctness, completeness, is_coherent in acc_comp_var:
+        avg_cv_correctness += correctness
+        avg_cv_completeness += completeness
+        inc_coherent += is_coherent
+
+    nb_testing = len(testing.data)
+    logger.info(
+        "Computing train/test (s_current, correctness, completeness, nb_testing, nb_coherent) (%s, %s, %s, %s, %s)",
+        s_current, avg_cv_correctness, avg_cv_completeness, nb_testing, inc_coherent
+    )
+    return avg_cv_correctness / nb_testing, avg_cv_completeness / nb_testing
 
 
-def kendall_tau(y_idx_true, y_idx_predict, M):
-    C, D = 0, 0
-    for idx in range(M):
-        for idy in range(idx + 1, M):
-            if (y_idx_true[idx] < y_idx_true[idy] and y_idx_predict[idx] < y_idx_predict[idy]) or \
-                    (y_idx_true[idx] > y_idx_true[idy] and y_idx_predict[idx] > y_idx_predict[idy]):
-                C += 1
-            if (y_idx_true[idx] < y_idx_true[idy] and y_idx_predict[idx] > y_idx_predict[idy]) or \
-                    (y_idx_true[idx] > y_idx_true[idy] and y_idx_predict[idx] < y_idx_predict[idy]):
-                D += 1
-    return (C-D)/(M*(M-1)/2)
+def get_cr_cp(s_current, training, k_splits_cv, seed_kfold):
+    cv_kFold = k_fold_cross_validation(training, k_splits_cv, randomise=True, random_seed=seed_kfold)
 
-
-def spearman_distance(y_idx_true, y_idx_predict):
-    return np.power(np.array(y_idx_true) - np.array(y_idx_predict), 2)
-
-
-def plot_save_results(results_dict, texte):
-    if not os.path.exists('Correctness_distance_results'):
-        os.makedirs('Correctness_distance_results')
-    # save results into json file
-    with open('Correctness_distance_results/%s.json' % texte, 'w') as outfile:
-        json.dump(results_dict, outfile, indent=4)
-
-    x = list()
-    y = list()
-    impression = list()
-    for discre in results_dict.keys():
-        list_s = sorted(list(results_dict[discre].keys()))
-        for impre in list_s:
-            x.append(results_dict[discre][impre]['comp'])
-            y.append(results_dict[discre][impre]['corr'])
-            impression.append(str(round(impre, 2)))
-
-    plt.figure()
-    plt.plot(x, y)
-    plt.scatter(x, y)
-
-    for text in impression:
-        plt.annotate(text, (x[impression.index(text)], y[impression.index(text)]))
-
-    plt.xlabel('Completeness')
-    plt.ylabel('Correctness')
-    plt.title('Discretisation with s values')
-    plt.grid(True)
-    plt.savefig("Correctness_distance_results/%s.png"%texte)
-
-    plt.close()
-
-
-def random_floats(low, high, size):
-    floats = [round(random.uniform(low, high), 2) for _ in range(size)]
-    return sorted(floats)
-
-
-def correctness_distance(ya, yb):
-    return abs(ya - yb)
-
-
-def get_s_values(results_dict):
-    list_s = sorted(list(results_dict.keys()))
-    x = [results_dict[s]['comp'] for s in list_s]
-    y = [results_dict[s]['corr'] for s in list_s]
-    distances = []
-
-    for i in range(len(list_s)-1):
-        distances.append(correctness_distance(y[i], y[i+1]))
-    indx = distances.index(max(distances))
-
-    new_s = (list_s[indx]+list_s[indx+1])/2
-
-    return new_s
-
-
-def get_cr_cp(s, model, train, num_kFold, seed_kFold):
-    cv_kFold = classifip.evaluation.k_fold_cross_validation(train, num_kFold, randomise=True,
-                                                            random_seed=seed_kFold)
-    avg_cv_correctness = 0
-    avg_cv_completeness = 0
-
+    avg_cv_correctness, avg_cv_completeness = 0, 0
     for set_train, set_test in cv_kFold:
-        model.learn(set_train)
-        evaluate_pBox = model.evaluate(set_test.data, ncc_s_param=s)
-        target_function = partial(parallel_prediction_csp, model, set_test.data)
-        acc_comp_var = POOL.map(target_function, enumerate(evaluate_pBox))
-        for acc, comp in acc_comp_var:
-            avg_cv_correctness += acc
-            avg_cv_completeness += comp
-    avg_cv_correctness = avg_cv_correctness / num_kFold
-    avg_cv_completeness = avg_cv_completeness / num_kFold
-    return(avg_cv_correctness, avg_cv_completeness)
+        cr, cp = computing_training_testing_step(set_train, set_test, s_current)
+        avg_cv_correctness += cr
+        avg_cv_completeness += cp
+    avg_cv_correctness = avg_cv_correctness / k_splits_cv
+    avg_cv_completeness = avg_cv_completeness / k_splits_cv
+    return avg_cv_correctness, avg_cv_completeness
 
 
-def find_max_dichotomy(l, r, model, training, num_kFold, seed_kFold):
-    if l != r:
-        mid = round((r+l)/2, 2)
-    else:
-        print("No mid, l value saved %s"%l, flush=True)
-        l_corr, l_comp = get_cr_cp(l, model, training, num_kFold, seed_kFold)
-        return l, l_corr, l_comp
-    # Calculate mid corr and comp scores
-    mid_corr, mid_comp = get_cr_cp(mid, model, training, num_kFold, seed_kFold)
+def computing_best_min_s_cross_validation(in_path,
+                                          out_path=".",
+                                          type_distance_s=TypeDistance.CORRECTNESS,
+                                          k_splits_cv=10,
+                                          min_discretization=5,
+                                          max_discretization=7,
+                                          nb_points_into_curve=3,
+                                          iplot_evolution_s=True,
+                                          SEED_SCIENTIFIC=1234):
+    assert os.path.exists(in_path), "Without dataset, it not possible to computing"
+    assert os.path.exists(out_path), "Directory for putting results does not exist"
 
-    print(l, mid, r, mid_corr, flush=True)
-    if 0.95 <= mid_corr < 1:
-        print("Found", flush=True)
-        print(mid, mid_corr, flush=True)
-        return mid, mid_corr, mid_comp
-    else:
-        l_corr, l_comp = get_cr_cp(l, model, training, num_kFold, seed_kFold)
-        r_corr, r_comp = get_cr_cp(r, model, training, num_kFold, seed_kFold)
-        if l_corr < r_corr:
-            if mid_corr < 1:
-                return find_max_dichotomy(mid, r, model, training, num_kFold, seed_kFold)
-            if mid_corr == 1:
-                return find_max_dichotomy(l, mid, model, training, num_kFold, seed_kFold)
-        else:
-            if mid_corr < 1:
-                return find_max_dichotomy(l, mid, model, training, num_kFold, seed_kFold)
-            if mid_corr == 1:
-                return find_max_dichotomy(mid, r, model, training, num_kFold, seed_kFold)
+    logger.info('Training dataset (%s, %s, %s)', in_path, SEED_SCIENTIFIC, type_distance_s.name)
+    logger.info('Parameters (min_disc, max_disc, k_split_cv, nb_points_into_curve) (%s, %s, %s, %s)',
+                min_discretization, max_discretization, k_splits_cv, nb_points_into_curve)
 
+    random.seed(SEED_SCIENTIFIC)
+    overall_accuracy = dict()
+    fnt_distance = type_distance_s.value[0]
+    name_type_distance = type_distance_s.name.lower()
+    dataset_name = os.path.basename(in_path)
 
-def find_min_dichotomy(l, r, model, training, num_kFold, seed_kFold):
-    if l != r:
-        mid = round((r+l)/2, 2)
-    else:
-        print("No mid, l value saved %s"%l, flush=True)
-        l_corr, l_comp = get_cr_cp(l, model, training, num_kFold, seed_kFold)
-        return l, l_corr, l_comp
-    # Calculate mid corr and comp scores
-    mid_corr, mid_comp = get_cr_cp(mid, model, training, num_kFold, seed_kFold)
-    print(l, mid, r, mid_comp, flush=True)
-    if 0.95 <= mid_comp < 1:
-        print("Found", flush=True)
-        print(mid, mid_comp, flush=True)
-        return mid, mid_corr, mid_comp
-    else:
-        l_corr, l_comp = get_cr_cp(l, model, training, num_kFold, seed_kFold)
-        r_corr, r_comp = get_cr_cp(r, model, training, num_kFold, seed_kFold)
-        if l_comp < r_comp:
-            if mid_comp < 1:
-                return find_min_dichotomy(mid, r, model, training, num_kFold, seed_kFold)
-            if mid_comp >= 1:
-                return find_min_dichotomy(l, mid, model, training, num_kFold, seed_kFold)
-        else :
-            if mid_comp < 1:
-                return find_min_dichotomy(l, mid, model, training, num_kFold, seed_kFold)
-            if mid_comp >= 1:
-                return find_min_dichotomy(mid, r, model, training, num_kFold, seed_kFold)
+    for nb_intervals in range(min_discretization, max_discretization):
+        logger.info("Starting discretization %s", nb_intervals)
 
+        seed = generate_seeds(1)[0]
+        seed_2ndkfcv = generate_seeds(k_splits_cv)
+        logger.info("Seed generated for system is (%s, %s).", seed, seed_2ndkfcv)
+        logger.info("Number interval for discreteness %s", nb_intervals)
 
-def find_min(model, training, num_kFold, seed_kFold):
-    print("Searching for min S value", flush=True)
-    s = 2
-    s_prev = 0
-    l = 0
-    r = 0
-    while r == 0:
-        s_corr, s_comp = get_cr_cp(s, model, training, num_kFold, seed_kFold)
-        print(s, s_prev, s_comp, flush=True)
-        if 0.95 <= s_comp < 1:
-            print("Found without dichotomy")
-            print(s, s_comp, flush=True)
-            return s, s_corr, s_comp
-        else:
-            if s_comp >= 1:
-                if s_prev == s*2:
-                    r = s*2
-                    l = s
-                else:
-                    s_prev = s
-                    s = s*2
-            else:
-                if s_prev == s/2:
-                    l = s/2
-                    r = s
-                else:
-                    s_prev = s
-                    s = s/2
-    print("Now dichotomy", flush=True)
-    return find_min_dichotomy(l, r, model, training, num_kFold, seed_kFold)
+        # Load dataset and discretization
+        dataArff = ArffFile()
+        dataArff.load(in_path)
+        dataArff.discretize(discmet="eqfreq", numint=nb_intervals)
+        learning_kfcv = k_fold_cross_validation(dataArff, k_splits_cv, randomise=True, random_seed=seed)
 
-
-def find_max(s, model, training, num_kFold, seed_kFold):
-    print("Searching for max S value", flush=True)
-    s_orig = s
-    s_prev = 0
-    l = 0
-    r = 0
-    while r == 0:
-        s_corr, s_comp = get_cr_cp(s, model, training, num_kFold, seed_kFold)
-        print(s, s_prev, s_corr, flush=True)
-        if 0.95 <= s_corr < 1 and s_orig != s:
-            print("Found without dichotomy")
-            print(s, s_corr, flush=True)
-            return s, s_corr, s_comp
-        else:
-            if s_corr < 1:
-                if s_prev == s*2:
-                    r = s*2
-                    l = s
-                else:
-                    s_prev = s
-                    s = s*2
-            else:
-                if s_prev == s/2:
-                    l = s/2
-                    r = s
-                else:
-                    s_prev = s
-                    s = s/2
-    print("Now dichotomy", flush=True)
-    return find_max_dichotomy(round(l, 2), round(r, 2), model, training, num_kFold, seed_kFold)
-
-
-def experiment_03():
-    startTime = datetime.now()
-    filename = sys.argv[1]
-    dataset_name = sys.argv[2]
-    random.seed(1234)
-    model = classifip.models.ncclr.NCCLR()
-    max_ncc_s_param, num_kFold = 5, 10
-    min_disc, max_disc = 5,  7
-    all_accuracy = dict()
-
-    for nb_int in range(min_disc, max_disc):
-        seed = random.randrange(sys.maxsize)
-        seed_kFold = [random.randrange(sys.maxsize) for _ in range(num_kFold)]
-        print("Seed generated for system is .", seed, seed_kFold, flush=True)
-        print("Number interval for discreteness %5d." % nb_int, flush=True)
-        dataArff = classifip.dataset.arff.ArffFile()
-        dataArff.load(filename)
-        # dataArff.load("C:/Users/smessoud/PycharmProjects/classifip/datasets_rang/iris_dense.xarff")
-        # dataset_name = "iris"
-        dataArff.discretize(discmet="eqfreq", numint=nb_int)
-        # training, testing = classifip.evaluation.train_test_split(dataArff, test_pct=pct_testing, random_seed=seed)
-        first_cv_kFold = classifip.evaluation.k_fold_cross_validation(dataArff, num_kFold, randomise=True,
-                                                                      random_seed=seed)
-        i = 0
-        avg_all_corr = np.array([])
-        avg_all_comp = np.array([])
+        # save partial performance correctness/completeness
+        avg_kfold_correctness, avg_kfold_completeness = np.array([]), np.array([])
         avg_accuracy = dict()
-        for training, testing in first_cv_kFold:
-            i += 1
-            avg_accuracy[str(nb_int)] = dict()
-            # find min and max
-            min_s, min_s_corr, min_s_comp = find_min(model, training, num_kFold, seed_kFold[i-1])
-            max_s, max_s_corr, max_s_comp = find_max(min_s, model, training, num_kFold, seed_kFold[i-1])
-            moy_s = round((min_s + max_s)/2, 2)
+        key_interval = str(nb_intervals)
+        for training, testing in learning_kfcv:
+            kfold = len(avg_kfold_correctness)
+            # args for calculate s-min and s-max from cross-validation
+            args_get_cr_cp = {"training": training,
+                              "k_splits_cv": k_splits_cv,
+                              "seed_kfold": seed_2ndkfcv[kfold]}
+
+            # find s-min and s-max methods
+            min_s, min_s_corr, min_s_comp = find_min_or_max(2, TypeMeasure.COMPLETENESS, get_cr_cp, args_get_cr_cp)
+            max_s, max_s_corr, max_s_comp = find_min_or_max(min_s, TypeMeasure.CORRECTNESS, get_cr_cp, args_get_cr_cp)
+            middle_s = round((min_s + max_s) / 2, 2)
+            avg_accuracy[key_interval] = dict()
 
             # init values into accuracy dict
-            avg_accuracy[str(nb_int)][(min_s)] = \
-                dict({'corr': min_s_corr, 'comp': min_s_comp})
+            avg_accuracy[key_interval][min_s] = dict({'corr': min_s_corr, 'comp': min_s_comp})
+            avg_accuracy[key_interval][max_s] = dict({'corr': max_s_corr, 'comp': max_s_comp})
+            middle_s_corr, middle_s_comp = get_cr_cp(middle_s, **args_get_cr_cp)
+            avg_accuracy[key_interval][middle_s] = dict({'corr': middle_s_corr, 'comp': middle_s_comp})
 
-            avg_accuracy[str(nb_int)][(max_s)] = \
-                dict({'corr': max_s_corr, 'comp': max_s_comp})
+            for _ in range(nb_points_into_curve):
+                new_s = get_s_values(avg_accuracy[key_interval], fnt_distance)
+                avg_cv_correctness, avg_cv_completeness = get_cr_cp(new_s, **args_get_cr_cp)
+                avg_accuracy[key_interval][new_s] = dict({'corr': avg_cv_correctness, 'comp': avg_cv_completeness})
 
-            moy_s_corr, moy_s_comp = get_cr_cp(moy_s, model, training, num_kFold, seed_kFold[i-1])
-            avg_accuracy[str(nb_int)][(moy_s)] = \
-                dict({'corr': moy_s_corr, 'comp': moy_s_comp})
+            # plot results k-fold learning
+            if iplot_evolution_s:
+                plot_save_results(results_dict=avg_accuracy,
+                                  dataset_name=dataset_name,
+                                  file_name=dataset_name + "_fold_" + str(kfold) + "_disc_" + str(nb_intervals),
+                                  criterion=name_type_distance,
+                                  out_root=out_path)
 
-            n = 3
-            for _ in range(n):
-                new_s = get_s_values(avg_accuracy[str(nb_int)])
-                avg_cv_correctness, avg_cv_completeness = get_cr_cp(new_s, model, training, num_kFold, seed_kFold[i-1])
-                avg_accuracy[str(nb_int)][new_s] = \
-                    dict({'corr': avg_cv_correctness, 'comp': avg_cv_completeness})
-            # plot results
-            print(avg_accuracy)
-            plot_save_results(avg_accuracy, dataset_name + "_fold_" + str(i) + "_disc_" + str(nb_int))
+            # computing correctness with s-optimal
+            s_optimal = min_s
+            avg_validation_cr, avg_validation_cp = computing_training_testing_step(training, testing, s_optimal)
+            logger.info("avg. cross-validation correctness/completeness s-optimal (%s, %s, %s, %s)",
+                        kfold, s_optimal, avg_validation_cr, avg_validation_cp)
 
-            s_opt = min_s
-            model.learn(training)
-            evaluate_pBox = model.evaluate(testing.data, ncc_s_param=s_opt)
-            target_function = partial(parallel_prediction_csp, model, testing.data)
-            acc_comp_var = POOL.map(target_function, enumerate(evaluate_pBox))
-            avg_cv_correctness = 0
-            avg_cv_completeness = 0
-            for acc, comp in acc_comp_var:
-                avg_cv_correctness += acc
-                avg_cv_completeness += comp
-            print(s_opt, avg_cv_correctness, avg_cv_completeness)
-            avg_all_comp = np.append(avg_all_comp, avg_cv_completeness)
-            avg_all_corr = np.append(avg_all_corr, avg_cv_correctness)
-        all_accuracy[str(nb_int)] = dict({'corr': str(avg_all_corr), 'mean_corr': np.mean(avg_all_corr),
-                                          'std_corr': np.std(avg_all_corr), 'comp': str(avg_all_comp),
-                                          'mean_comp': np.mean(avg_all_comp), 'std_comp': np.std(avg_all_comp)})
-        print("End discretisation ", str(nb_int))
+            # save average of k-fold for std and mean correctness
+            avg_kfold_completeness = np.append(avg_kfold_completeness, avg_validation_cp)
+            avg_kfold_correctness = np.append(avg_kfold_correctness, avg_validation_cr)
 
+        # print partial results
+        logger.info("Discretization %s and partial results  %s", key_interval, avg_accuracy[key_interval])
+
+        # save partial results in a list
+        overall_accuracy[key_interval] = dict({'correctness': list(avg_kfold_correctness),
+                                               'mean_corr': np.mean(avg_kfold_correctness),
+                                               'std_corr': np.std(avg_kfold_correctness),
+                                               'completeness': list(avg_kfold_completeness),
+                                               'mean_comp': np.mean(avg_kfold_completeness),
+                                               'std_comp': np.std(avg_kfold_completeness)})
+
+        logger.info("Ending discretization %s", nb_intervals)
 
     # save summary results into json file
-    with open('Correctness_distance_results/summary_%s.json' % dataset_name, 'w') as outfile:
-        json.dump(all_accuracy, outfile, indent=4)
-
-    # calculate code execution time
-    execution_time = datetime.now() - startTime
-    print("Execution Time:", execution_time, flush=True)
+    out_dir_results = os.path.join(out_path, name_type_distance + '_distance_results')
+    with open(out_dir_results + '/summary_%s.json' % dataset_name, 'w') as outfile:
+        json.dump(overall_accuracy, outfile, indent=5)
 
 
-if __name__ == '__main__':
-    POOL = multiprocessing.Pool(processes=NBRCORES)
-    experiment_03()
+# args. parameters
+in_path_dataset = sys.argv[1]
+out_path_results = sys.argv[2]
+nb_process = int(sys.argv[3])
+
+# creation pools process
+POOL = multiprocessing.Pool(processes=nb_process)
+seed_random_experiment = generate_seeds(1)[0]
+computing_best_min_s_cross_validation(in_path=in_path_dataset,
+                                      out_path=out_path_results,
+                                      SEED_SCIENTIFIC=seed_random_experiment)

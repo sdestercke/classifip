@@ -39,6 +39,7 @@ def normalize_minmax(data_set):
 
 def timeit(method):
     import time
+
     def timed(*args, **kwargs):
         DEBUG = args[0].DEBUG if len(args) > 0 and hasattr(args[0], "DEBUG") else True
         if DEBUG:

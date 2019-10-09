@@ -5,31 +5,33 @@ import copy
 from constraint import *
 
 
-def _create_rank_utility_matrix(size):
-    utility = np.zeros([size, size])
-    for i in range(0, size):
-        for j in range(i, size):
-            utility[i, j] = size + i - j - 1
-            utility[j, i] = size + i - j - 1
-    return utility
-
 class NCCLR(object):
-    """NCCLR implements the naive credal classification method using the IDM for
-       Label ranking problem with label-wise decomposition.
-
     """
+       NCCLR implements the naive credal classification method using the IDM for
+       Label ranking problem with label-wise decomposition.
+    """
+
     def __init__(self):
         self.nb_clazz = 0
         self.set_nccof = dict()
         self.clazz = []
         self.ranking_utility = None
 
+    @staticmethod
+    def __create_rank_utility_matrix(size):
+        utility = np.zeros([size, size])
+        for i in range(0, size):
+            for j in range(i, size):
+                utility[i, j] = size + i - j - 1
+                utility[j, i] = size + i - j - 1
+        return utility
+
     def learn(self, learn_data_set):
         try:
             classes = learn_data_set.attribute_data['L'][:]
             self.nb_clazz = len(classes)
             self.clazz = classes
-            self.ranking_utility = _create_rank_utility_matrix(self.nb_clazz)
+            self.ranking_utility = NCCLR.__create_rank_utility_matrix(self.nb_clazz)
             rankings = [str(i + 1) for i in range(self.nb_clazz)]
             for class_value in classes:
                 # print("Building ranking classifier %s" % class_value)
@@ -58,11 +60,12 @@ class NCCLR(object):
         for item in test_data_set:
             ans_lw_ranking = dict()
             for clazz in self.clazz:
-                ans_lw_ranking[clazz] = self.set_nccof[clazz].evaluate([item], ncc_epsilon=0.001, ncc_s_param=ncc_s_param)[0]
+                ans_lw_ranking[clazz] = \
+                    self.set_nccof[clazz].evaluate([item], ncc_epsilon=0.001, ncc_s_param=ncc_s_param)[0]
             answers.append(ans_lw_ranking)
         return answers
 
-    def predict_CSP(self, evaluates):
+    def inference_CSP(self, evaluates):
         solutions = []
         for evaluate in evaluates:
             problem = Problem()

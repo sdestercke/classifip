@@ -2,6 +2,7 @@ from . import costMatrix, measures
 
 import random
 
+
 def k_fold_cross_validation(data, K, randomise=False, random_seed=None, structured=False):
     """
     Generates K (training, validation) pairs from the items in X.
@@ -39,7 +40,7 @@ def k_fold_cross_validation(data, K, randomise=False, random_seed=None, structur
         yield datatr, datatst
 
 
-def train_test_split(dataArff, test_pct = 0.5, random_seed=None):
+def train_test_split(dataArff, test_pct=0.5, random_seed=None):
     """
        Generates partition (training, testing) pairs from the items in X
     """
