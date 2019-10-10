@@ -11,7 +11,7 @@ from functools import partial
 logger = create_logger("computing_best_min_s_cross_validation", True)
 
 
-def parallel_prediction_csp(model, test_data, evaluatePBOX):
+def parallel_prediction_csp(model, test_data, dataset, evaluatePBOX):
     idx, pBox = evaluatePBOX
     predicts = model.inference_CSP([pBox])
     y_ground_truth = test_data[idx][-1].split(">")
@@ -22,16 +22,16 @@ def parallel_prediction_csp(model, test_data, evaluatePBOX):
     pid = multiprocessing.current_process().name
 
     def _pinfo(message, kwargs):
-        print("[" + pid + "]" + time.strftime('%x %X %Z'), "-", message % kwargs, flush=True)
+        print("[" + pid + "][" + time.strftime('%x %X %Z') + "]", "-", message % kwargs, flush=True)
 
     if predicts[0] is not None:
         is_coherent = True
         _desc_features = ",".join([
             '{0:.18f}'.format(feature) if str(feature).upper().find("E-") > 0 else str(feature)
-            for feature in test_data[idx][:-1]
+            for feature in dataset[test_data[idx][0]][:-1]
         ])
-        _pinfo("(ground_truth, nb_predictions) (%s, %s) ", (y_ground_truth, len(predicts[0])))
-        _pinfo("INSTANCE-COHERENT ( %s ) %s", (_desc_features, correctness))
+        _pinfo("(ground_truth, nb_predictions) %s (%s, %s) ", (test_data[idx][0], y_ground_truth, len(predicts[0])))
+        _pinfo("INSTANCE-COHERENT %s ( %s ) %s", (test_data[idx][0], _desc_features, correctness))
     else:
         incoherent_prediction = []
         for clazz, classifier in pBox.items():
@@ -42,14 +42,18 @@ def parallel_prediction_csp(model, test_data, evaluatePBOX):
     return correctness, completeness, is_coherent
 
 
-def computing_training_testing_step(training, testing, s_current):
+def computing_training_testing_step(training, testing, s_current, all_data_set):
+    # getting training and testing data without raw-index
+    p_size = len(all_data_set[0])  # p_size: size of features + label ranking
+    set_train_wridx, set_test_wridx = create_train_test_data_without_raw_index(training, testing, p_size)
+
     # learning model
     model = NCCLR()
-    model.learn(training)
+    model.learn(set_train_wridx)
     # testing model
-    evaluate_pBox = model.evaluate(testing.data, ncc_s_param=s_current)
+    evaluate_pBox = model.evaluate(set_test_wridx, ncc_s_param=s_current)
     # inference constraint satisfaction problem
-    target_function = partial(parallel_prediction_csp, model, testing.data)
+    target_function = partial(parallel_prediction_csp, model, testing.data, all_data_set)
     acc_comp_var = POOL.map(target_function, enumerate(evaluate_pBox))
     # computing correctness and completeness on testing data set
     avg_cv_correctness, avg_cv_completeness, inc_coherent = 0, 0, 0
@@ -66,17 +70,34 @@ def computing_training_testing_step(training, testing, s_current):
     return avg_cv_correctness / nb_testing, avg_cv_completeness / nb_testing
 
 
-def get_cr_cp(s_current, training, k_splits_cv, seed_kfold):
+def get_cr_cp(s_current, training, all_data_set, k_splits_cv, seed_kfold):
     cv_kFold = k_fold_cross_validation(training, k_splits_cv, randomise=True, random_seed=seed_kfold)
 
     avg_cv_correctness, avg_cv_completeness = 0, 0
     for set_train, set_test in cv_kFold:
-        cr, cp = computing_training_testing_step(set_train, set_test, s_current)
+        cr, cp = computing_training_testing_step(set_train, set_test, s_current, all_data_set)
         avg_cv_correctness += cr
         avg_cv_completeness += cp
     avg_cv_correctness = avg_cv_correctness / k_splits_cv
     avg_cv_completeness = avg_cv_completeness / k_splits_cv
     return avg_cv_correctness, avg_cv_completeness
+
+
+def create_train_test_data_without_raw_index(training, testing, p_size):
+    # remove the raw-index of training data
+    train_without_raw_index = training.make_clone()
+    for data in train_without_raw_index.data:
+        if len(data) > p_size:
+            data.pop(0)
+
+    # testing data without raw-index
+    test_without_raw_index = []
+    for data in testing.data:
+        if len(data) > p_size:
+            test_without_raw_index.append(data[1:])
+        else:
+            test_without_raw_index.append(data)
+    return train_without_raw_index, test_without_raw_index
 
 
 def computing_best_min_s_cross_validation(in_path,
@@ -99,7 +120,7 @@ def computing_best_min_s_cross_validation(in_path,
     overall_accuracy = dict()
     fnt_distance = type_distance_s.value[0]
     name_type_distance = type_distance_s.name.lower()
-    dataset_name = os.path.basename(in_path)
+    dataset_name = os.path.basename(in_path).replace("_dense.xarff", "")
 
     for nb_intervals in range(min_discretization, max_discretization):
         logger.info("Starting discretization %s", nb_intervals)
@@ -109,11 +130,18 @@ def computing_best_min_s_cross_validation(in_path,
         logger.info("Seed generated for system is (%s, %s).", seed, seed_2ndkfcv)
         logger.info("Number interval for discreteness %s", nb_intervals)
 
-        # Load dataset and discretization
+        # load dataset
         dataArff = ArffFile()
         dataArff.load(in_path)
+        # recovery real data set (without discretization)
+        dataset = dataArff.make_clone().data
+        # discretization data set
         dataArff.discretize(discmet="eqfreq", numint=nb_intervals)
         learning_kfcv = k_fold_cross_validation(dataArff, k_splits_cv, randomise=True, random_seed=seed)
+
+        # adding raw-index to each instance
+        for idx, data in enumerate(dataArff.data):
+            data.insert(0, idx)
 
         # save partial performance correctness/completeness
         avg_kfold_correctness, avg_kfold_completeness = np.array([]), np.array([])
@@ -121,8 +149,10 @@ def computing_best_min_s_cross_validation(in_path,
         key_interval = str(nb_intervals)
         for training, testing in learning_kfcv:
             kfold = len(avg_kfold_correctness)
+
             # args for calculate s-min and s-max from cross-validation
             args_get_cr_cp = {"training": training,
+                              "all_data_set": dataset,
                               "k_splits_cv": k_splits_cv,
                               "seed_kfold": seed_2ndkfcv[kfold]}
 
@@ -153,7 +183,10 @@ def computing_best_min_s_cross_validation(in_path,
 
             # computing correctness with s-optimal
             s_optimal = min_s
-            avg_validation_cr, avg_validation_cp = computing_training_testing_step(training, testing, s_optimal)
+            avg_validation_cr, avg_validation_cp = computing_training_testing_step(training=training,
+                                                                                   testing=testing,
+                                                                                   s_current=s_optimal,
+                                                                                   all_data_set=dataset)
             logger.info("avg. cross-validation correctness/completeness s-optimal (%s, %s, %s, %s)",
                         kfold, s_optimal, avg_validation_cr, avg_validation_cp)
 
