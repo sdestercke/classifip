@@ -7,14 +7,19 @@ import numpy as np, pandas as pd, sys, os, csv, ntpath
 from sklearn.model_selection import train_test_split
 from qda_manager import computing_training_testing_step, ManagerWorkers
 
-QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
+# Server env:
+# export LD_PRELOAD=/usr/local/MATLAB/R2018b/sys/os/glnxa64/libstdc++.so.6.0.22
+# export OPENBLAS_MAIN_FREE=1
+# export OPENBLAS_NUM_THREADS=1
+# QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
+# QPBB_PATH_SERVER = ['/volper/users/ycarranz/QuadProgBB', '/volper/users/ycarranz/cplex128/cplex/matlab/x86-64_linux']
 
 
 def dataset_to_Xy(in_data_path, scaling=False, idx_label=-1):
     data = pd.read_csv(in_data_path, header=None)
     X = data.iloc[:, :idx_label].values
     if scaling: X = normalize_minmax(X)
-    y = data.iloc[:, -1].tolist()
+    y = np.array(data.iloc[:, idx_label].tolist())
     return X, y
 
 
@@ -95,14 +100,14 @@ def performance_accuracy_noise_corrupted_test_data(in_train_path=None, in_tests_
     model_precise = __factory_model_precise(model_type_precise, store_covariance=True)
     model_precise.fit(X_train, y_train)
     versus = model_type_imprecise + "_vs_" + model_type_precise
-    file_csv = open("results_"+versus+"_noise_accuracy.csv", 'w')
+    file_csv = open("results_" + versus + "_noise_accuracy.csv", 'w')
     writer = csv.writer(file_csv)
     accuracies = dict({})
     for in_test_path in in_tests_path:
         X_test, y_test = dataset_to_Xy(in_test_path, scaling=scaling)
         u65, u80 = computing_training_testing_step(X_train, y_train, X_test, y_test, ell_optimal, manager, 0, 0)
         evaluate = model_precise.predict(X_test)
-        acc = sum(1 for i, j in zip(evaluate, y_test) if i == j)/len(y_test)
+        acc = sum(1 for i, j in zip(evaluate, y_test) if i == j) / len(y_test)
         logger.debug("accuracy-in_test_path (%s, %s, %s, %s, %s)", in_test_path, ell_optimal, u65, u80, acc)
         accuracies[ntpath.basename(in_test_path)] = [ell_optimal, u65, u80, acc]
         writer.writerow([ntpath.basename(in_test_path), ell_optimal, u65, u80, acc])
@@ -118,17 +123,16 @@ ell_optimal = float(sys.argv[2])
 performance_cv_accuracy_imprecise(in_path=in_path, ell_optimal=ell_optimal, model_type="ilda",
                                   lib_path_server=QPBB_PATH_SERVER, nb_process=2)
 
-ell_optimal=1.00
-root = sys.argv[1]
+ell_optimal = float(sys.argv[1])
+root = sys.argv[2]
 in_train_path = root + "dsyn01_train.csv"
 in_test_path = []
 for i in range(20):
-    in_test_path.append(root + "noise_gamma/dsyn01_test_gamma_" +str((i+1))+".csv")
+    in_test_path.append(root + "noise_gamma/dsyn01_test_gamma_" + str((i + 1)) + ".csv")
 
 for i in range(20):
-    in_test_path.append(root + "noise_tau/dsyn01_test_tau_" +str((i+1))+".csv")
+    in_test_path.append(root + "noise_tau/dsyn01_test_tau_" + str((i + 1)) + ".csv")
 
-performance_accuracy_noise_corrupted_test_data(in_train_path, in_test_path,
+performance_accuracy_noise_corrupted_test_data(in_train_path, in_test_path, ell_optimal=ell_optimal,
                                                model_type_precise='qda', model_type_imprecise='iqda',
-                                               ell_optimal=ell_optimal, scaling=True,
                                                lib_path_server=QPBB_PATH_SERVER, nb_process=2)

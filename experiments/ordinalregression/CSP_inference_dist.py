@@ -30,14 +30,15 @@ def parallel_prediction_csp(model, test_data, dataset, evaluatePBOX):
             '{0:.18f}'.format(feature) if str(feature).upper().find("E-") > 0 else str(feature)
             for feature in dataset[test_data[idx][0]][:-1]
         ])
-        _pinfo("(ground_truth, nb_predictions) %s (%s, %s) ", (test_data[idx][0], y_ground_truth, len(predicts[0])))
-        _pinfo("INSTANCE-COHERENT %s ( %s ) %s", (test_data[idx][0], _desc_features, correctness))
+        _pinfo("(ground_truth, nb_predictions) [%s] (%s, %s) ", (test_data[idx][0], y_ground_truth, len(predicts[0])))
+        _pinfo("INSTANCE-COHERENT [%s] ( %s ) %s", (test_data[idx][0], _desc_features, correctness))
     else:
         incoherent_prediction = []
         for clazz, classifier in pBox.items():
             maxDecision = classifier.getmaximaldecision(model.ranking_utility)
             incoherent_prediction.append({clazz: np.where(maxDecision > 0)[0]})
-        _pinfo("Solution incoherent (ground-truth, prediction) (%s, %s)", (y_ground_truth, incoherent_prediction))
+        _pinfo("Solution incoherent (ground-truth, prediction) [%s] (%s, %s)",
+               (test_data[idx][0], y_ground_truth, incoherent_prediction))
 
     return correctness, completeness, is_coherent
 
@@ -70,16 +71,21 @@ def computing_training_testing_step(training, testing, s_current, all_data_set):
     return avg_cv_correctness / nb_testing, avg_cv_completeness / nb_testing
 
 
-def get_cr_cp(s_current, training, all_data_set, k_splits_cv, seed_kfold):
-    cv_kFold = k_fold_cross_validation(training, k_splits_cv, randomise=True, random_seed=seed_kfold)
+def get_cr_cp(s_current, training, all_data_set, k_splits_cv):
+    cv_kFold = k_fold_cross_validation(training, k_splits_cv, randomise=False)
 
     avg_cv_correctness, avg_cv_completeness = 0, 0
     for set_train, set_test in cv_kFold:
         cr, cp = computing_training_testing_step(set_train, set_test, s_current, all_data_set)
         avg_cv_correctness += cr
         avg_cv_completeness += cp
+
     avg_cv_correctness = avg_cv_correctness / k_splits_cv
     avg_cv_completeness = avg_cv_completeness / k_splits_cv
+    logger.info(
+        "Get_cr_cp avg-k-fold cross-validation (s_current, correctness, completeness, k_splits) (%s, %s, %s, %s)",
+        s_current, avg_cv_correctness, avg_cv_completeness, k_splits_cv
+    )
     return avg_cv_correctness, avg_cv_completeness
 
 
@@ -150,11 +156,14 @@ def computing_best_min_s_cross_validation(in_path,
         for training, testing in learning_kfcv:
             kfold = len(avg_kfold_correctness)
 
+            # shuffle data, just one time for cross-validation (randomness)
+            random.seed(seed_2ndkfcv[kfold])
+            random.shuffle(training.data)
+
             # args for calculate s-min and s-max from cross-validation
             args_get_cr_cp = {"training": training,
                               "all_data_set": dataset,
-                              "k_splits_cv": k_splits_cv,
-                              "seed_kfold": seed_2ndkfcv[kfold]}
+                              "k_splits_cv": k_splits_cv}
 
             # find s-min and s-max methods
             min_s, min_s_corr, min_s_comp = find_min_or_max(2, TypeMeasure.COMPLETENESS, get_cr_cp, args_get_cr_cp)
@@ -182,12 +191,13 @@ def computing_best_min_s_cross_validation(in_path,
                                   out_root=out_path)
 
             # computing correctness with s-optimal
+            logger.info("[STARTING] avg. cross-validation correctness/completeness s-optimal")
             s_optimal = min_s
             avg_validation_cr, avg_validation_cp = computing_training_testing_step(training=training,
                                                                                    testing=testing,
                                                                                    s_current=s_optimal,
                                                                                    all_data_set=dataset)
-            logger.info("avg. cross-validation correctness/completeness s-optimal (%s, %s, %s, %s)",
+            logger.info("[ENDING] avg. cross-validation correctness/completeness s-optimal (%s, %s, %s, %s)",
                         kfold, s_optimal, avg_validation_cr, avg_validation_cp)
 
             # save average of k-fold for std and mean correctness
