@@ -61,11 +61,13 @@ def find_dichotomy(l_s, r_s, type_measure, fnt_get_measures, lower_bnd=0.95, upp
         mid = round((r_s + l_s) / 2, 2)
     else:
         _pinfo("Not middle, l-value saved %s", l_s)
-        l_corr, l_comp = fnt_get_measures(s_current=l_s, **kwargs_fnt)
+        l_return = fnt_get_measures(s_current=l_s, **kwargs_fnt)
+        l_corr, l_comp = l_return[0], l_return[1]
         return l_s, l_corr, l_comp
 
     # Calculate mid corr and comp scores
-    mid_corr, mid_comp = fnt_get_measures(s_current=mid, **kwargs_fnt)
+    mid_return = fnt_get_measures(s_current=mid, **kwargs_fnt)
+    mid_corr, mid_comp = mid_return[0], mid_return[1]
     mid_measure = mid_corr if type_measure == TypeMeasure.CORRECTNESS else mid_comp
     _pinfo("Find dichotomy (l_s:%s, mid_s:%s, r_s:%s, s_mid_measure:%s, type_measure:%s)",
            (l_s, mid, r_s, mid_measure, type_measure.name))
@@ -78,8 +80,10 @@ def find_dichotomy(l_s, r_s, type_measure, fnt_get_measures, lower_bnd=0.95, upp
         else:
             return mid, mid_corr, mid_measure
     else:
-        l_corr, l_comp = fnt_get_measures(s_current=l_s, **kwargs_fnt)
-        r_corr, r_comp = fnt_get_measures(s_current=r_s, **kwargs_fnt)
+        l_return = fnt_get_measures(s_current=l_s, **kwargs_fnt)
+        l_corr, l_comp = l_return[0], l_return[1]
+        r_return = fnt_get_measures(s_current=r_s, **kwargs_fnt)
+        r_corr, r_comp = r_return[0], r_return[1]
         is_right_bigger = l_corr < r_corr if type_measure == TypeMeasure.CORRECTNESS else l_comp < r_comp
         if is_right_bigger:
             if mid_measure < 1:
@@ -98,7 +102,8 @@ def find_min_or_max(s_current, type_measure, fnt_get_measures, kwargs_fnt, lower
            (s_current, type_measure.name, lower_bnd, upper_bnd))
     s_orig, s_prev, l_s, r_s = s_current, 0, 0, 0
     while r_s == 0:
-        s_correctness, s_completeness = fnt_get_measures(s_current=s_current, **kwargs_fnt)
+        s_return = fnt_get_measures(s_current=s_current, **kwargs_fnt)
+        s_correctness, s_completeness = s_return[0], s_return[1]
         s_measure = s_correctness if type_measure == TypeMeasure.CORRECTNESS else s_completeness
         _pinfo("Find min-or-max (s_current:%s, s_prev:%s, s_measure:%s, type_measure:%s)",
                (s_current, s_prev, s_measure, type_measure.name))

@@ -40,7 +40,7 @@ def parallel_prediction_csp(model, test_data, dataset, evaluatePBOX):
         _pinfo("Solution incoherent (ground-truth, prediction) [%s] (%s, %s)",
                (test_data[idx][0], y_ground_truth, incoherent_prediction))
 
-    return correctness, completeness, is_coherent
+    return correctness, completeness, test_data[idx][0], is_coherent
 
 
 def computing_training_testing_step(training, testing, s_current, all_data_set):
@@ -57,28 +57,44 @@ def computing_training_testing_step(training, testing, s_current, all_data_set):
     target_function = partial(parallel_prediction_csp, model, testing.data, all_data_set)
     acc_comp_var = POOL.map(target_function, enumerate(evaluate_pBox))
     # computing correctness and completeness on testing data set
-    avg_cv_correctness, avg_cv_completeness, inc_coherent = 0, 0, 0
-    for correctness, completeness, is_coherent in acc_comp_var:
+    avg_cv_correctness, avg_cv_completeness, inc_coherent, raw_idx_coherent_instances = 0, 0, 0, []
+    for correctness, completeness, idx_coherent, is_coherent in acc_comp_var:
         avg_cv_correctness += correctness
         avg_cv_completeness += completeness
         inc_coherent += is_coherent
+        if is_coherent:
+            raw_idx_coherent_instances.append(idx_coherent)
 
     nb_testing = len(testing.data)
     logger.info(
         "Computing train/test (s_current, correctness, completeness, nb_testing, nb_coherent) (%s, %s, %s, %s, %s)",
         s_current, avg_cv_correctness, avg_cv_completeness, nb_testing, inc_coherent
     )
-    return avg_cv_correctness / nb_testing, avg_cv_completeness / nb_testing
+    return avg_cv_correctness / nb_testing, avg_cv_completeness / nb_testing, raw_idx_coherent_instances
 
 
-def get_cr_cp(s_current, training, all_data_set, k_splits_cv):
+def recovery_instances_raw_index(idx_coherent_insts, set_testing):
+    instances_retains = []
+    for test_instance in set_testing.data:
+        if test_instance[0] in idx_coherent_insts:
+            instances_retains.append(test_instance)
+    set_testing.data = instances_retains
+
+
+def get_cr_cp(s_current, training, all_data_set, k_splits_cv, instances_coherent=None):
     cv_kFold = k_fold_cross_validation(training, k_splits_cv, randomise=False)
-
+    # checking if we retain the coherent instances for calculations
+    has_inst_pre_selected = (instances_coherent is not None)
+    instances_coherent = [] if instances_coherent is None else instances_coherent
     avg_cv_correctness, avg_cv_completeness = 0, 0
     for set_train, set_test in cv_kFold:
-        cr, cp = computing_training_testing_step(set_train, set_test, s_current, all_data_set)
+        if has_inst_pre_selected:
+            recovery_instances_raw_index(instances_coherent, set_test)
+        cr, cp, raw_idx_instances = computing_training_testing_step(set_train, set_test, s_current, all_data_set)
         avg_cv_correctness += cr
         avg_cv_completeness += cp
+        if not has_inst_pre_selected:
+            instances_coherent.extend(raw_idx_instances)
 
     avg_cv_correctness = avg_cv_correctness / k_splits_cv
     avg_cv_completeness = avg_cv_completeness / k_splits_cv
@@ -86,7 +102,7 @@ def get_cr_cp(s_current, training, all_data_set, k_splits_cv):
         "Get_cr_cp avg-k-fold cross-validation (s_current, correctness, completeness, k_splits) (%s, %s, %s, %s)",
         s_current, avg_cv_correctness, avg_cv_completeness, k_splits_cv
     )
-    return avg_cv_correctness, avg_cv_completeness
+    return avg_cv_correctness, avg_cv_completeness, instances_coherent
 
 
 def create_train_test_data_without_raw_index(training, testing, p_size):
@@ -110,11 +126,13 @@ def computing_best_min_s_cross_validation(in_path,
                                           out_path=".",
                                           type_distance_s=TypeDistance.CORRECTNESS,
                                           k_splits_cv=10,
+                                          s_theoretical=2,
                                           min_discretization=5,
                                           max_discretization=7,
                                           nb_points_into_curve=3,
                                           iplot_evolution_s=True,
-                                          SEED_SCIENTIFIC=1234):
+                                          SEED_SCIENTIFIC=1234,
+                                          is_retain_instances_coherent=False):
     assert os.path.exists(in_path), "Without dataset, it not possible to computing"
     assert os.path.exists(out_path), "Directory for putting results does not exist"
 
@@ -166,7 +184,17 @@ def computing_best_min_s_cross_validation(in_path,
                               "k_splits_cv": k_splits_cv}
 
             # find s-min and s-max methods
-            min_s, min_s_corr, min_s_comp = find_min_or_max(2, TypeMeasure.COMPLETENESS, get_cr_cp, args_get_cr_cp)
+            min_s, min_s_corr, min_s_comp = find_min_or_max(s_theoretical,
+                                                            TypeMeasure.COMPLETENESS,
+                                                            get_cr_cp,
+                                                            args_get_cr_cp)
+            # coherent instances of s-minimum form k-fold
+            if is_retain_instances_coherent:
+                _, _, inst_coherent_s_min_kfcv = get_cr_cp(min_s, **args_get_cr_cp)
+                logger.info("[RAW-INDEX-COHERENT-INSTANCES] %s", inst_coherent_s_min_kfcv)
+                args_get_cr_cp["instances_coherent"] = inst_coherent_s_min_kfcv
+
+            # recovery s-max with instances coherent and the others 's'
             max_s, max_s_corr, max_s_comp = find_min_or_max(min_s, TypeMeasure.CORRECTNESS, get_cr_cp, args_get_cr_cp)
             middle_s = round((min_s + max_s) / 2, 2)
             avg_accuracy[key_interval] = dict()
@@ -174,12 +202,12 @@ def computing_best_min_s_cross_validation(in_path,
             # init values into accuracy dict
             avg_accuracy[key_interval][min_s] = dict({'corr': min_s_corr, 'comp': min_s_comp})
             avg_accuracy[key_interval][max_s] = dict({'corr': max_s_corr, 'comp': max_s_comp})
-            middle_s_corr, middle_s_comp = get_cr_cp(middle_s, **args_get_cr_cp)
+            middle_s_corr, middle_s_comp, _ = get_cr_cp(middle_s, **args_get_cr_cp)
             avg_accuracy[key_interval][middle_s] = dict({'corr': middle_s_corr, 'comp': middle_s_comp})
 
             for _ in range(nb_points_into_curve):
                 new_s = get_s_values(avg_accuracy[key_interval], fnt_distance)
-                avg_cv_correctness, avg_cv_completeness = get_cr_cp(new_s, **args_get_cr_cp)
+                avg_cv_correctness, avg_cv_completeness, _ = get_cr_cp(new_s, **args_get_cr_cp)
                 avg_accuracy[key_interval][new_s] = dict({'corr': avg_cv_correctness, 'comp': avg_cv_completeness})
 
             # plot results k-fold learning
@@ -193,10 +221,10 @@ def computing_best_min_s_cross_validation(in_path,
             # computing correctness with s-optimal
             logger.info("[STARTING] avg. cross-validation correctness/completeness s-optimal")
             s_optimal = min_s
-            avg_validation_cr, avg_validation_cp = computing_training_testing_step(training=training,
-                                                                                   testing=testing,
-                                                                                   s_current=s_optimal,
-                                                                                   all_data_set=dataset)
+            avg_validation_cr, avg_validation_cp, _ = computing_training_testing_step(training=training,
+                                                                                      testing=testing,
+                                                                                      s_current=s_optimal,
+                                                                                      all_data_set=dataset)
             logger.info("[ENDING] avg. cross-validation correctness/completeness s-optimal (%s, %s, %s, %s)",
                         kfold, s_optimal, avg_validation_cr, avg_validation_cp)
 
@@ -233,4 +261,5 @@ POOL = multiprocessing.Pool(processes=nb_process)
 seed_random_experiment = generate_seeds(1)[0]
 computing_best_min_s_cross_validation(in_path=in_path_dataset,
                                       out_path=out_path_results,
-                                      SEED_SCIENTIFIC=seed_random_experiment)
+                                      SEED_SCIENTIFIC=seed_random_experiment,
+                                      is_retain_instances_coherent=False)
