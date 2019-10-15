@@ -61,13 +61,11 @@ def find_dichotomy(l_s, r_s, type_measure, fnt_get_measures, lower_bnd=0.95, upp
         mid = round((r_s + l_s) / 2, 2)
     else:
         _pinfo("Not middle, l-value saved %s", l_s)
-        l_return = fnt_get_measures(s_current=l_s, **kwargs_fnt)
-        l_corr, l_comp = l_return[0], l_return[1]
-        return l_s, l_corr, l_comp
+        l_corr, l_comp, instances_coherent = fnt_get_measures(s_current=l_s, **kwargs_fnt)
+        return l_s, l_corr, l_comp, instances_coherent
 
     # Calculate mid corr and comp scores
-    mid_return = fnt_get_measures(s_current=mid, **kwargs_fnt)
-    mid_corr, mid_comp = mid_return[0], mid_return[1]
+    mid_corr, mid_comp, instances_coherent = fnt_get_measures(s_current=mid, **kwargs_fnt)
     mid_measure = mid_corr if type_measure == TypeMeasure.CORRECTNESS else mid_comp
     _pinfo("Find dichotomy (l_s:%s, mid_s:%s, r_s:%s, s_mid_measure:%s, type_measure:%s)",
            (l_s, mid, r_s, mid_measure, type_measure.name))
@@ -76,14 +74,12 @@ def find_dichotomy(l_s, r_s, type_measure, fnt_get_measures, lower_bnd=0.95, upp
         _pinfo("Found with dichotomy (mid_s:%s, s_mid_measure:%s, type_measure:%s)",
                (mid, mid_measure, type_measure.name))
         if type_measure == TypeMeasure.CORRECTNESS:
-            return mid, mid_measure, mid_comp
+            return mid, mid_measure, mid_comp, instances_coherent
         else:
-            return mid, mid_corr, mid_measure
+            return mid, mid_corr, mid_measure, instances_coherent
     else:
-        l_return = fnt_get_measures(s_current=l_s, **kwargs_fnt)
-        l_corr, l_comp = l_return[0], l_return[1]
-        r_return = fnt_get_measures(s_current=r_s, **kwargs_fnt)
-        r_corr, r_comp = r_return[0], r_return[1]
+        l_corr, l_comp, _ = fnt_get_measures(s_current=l_s, **kwargs_fnt)
+        r_corr, r_comp, _ = fnt_get_measures(s_current=r_s, **kwargs_fnt)
         is_right_bigger = l_corr < r_corr if type_measure == TypeMeasure.CORRECTNESS else l_comp < r_comp
         if is_right_bigger:
             if mid_measure < 1:
@@ -102,8 +98,7 @@ def find_min_or_max(s_current, type_measure, fnt_get_measures, kwargs_fnt, lower
            (s_current, type_measure.name, lower_bnd, upper_bnd))
     s_orig, s_prev, l_s, r_s = s_current, 0, 0, 0
     while r_s == 0:
-        s_return = fnt_get_measures(s_current=s_current, **kwargs_fnt)
-        s_correctness, s_completeness = s_return[0], s_return[1]
+        s_correctness, s_completeness, instances_coherent = fnt_get_measures(s_current=s_current, **kwargs_fnt)
         s_measure = s_correctness if type_measure == TypeMeasure.CORRECTNESS else s_completeness
         _pinfo("Find min-or-max (s_current:%s, s_prev:%s, s_measure:%s, type_measure:%s)",
                (s_current, s_prev, s_measure, type_measure.name))
@@ -116,7 +111,7 @@ def find_min_or_max(s_current, type_measure, fnt_get_measures, kwargs_fnt, lower
         if is_interval_allowed:
             _pinfo("Found without dichotomy (s_current:%s, s_measure:%s, type_measure:%s)",
                    (s_current, s_measure, type_measure.name))
-            return s_current, s_correctness, s_completeness
+            return s_current, s_correctness, s_completeness, instances_coherent
         else:
             is_least_one = (s_measure < 1) if type_measure == TypeMeasure.CORRECTNESS \
                 else (s_measure >= 1)

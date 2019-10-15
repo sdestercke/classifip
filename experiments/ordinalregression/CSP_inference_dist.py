@@ -27,7 +27,7 @@ def parallel_prediction_csp(model, test_data, dataset, evaluatePBOX):
     if predicts[0] is not None:
         is_coherent = True
         _desc_features = ",".join([
-            '{0:.18f}'.format(feature) if str(feature).upper().find("E-") > 0 else str(feature)
+            '{0:.18f}'.format(feature).rstrip('0') if str(feature).upper().find("E-") > 0 else str(feature)
             for feature in dataset[test_data[idx][0]][:-1]
         ])
         _pinfo("(ground_truth, nb_predictions) [%s] (%s, %s) ", (test_data[idx][0], y_ground_truth, len(predicts[0])))
@@ -126,6 +126,10 @@ def computing_best_min_s_cross_validation(in_path,
                                           out_path=".",
                                           type_distance_s=TypeDistance.CORRECTNESS,
                                           k_splits_cv=10,
+                                          lower_bnd_completeness=0.95,
+                                          upper_bnd_completeness=1,
+                                          lower_bnd_correctness=0.95,
+                                          upper_bnd_correctness=1,
                                           s_theoretical=2,
                                           min_discretization=5,
                                           max_discretization=7,
@@ -184,18 +188,25 @@ def computing_best_min_s_cross_validation(in_path,
                               "k_splits_cv": k_splits_cv}
 
             # find s-min and s-max methods
-            min_s, min_s_corr, min_s_comp = find_min_or_max(s_theoretical,
-                                                            TypeMeasure.COMPLETENESS,
-                                                            get_cr_cp,
-                                                            args_get_cr_cp)
+            min_s, min_s_corr, min_s_comp, inst_coherent_s_min_kfcv = find_min_or_max(s_theoretical,
+                                                                                      TypeMeasure.COMPLETENESS,
+                                                                                      get_cr_cp,
+                                                                                      args_get_cr_cp,
+                                                                                      lower_bnd=lower_bnd_completeness,
+                                                                                      upper_bnd=upper_bnd_completeness)
             # coherent instances of s-minimum form k-fold
             if is_retain_instances_coherent:
-                _, _, inst_coherent_s_min_kfcv = get_cr_cp(min_s, **args_get_cr_cp)
                 logger.info("[RAW-INDEX-COHERENT-INSTANCES] %s", inst_coherent_s_min_kfcv)
                 args_get_cr_cp["instances_coherent"] = inst_coherent_s_min_kfcv
+                min_s_corr, min_s_comp, _ = get_cr_cp(min_s, **args_get_cr_cp)
 
             # recovery s-max with instances coherent and the others 's'
-            max_s, max_s_corr, max_s_comp = find_min_or_max(min_s, TypeMeasure.CORRECTNESS, get_cr_cp, args_get_cr_cp)
+            max_s, max_s_corr, max_s_comp, _ = find_min_or_max(min_s,
+                                                               TypeMeasure.CORRECTNESS,
+                                                               get_cr_cp,
+                                                               args_get_cr_cp,
+                                                               lower_bnd=lower_bnd_correctness,
+                                                               upper_bnd=upper_bnd_correctness)
             middle_s = round((min_s + max_s) / 2, 2)
             avg_accuracy[key_interval] = dict()
 
@@ -225,8 +236,8 @@ def computing_best_min_s_cross_validation(in_path,
                                                                                       testing=testing,
                                                                                       s_current=s_optimal,
                                                                                       all_data_set=dataset)
-            logger.info("[ENDING] avg. cross-validation correctness/completeness s-optimal (%s, %s, %s, %s)",
-                        kfold, s_optimal, avg_validation_cr, avg_validation_cp)
+            logger.info("[ENDING] avg. cross-validation correctness/completeness s-optimal-seed (%s, %s, %s, %s, %s)",
+                        kfold, s_optimal, avg_validation_cr, avg_validation_cp, seed)
 
             # save average of k-fold for std and mean correctness
             avg_kfold_completeness = np.append(avg_kfold_completeness, avg_validation_cp)
