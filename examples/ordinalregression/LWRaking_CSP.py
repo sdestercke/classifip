@@ -33,6 +33,6 @@ for clazz, classifier in test[0].items():
     print(classifier.getmaximaldecision(ranking_utility))
 
 print("\nConstraint Satisfy Problem for making inference(reduction/propagation)")
-inference_csp = model.predict_CSP(test)
+inference_csp = model.inference_CSP(test)
 if inference_csp is None : print("\nWithout response CSP ranking.")
 else: print("\nCSP ranking response:", inference_csp)

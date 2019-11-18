@@ -273,4 +273,4 @@ seed_random_experiment = generate_seeds(1)[0]
 computing_best_min_s_cross_validation(in_path=in_path_dataset,
                                       out_path=out_path_results,
                                       SEED_SCIENTIFIC=seed_random_experiment,
-                                      is_retain_instances_coherent=False)
+                                      is_retain_instances_coherent=True)

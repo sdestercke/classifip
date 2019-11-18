@@ -14,14 +14,14 @@ def experiment_01():
     min_disc, max_disc = 5, 9
     avg_accuracy = dict()
     for nb_int in range(min_disc, max_disc):
-        print("Number interval for discreteness %5d." % nb_int, flush=True)
+        print("Number interval for discreteness %s." % nb_int, flush=True)
         dataArff = classifip.dataset.arff.ArffFile()
-        dataArff.load("/Users/salmuz/Downloads/datasets_rang/iris_dense.xarff")
+        dataArff.load("../../examples/ordinalregression/iris_dense.xarff")
         dataArff.discretize(discmet="eqfreq", numint=nb_int)
         training, testing = classifip.evaluation.train_test_split(dataArff, test_pct=pct_testing, random_seed=seed)
         avg_accuracy[str(nb_int)] = dict()
         for ncc_imprecise in np.arange(0.1, max_ncc_s_param + 1, 1):
-            print("Level imprecision %5d." % ncc_imprecise, flush=True)
+            print("Level imprecision %s." % ncc_imprecise, flush=True)
             cv_kFold = classifip.evaluation.k_fold_cross_validation(training, num_kFold, randomise=True,
                                                                     random_seed=seed_kFold)
             avg_cv_correctness = 0
@@ -40,7 +40,7 @@ def experiment_01():
                 avg_cv_completeness += avg_completeness / len(set_test.data)
             avg_accuracy[str(nb_int)][str(ncc_imprecise)] = \
                 dict({'corr': avg_cv_correctness / num_kFold, 'comp': avg_cv_completeness / num_kFold})
-            print("avg imprecision", ncc_imprecise, avg_cv_correctness, flush=True)
+            print("avg imprecision", ncc_imprecise, avg_accuracy[str(nb_int)][str(ncc_imprecise)], flush=True)
         print("Partial results:", avg_accuracy, flush=True)
     print("Results:", avg_accuracy)
 
