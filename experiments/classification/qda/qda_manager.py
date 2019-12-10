@@ -55,22 +55,24 @@ def prediction(pid, tasks, queue, results, model_type, lib_path_server, criterio
         training = queue.get()
         if training is None: break
         model.learn(**training)
-        sum80, sum65 = 0, 0
+        sum80, sum65, sum_set = 0, 0, 0
         while True:
             task = tasks.get()
-            if task is None: break
+            if task is None:
+                break
             evaluate, _ = model.evaluate(task['X_test'], criterion=criterion)
             print("(pid, prediction, ground-truth) (", pid, evaluate, task["y_test"], ")", flush=True)
             if task['y_test'] in evaluate:
                 sum65 += u65(evaluate)
                 sum80 += u80(evaluate)
-        results.append(dict({'u65': sum65, 'u80': sum80}))
+                sum_set += 1
+        results.append(dict({'u65': sum65, 'u80': sum80, 'set': sum_set}))
         queue.task_done()
     print("Worker PID finished", pid, flush=True)
 
 
 def computing_training_testing_step(X_training, y_training, X_testing, y_testing, ell_current,
-                                    manager, acc_u65, acc_u80):
+                                    manager, acc_u65, acc_u80, acc_set=0):
     n_test = len(y_testing)
     # Send training data model to every parallel process
     manager.addNewTraining(X=X_training, y=y_training, ell=ell_current)
@@ -87,4 +89,5 @@ def computing_training_testing_step(X_training, y_training, X_testing, y_testing
         utility = shared_results.pop()
         acc_u65 += utility['u65'] / n_test
         acc_u80 += utility['u80'] / n_test
-    return acc_u65, acc_u80
+        acc_set += utility['set'] / n_test
+    return acc_u65, acc_u80, acc_set

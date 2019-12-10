@@ -6,10 +6,11 @@ import sys, random, os, csv, numpy as np, pandas as pd
 from qda_common import __factory_model, generate_seeds, generate_sample_cross_validation
 from qda_manager import computing_training_testing_step, ManagerWorkers
 
-## Server env:
-# export LD_PRELOAD=/usr/local/MATLAB/R2018b/sys/os/glnxa64/libstdc++.so.6.0.22
-QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
 
+# Server env:
+# export LD_PRELOAD=/usr/local/MATLAB/R2018b/sys/os/glnxa64/libstdc++.so.6.0.22
+# QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
+# QPBB_PATH_SERVER = ['/volper/users/ycarranz/QuadProgBB', '/volper/users/ycarranz/cplex128/cplex/matlab/x86-64_linux']
 
 def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optimal=0.1, nb_process=2,
                                       lib_path_server=None, cv_n_fold=10, seeds=None, criterion="maximality"):
@@ -32,8 +33,8 @@ def performance_cv_accuracy_imprecise(in_path=None, model_type="ilda", ell_optim
             logger.info("Splits test %s", idx_test)
             X_cv_train, y_cv_train = X[idx_train], y[idx_train]
             X_cv_test, y_cv_test = X[idx_test], y[idx_test]
-            mean_u65, mean_u80 = computing_training_testing_step(X_cv_train, y_cv_train, X_cv_test, y_cv_test,
-                                                                 ell_optimal, manager, mean_u65, mean_u80)
+            mean_u65, mean_u80, _ = computing_training_testing_step(X_cv_train, y_cv_train, X_cv_test, y_cv_test,
+                                                                    ell_optimal, manager, mean_u65, mean_u80)
             logger.debug("Partial-kfold (%s, %s, %s, %s)", ell_optimal, time, mean_u65, mean_u80)
         logger.info("Time, seed, u65, u80 (%s, %s, %s, %s)", time, seeds[time],
                     mean_u65 / cv_n_fold, mean_u80 / cv_n_fold)
@@ -96,7 +97,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
                     X_cv_train, y_cv_train = X_learning[idx_train], y_learning[idx_train]
                     X_cv_test, y_cv_test = X_learning[idx_test], y_learning[idx_test]
                     # Computing accuracy testing for cross-validation step
-                    ell_u65[ell_current], ell_u80[ell_current] = \
+                    ell_u65[ell_current], ell_u80[ell_current], _ = \
                         computing_training_testing_step(X_cv_train, y_cv_train, X_cv_test, y_cv_test, ell_current,
                                                         manager, ell_u65[ell_current], ell_u80[ell_current])
                     logger.info("Partial-kfold (%s, %s, %s)", ell_current, ell_u65[ell_current], ell_u80[ell_current])
@@ -118,13 +119,13 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
 
             for ellu80_opt in ellu80_opts:
                 logger.info("ELL_OPTIMAL_SAMPLING_U80 %s", ellu80_opt)
-                _, acc_u80[sampling] = \
+                _, acc_u80[sampling], _ = \
                     computing_training_testing_step(X_learning, y_learning, X_testing, y_testing, ellu80_opt,
                                                     manager, 0, acc_u80[sampling])
 
             for ellu65_opt in ellu65_opts:
                 logger.info("ELL_OPTIMAL_SAMPLING_U65 %s", ellu65_opt)
-                acc_u65[sampling], _ = \
+                acc_u65[sampling], _, _ = \
                     computing_training_testing_step(X_learning, y_learning, X_testing, y_testing, ellu65_opt,
                                                     manager, acc_u65[sampling], 0)
 

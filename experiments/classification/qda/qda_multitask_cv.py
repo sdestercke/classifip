@@ -72,7 +72,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
                     X_cv_train, y_cv_train = X_learning[idx_learn_train], y_learning[idx_learn_train]
                     X_cv_test, y_cv_test = X_learning[idx_learn_test], y_learning[idx_learn_test]
 
-                    ell_u65[ell_current], ell_u80[ell_current] = \
+                    ell_u65[ell_current], ell_u80[ell_current], _ = \
                         computing_training_testing_step(X_cv_train, y_cv_train, X_cv_test, y_cv_test, ell_current,
                                                         manager, ell_u65[ell_current], ell_u80[ell_current])
 
@@ -93,7 +93,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
             n_ell80_opts, n_ell65_opts = len(ell_u80_opts), len(ell_u65_opts)
             for ell_u80_opt in ell_u80_opts:
                 logger.info("ELL_OPTIMAL_CV_U80 %s", ell_u80_opt)
-                _, _acc_u80 = \
+                _, _acc_u80, _ = \
                     computing_training_testing_step(X_learning, y_learning, X_testing, y_testing, ell_u80_opt,
                                                     manager, 0, 0)
                 acc_u80[idx_kfold] += _acc_u80
@@ -101,7 +101,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, lib_path_server=N
 
             for ell_u65_opt in ell_u65_opts:
                 logger.info("ELL_OPTIMAL_CV_U65 %s", ell_u65_opt)
-                _acc_u65, _ = \
+                _acc_u65, _, _ = \
                     computing_training_testing_step(X_learning, y_learning, X_testing, y_testing, ell_u65_opt,
                                                     manager, 0, 0)
                 acc_u65[idx_kfold] += _acc_u65
