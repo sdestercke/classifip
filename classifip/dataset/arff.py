@@ -175,8 +175,7 @@ class ArffFile(object):
         selection.attributes=self.attributes[:]
         selection.comment=self.comment[:]
         
-        return selection 
-    
+        return selection
     
     def select_class_binary(self, positive, negative):
         """return an ARFF object where only some classes are selected in order
@@ -284,16 +283,15 @@ class ArffFile(object):
         :param numint: number of intervals into which divide attributes
         :type numint: integer
         :param selfeat: name of a particular feature to discretize, if None discretize all
-        :type numint: string
+        :type selfeat: string
         
         ..todo::
         
             * encode the method of fayyad et al. 1993 in this function (rather than using Orange)
         
         """
-        datasave=np.array([map(str,x) for x in self.data]).astype('|S25')
+        datasave = np.array([[str(item) for item in row] for row in self.data], dtype=object)
         numitem=datasave.shape[0]
-        
         if discmet=='eqfreq':
             if selfeat!=None:
                 if self.attribute_types[selfeat]!='numeric':
@@ -305,7 +303,7 @@ class ArffFile(object):
                 cutpoint=[]
                 newname=[]
                 for i in range(numint):
-                    cutpoint.append(datasave[((i+1)*(numitem/(numint)))-1,indexfeat])
+                    cutpoint.append(datasave[int((i+1)*(numitem/(numint)))-1,indexfeat])
                 for i in range(numint):
                     if i==0:
                         string=str(cutpoint[i])
@@ -320,12 +318,12 @@ class ArffFile(object):
                                         +';'+string2[0:min(len(string2),7)]+']')
                 for i in range(numint):
                     if i==0:
-                        datasave[(floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
+                        datasave[(floatdata<=float(cutpoint[i])),indexfeat]=newname[i]
                     elif i==(numint-1):
-                        datasave[(floatdata>cutpoint[i-1].astype(float)),indexfeat]=newname[i]
+                        datasave[(floatdata>float(cutpoint[i-1])),indexfeat]=newname[i]
                     else:
-                        datasave[(floatdata>cutpoint[i-1].astype(float)) &
-                            (floatdata<=cutpoint[i].astype(float)),indexfeat]=newname[i]
+                        datasave[(floatdata>float(cutpoint[i-1])) &
+                            (floatdata<=float(cutpoint[i])),indexfeat]=newname[i]
                 self.data=datasave.tolist()
                 self.attribute_types[selfeat]='nominal'
                 self.attribute_data[selfeat]=newname
@@ -339,7 +337,7 @@ class ArffFile(object):
                         cutpoint=[]
                         newname=[]
                         for j in range(numint):
-                            cutpoint.append(datasave[((j+1)*(numitem/(numint)))-1,i])
+                            cutpoint.append(datasave[int((j+1)*(numitem/(numint)))-1,i])
                         for j in range(numint):
                             if j==0:
                                 string=str(cutpoint[j])
@@ -354,12 +352,12 @@ class ArffFile(object):
                                         +';'+string2[0:min(len(string2),7)]+']')
                         for j in range(numint):
                             if j==0:
-                                datasave[(floatdata<=cutpoint[j].astype(float)),i]=newname[j]
+                                datasave[(floatdata<=float(cutpoint[j])),i]=newname[j]
                             elif j==(numint-1):
-                                datasave[(floatdata>cutpoint[j-1].astype(float)),i]=newname[j]
+                                datasave[(floatdata>float(cutpoint[j-1])),i]=newname[j]
                             else:
-                                datasave[(floatdata>cutpoint[j-1].astype(float)) &
-                                    (floatdata<=cutpoint[j].astype(float)),i]=newname[j]
+                                datasave[(floatdata>float(cutpoint[j-1])) &
+                                    (floatdata<=float(cutpoint[j])),i]=newname[j]
                         self.attribute_types[feature]='nominal'
                         self.attribute_data[feature]=newname
                 self.data=datasave.tolist()
@@ -434,8 +432,6 @@ class ArffFile(object):
         
         if discmet=='ent':
             print("sorry, not implemented, please use discretize_ent function of classifip.datasets")
-
-            
 
     @staticmethod
     def parse(s):
@@ -514,7 +510,7 @@ class ArffFile(object):
         :param name: name of the attribute
         :type name: string
         :param data: modalities/labels of the attribute
-        :type atype: list
+        :type data: list
         """
         
         self.attributes.append(name)
@@ -593,7 +589,6 @@ class ArffFile(object):
                 datum.append(None)                     
             else:
                 self.__print_warning('incorrect value %s for nominal attribute %s' % (value, self.attributes[idx_attrib]))
-
 
     def __parse_sparse_data(self, l):
         pairs = [s.strip() for s in l.strip('{}').split(',')]

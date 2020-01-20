@@ -1,106 +1,211 @@
-import abc
-
-import matlab.engine
+import abc, sys, io
 import numpy as np
 import pandas as pd
 from cvxopt import solvers, matrix
 from numpy import linalg
-import sys
+from scipy.stats import multivariate_normal
+from ..utils import create_logger, is_level_debug
+from classifip.representations.voting import Scores
+
+try:
+    import matlab.engine
+except Exception as e:
+    print("MATLAB not installed in host.")
+
+
+def is_sdp_symmetric(x):
+    def is_pos_def(x):
+        return np.all(np.linalg.eigvals(x) > 0)
+
+    def check_symmetric(x, tol=1e-8):
+        return np.allclose(x, x.T, atol=tol)
+
+    return is_pos_def(x) and check_symmetric(x)
+
+
+# First version maximality criterion
+def inference_maximal_criterion(lower, upper, clazz):
+    pairwise_comparison = []
+    pairwise_indifferent = []
+    # O(n^2), n: number of classes
+    for idl, l in enumerate(lower):
+        for idu, u in enumerate(upper):
+            if idl != idu:
+                if l - u > 0:
+                    pairwise_comparison.append([clazz[idl], clazz[idu]])
+                elif lower[idu] - upper[idl] <= 0:
+                    pairwise_indifferent.append([clazz[idl], clazz[idu]])
+
+    top_max = dict()
+    down_min = dict()
+    # O(l), l: number of pairwise comparison
+    for pairwise in pairwise_comparison:
+        if pairwise[0] not in down_min:
+            if pairwise[1] in top_max: top_max.pop(pairwise[1], None)
+            top_max[pairwise[0]] = 1
+            down_min[pairwise[1]] = 0
+        else:
+            down_min[pairwise[1]] = 0
+
+    for pairwise in pairwise_indifferent:
+        if pairwise[0] in top_max or pairwise[1] in top_max:
+            if pairwise[0] not in down_min and pairwise[0] not in top_max:
+                top_max[pairwise[0]] = 1
+            if pairwise[1] not in down_min and pairwise[1] not in top_max:
+                top_max[pairwise[1]] = 1
+
+    maximal_elements = list(top_max.keys())
+    # If there is no maximals, so maximal elements are all classes.
+    return clazz if len(maximal_elements) == 0 else maximal_elements
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
-    def __init__(self, init_matlab=False):
+    def __init__(self, init_matlab=False, add_path_matlab=None):
+        """
+        :param init_matlab: init engine matlab
+        :param DEBUG: logger debug log for computation
+        """
         # Starting matlab environment
         if init_matlab:
             self._eng = matlab.engine.start_matlab()
+            self._add_path_matlab = [] if add_path_matlab is None else add_path_matlab
+            for _in_path in self._add_path_matlab: self._eng.addpath(_in_path)
         else:
             self._eng = None
         self._N, self._p = None, None
         self._data = None
+        self._ell = None
         self._clazz = None
         self._nb_clazz = None
-        self.means, self.cov, self.inv_cov, self.det_cov = dict(), dict(), dict(), dict()
+        self._prior = dict()
+        # icov: inverse covariance,
+        # sdp: bool if it's semi-definite positive symmetric
+        self._gp_mean, self._gp_sdp = dict(), dict()
+        self._gp_cov, self._gp_icov = dict(), dict()
+        self._mean_lower, self._mean_upper = None, None
+        self.__nb_rebuild_opt = 0
+        self._logger = None
 
-    def __mean_by_clazz(self, clazz):
-        return self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
+    def get_data(self):
+        return self._data
 
-    def __cov_by_clazz(self, clazz):
-        return self._data[self._data.y == clazz].iloc[:, :-1].cov().as_matrix()
+    def get_clazz(self):
+        return self._clazz
+
+    def get_ell(self):
+        return self._ell
 
     def get_mean_by_clazz(self, clazz):
-        if clazz not in self.means:
-            self.means[clazz] = self.__mean_by_clazz(clazz)
-        return self.means[clazz]
+        if clazz not in self._gp_mean:
+            self._gp_mean[clazz] = self.__mean_by_clazz(clazz)
+        return self._gp_mean[clazz]
 
     def get_cov_by_clazz(self, clazz):
-        if clazz not in self.inv_cov:
-            cov_clazz = self.__cov_by_clazz(clazz)
-            self.cov[clazz] = cov_clazz
+        if clazz not in self._gp_cov:
+            cov_clazz = self._cov_by_clazz(clazz)
+            self._gp_cov[clazz] = cov_clazz
             if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
-                self.inv_cov[clazz] = linalg.inv(cov_clazz)
-                self.det_cov[clazz] = linalg.det(cov_clazz)
-            else:  # computing pseudo inverse/determinant to a singular covariance matrix
-                self.inv_cov[clazz] = linalg.pinv(cov_clazz)
-                eig_values, _ = linalg.eig(cov_clazz)
-                self.det_cov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
-        return self.cov[clazz], self.inv_cov[clazz], self.det_cov[clazz]
+                self._gp_icov[clazz] = linalg.inv(cov_clazz)
+            else:  # computing pseudo-inverse of a singular covariance matrix
+                self._gp_icov[clazz] = linalg.pinv(cov_clazz)
 
+            # verify if pseudo-inverse matrix is semi-definite positive symmetric
+            # @review: numerical tolerance 1e-7 all matrix are symmetric, is good so much decimal precision?
+            self._gp_sdp[clazz] = is_sdp_symmetric(self._gp_icov[clazz])
+        return self._gp_cov[clazz], self._gp_icov[clazz]
 
-class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
-    def __init__(self, init_matlab=True):
+    def probability_density_gaussian(self, mean, cov, query, log_p=False):
         """
-        ell : be careful with negative ll_upper interval, it needs max(0 , ll_upper)
-        :param ell:
-        """
-        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab)
-        self.ell = None
-        self.prior = dict()
-        self.means, self.inv_cov, self.det_cov = dict(), dict(), dict()
-        self._mean_lower, self._mean_upper = dict(), dict()
-        # self.cov_group_sample = (None, None, None)
+        This method calculate the multivariate Gaussian probability of event (query)
+        when the covariance matrix is positive semi-definite matrix.
 
-    def __cov_group_sample(self):
+        This one also does take into consideration if the covariance matrix is singular,
+        that means that the multivariate Gaussian is degenerate and the calculation must be
+        done differently.
+            f(x)= \det^{*}(2\pi*\Sigma)^{-\frac {1}{2}} * exp(-0.5*(x -\mu)^T \Sigma^{+} (x - \mu))
+        where:
+            det^{*} is the pseudo-determinant of Sigma, and
+            Sigma^{+} is the generalized inverse
+
+        :param mean: mean of
+        :param cov: covariance matrix (positive semi-definite or singular)
+        :param query: event of multivariate Gaussian probability
+        :param log_p: boolean if it is log-probability or just probability
+        :return: the probability of 'query' event
         """
-        Hint: Improving this method using the SVD method for computing
-              pseudo-inverse matrix
+        if log_p:
+            probability = multivariate_normal.logpdf(query, mean=mean, cov=cov, allow_singular=True)
+        else:
+            probability = multivariate_normal.pdf(query, mean=mean, cov=cov, allow_singular=True)
+        self._logger.debug("Computing the (log-)probability (%s, %s):", log_p, probability)
+        return probability
+
+    def fit_max_likelihood(self, query):
+        means, probabilities = dict(), dict()
+        for clazz in self._clazz:
+            cov, inv = self.get_cov_by_clazz(clazz)
+            means[clazz] = self.get_mean_by_clazz(clazz)
+            probabilities[clazz] = self.probability_density_gaussian(means[clazz], cov, query)
+        return means, probabilities
+
+    def learn(self, learn_data_set=None, ell=2, X=None, y=None):
+        """
+        :param learn_data_set: (X, y): X matrix of features and y category by number instances
+        :param ell: imprecise value for mean parameter
+        :param X:
+        :param y:
         :return:
         """
-        cov = 0
-        for clazz in self._clazz:
-            covClazz, _, _ = self.get_cov_by_clazz(clazz)
-            _nb_instances_by_clazz = self.__nb_by_clazz(clazz)
-            cov += covClazz * (_nb_instances_by_clazz - 1)  # biased estimator
-        cov /= self._N - self._nb_clazz  # unbiased estimator group
-        return cov, linalg.inv(cov), linalg.det(cov)
-
-    def __nb_by_clazz(self, clazz):
-        return len(self._data[self._data.y == clazz])
-
-    def learn(self, X, y, ell=20):
-        self.ell = ell
-        self.means, self.inv_cov, self.det_cov = dict(), dict(), dict()
+        assert ell > 10 ^ -6, "Using a positive value ELL, otherwise using precise method LDA/QDA."
+        self._ell = ell
+        self._gp_mean, self._gp_sdp = dict(), dict()
+        self._gp_cov, self._gp_icov = dict(), dict()
         self._mean_lower, self._mean_upper = dict(), dict()
 
+        # transformation of Arff data to feature matrix and vector category
+        if learn_data_set is not None:
+            learn_data_set = np.array(learn_data_set.data)
+            X = learn_data_set[:, :-1]
+            y = learn_data_set[:, -1]
+        elif X is not None and y is not None:
+            self._logger.info("Loading training data set from (X,y) couples.")
+        else:
+            raise Exception('Not training data set setting.')
+
+        # Create data set in Panda frame structure
         self._N, self._p = X.shape
         assert self._N == len(y), "Size X and y is not equals."
         y = np.array(y) if type(y) is list else y
-        self._data = pd.concat([pd.DataFrame(X), pd.Series(y, dtype="category")], axis=1)
+        self._data = pd.concat([pd.DataFrame(X, dtype="float64"), pd.Series(y, dtype="category")], axis=1)
         columns = ["x" + i for i in map(str, range(self._p))]  # create columns names
         columns.extend('y')
         self._data.columns = columns
         self._clazz = np.array(self._data.y.cat.categories.tolist())
         self._nb_clazz = len(self._clazz)
 
+        # Estimation of imprecise/precise parameters
         for clazz in self._clazz:
             mean = self.get_mean_by_clazz(clazz)
             self.get_cov_by_clazz(clazz)
-            self.prior[clazz] = self.__nb_by_clazz(clazz) / self._N
-            nb_by_clazz = self.__nb_by_clazz(clazz)
-            self._mean_lower[clazz] = (-self.ell + nb_by_clazz * mean) / nb_by_clazz
-            self._mean_upper[clazz] = (self.ell + nb_by_clazz * mean) / nb_by_clazz
+            nb_by_clazz = self._nb_by_clazz(clazz)
+            self._prior[clazz] = nb_by_clazz / self._N
+            self._mean_lower[clazz] = (-self._ell + nb_by_clazz * mean) / nb_by_clazz
+            self._mean_upper[clazz] = (self._ell + nb_by_clazz * mean) / nb_by_clazz
 
-    def evaluate(self, query, method="quadratic"):
+    def evaluate(self, query, method="quadratic", criterion="maximality", log_probability=False):
+        """
+        This method is ..
+
+        :param query: new unlabeled instance
+        :param method: optimization method for computing optimal upper bound mean.
+        :param criterion: interval_dominance if criterion decision performs with Interval dominance,
+                otherwise maximality criterion
+        :param log_probability: calculate the maximality decision with log probability
+        :return: tuple composed of set-valued categories and (lower,upper) bound probabilities.
+        """
         bounds = dict((clazz, dict()) for clazz in self._clazz)
+        precise_probas = dict()
+        eng_session = self._eng
 
         def __get_bounds(clazz, bound="inf"):
             return bounds[clazz][bound] if bound in bounds[clazz] else None
@@ -108,278 +213,355 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         def __put_bounds(probability, estimator, clazz, bound="inf"):
             bounds[clazz][bound] = (probability, estimator)
 
-        def __probability(_self, query, clazz, inv, det, mean_lower, mean_upper, bound="inf"):
+        def __probability(_self, query, clazz, inv, cov, mean_lower, mean_upper, bound="inf", log_p=False):
 
             if __get_bounds(clazz, bound) is None:
-                q = query.T @ inv
+                q = -1 * (query.T @ inv)
+                _self._logger.debug("[BOUND_ESTIMATION:%s] Q matrix: %s", bound, inv)
+                _self._logger.debug("[BOUND_ESTIMATION:%s] q vector: %s", bound, q)
+                _self._logger.debug("[BOUND_ESTIMATION:%s] Lower Bound: %s", bound, mean_lower)
+                _self._logger.debug("[BOUND_ESTIMATION:%s] Upper Bound %s", bound, mean_upper)
                 if bound == "inf":
-                    estimator = _self.__infimum_estimation(inv, q, mean_lower, mean_upper)
+                    estimator = _self.infimum_estimation(inv, q, mean_lower, mean_upper, eng_session, clazz)
                 else:
-                    estimator = _self.__supremum_estimation(inv, q, mean_lower, mean_upper, method)
-                prob_lower = _self.__compute_probability(np.array(estimator), inv, det, query)
-                __put_bounds(prob_lower, estimator, clazz, bound)
+                    estimator = _self.supremum_estimation(inv, q, mean_lower, mean_upper, clazz, method)
+                prob = _self.probability_density_gaussian(np.array(estimator), cov, query, log_p=log_p)
+                __put_bounds(prob, estimator, clazz, bound)
             return __get_bounds(clazz, bound)
 
-        lower = []
-        upper = []
-        cov, inv, det = self.__cov_group_sample()
-        for clazz in self._clazz:
-            mean_lower = self._mean_lower[clazz]
-            mean_upper = self._mean_upper[clazz]
-            p_inf, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='inf')
-            p_up, _ = __probability(self, query, clazz, inv, det, mean_lower, mean_upper, bound='sup')
-            lower.append(p_inf * self.prior[clazz])
-            upper.append(p_up * self.prior[clazz])
+        if criterion == "maximality":
+            for clazz in self._clazz:
+                mean_lower = self._mean_lower[clazz]
+                mean_upper = self._mean_upper[clazz]
+                cov, inv = self.get_cov_by_clazz(clazz)
+                p_sub, estimator = __probability(self, query, clazz, inv, cov,
+                                                 mean_lower, mean_upper,
+                                                 bound='sup', log_p=log_probability)
+                __put_bounds(p_sub, estimator, clazz, "sup")
+                precise_probas[clazz] = self.probability_density_gaussian(self._gp_mean[clazz],
+                                                                          cov, query,
+                                                                          log_p=log_probability)
 
-        from ..representations.voting import Scores
+            C = set(self._clazz)
+            Z = set([])
+            while len(C - Z) > 0:
+                max_clazz = max(precise_probas, key=precise_probas.get)
+                mean_lower = self._mean_lower[max_clazz]
+                mean_upper = self._mean_upper[max_clazz]
+                cov, inv = self.get_cov_by_clazz(max_clazz)
+                p_inf, _ = __probability(self, query, max_clazz, inv, cov,
+                                         mean_lower, mean_upper,
+                                         bound='inf', log_p=log_probability)
+                nopt_clazz = set([])
+                for clazz in C - {max_clazz}:
+                    p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
 
-        score = Scores(np.c_[lower, upper])
-        return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
+                    # if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0: # precise 10e-18 instead 0
+                    maximility = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
+                    if log_probability:
+                        maximility = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
 
-        # inference = np.divide(lower, upper[::-1])
-        # answers = self._clazz[(inference > 1)]
-        # print("inf/sup:", np.divide(lower, upper[::-1]))
-        # return answers, bounds
+                    self._logger.debug("Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
+                                       max_clazz, clazz, maximility)
+                    # (maximility:true) labels indifferent to maximal-label-choice for assessment maximility
+                    if maximility:
+                        nopt_clazz.add(clazz)
+                    else:
+                        precise_probas.pop(clazz, None)
+                del precise_probas[max_clazz]
+                Z.add(max_clazz)
+                nopt_clazz.add(max_clazz)
+                C = nopt_clazz.copy()
 
-    def __compute_probability(self, mean, inv_cov, det_cov, query):
-        _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
-        _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
-        return _const * np.exp(_exp)
+            return list(C), bounds
 
-    def __supremum_estimation(self, Q, q, mean_lower, mean_upper, method="quadratic"):
+        elif criterion == "interval_dominance" or criterion == "maximality_v1":
+            if log_probability:
+                raise Exception("Criterion decision does not support with log-probability!!")
 
-        def __min_convex_qp(A, q, lower, upper, d):
-            ell_lower = matrix(lower, (d, 1))
-            ell_upper = matrix(upper, (d, 1))
-            P = matrix(A)
-            q = matrix(-1 * q)
-            I = matrix(0.0, (d, d))
-            I[::d + 1] = 1
-            G = matrix([I, -I])
-            h = matrix([ell_upper, -ell_lower])
-            return solvers.qp(P=P, q=q, G=G, h=h)
+            lower, upper = [], []
+            for clazz in self._clazz:
+                mean_lower = self._mean_lower[clazz]
+                mean_upper = self._mean_upper[clazz]
+                cov, inv = self.get_cov_by_clazz(clazz)
+                p_inf, _ = __probability(self, query, clazz, inv, cov, mean_lower, mean_upper, bound='inf')
+                p_up, _ = __probability(self, query, clazz, inv, cov, mean_lower, mean_upper, bound='sup')
+                lower.append(p_inf * self._prior[clazz])
+                upper.append(p_up * self._prior[clazz])
 
-        def __min_convex_cp(Q, q, lower, upper, d):
-            i_cov = matrix(Q)
-            b = matrix(q)
-
-            def cOptFx(x=None, z=None):
-                if x is None: return 0, matrix(0.0, (d, 1))
-                f = (0.5 * (x.T * i_cov * x) - b.T * x)
-                Df = (i_cov * x - b)
-                if z is None: return f, Df.T
-                H = z[0] * i_cov
-                return f, Df.T, H
-
-            ll_lower = matrix(lower, (d, 1))
-            ll_upper = matrix(upper, (d, 1))
-            I = matrix(0.0, (d, d))
-            I[::d + 1] = 1
-            G = matrix([I, -I])
-            h = matrix([ll_upper, -ll_lower])
-            return solvers.cp(cOptFx, G=G, h=h)
-
-        if method == "quadratic":
-            solution = __min_convex_qp(Q, q, mean_lower, mean_upper, self._p)
-        elif method == "nonlinear":
-            solution = __min_convex_cp(Q, q, mean_lower, mean_upper, self._p)
+            if criterion == "interval_dominance":
+                score = Scores(np.c_[lower, upper])
+                return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
+            else:
+                return inference_maximal_criterion(lower, upper, self._clazz), bounds
         else:
-            raise Exception("Yet doesn't exist optimisation implemented")
+            raise Exception("Decision criterion not implemented yet or another bug!!")
 
-        if solution['status'] != 'optimal':
-            print("[Solution-not-Optimal]", solution)
-            raise Exception("Not exist solution optimal!!")
+    def get_bound_means(self, clazz):
+        return self._mean_lower[clazz], self._mean_upper[clazz]
 
-        return [v for v in solution['x']]
+    def _nb_by_clazz(self, clazz):
+        assert self._data is not None, "It's necessary to firstly declare a data set."
+        return len(self._data[self._data.y == clazz])
 
-    def __infimum_estimation(self, Q, q, mean_lower, mean_upper):
-        if self._eng is None:
-            raise Exception("Environment matlab hadn't been initialized.")
+    def __mean_by_clazz(self, clazz):
+        return self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
+
+    def _cov_by_clazz(self, clazz):
+        _sub_data = self._data[self._data.y == clazz].iloc[:, :-1]
+        _n, _p = _sub_data.shape
+        if _n > 1:
+            return _sub_data.cov().as_matrix()
+        else:
+            ## Bug: Impossible to compute covariance of just ONE instance
+            ## assuming an identity covariance matrix
+            ## e.g. _sub_data.shape = (1, 8)
+            raise Exception("it has only 1 sample in class, covariance is ill defined.")
+
+    def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
+        """
+        .. warning::
+            * this case does not convergence with quadratic method
+                Q = np.array([[19.42941344,  -12.9899322, -5.1907171,   -0.25782677],
+                              [-12.9899322,  15.97805787, 1.87087712,   -6.72150886],
+                              [-5.1907171,   1.87087712,  36.99333345,  -16.21139038],
+                              [-0.25782677,  -6.72150886, -16.21139038, 103.0762929]])
+                q = np.array([-45.3553788, 26.52058282, -99.63769322, -61.59361441])
+                mean_lower = np.array([4.94791667, 3.36875, 1.41666667, 0.19375])
+                mean_upper = np.array([5.04375, 3.46458333, 1.5125, 0.28958333])
+
+        :param Q:
+        :param q:
+        :param mean_lower:
+        :param mean_upper:
+        :param clazz:
+        :param method:
+        :return:
+        """
+        self._logger.debug("[iS-Inverse-Covariance-SDP] (%s, %s)", clazz, self._gp_sdp[clazz])
+        if self._gp_sdp[clazz]:
+            def __min_convex_qp(A, q, lower, upper, d):
+                ell_lower = matrix(lower, (d, 1))
+                ell_upper = matrix(upper, (d, 1))
+                P = matrix(A)
+                q = matrix(q)
+                I = matrix(0.0, (d, d))
+                I[::d + 1] = 1
+                G = matrix([I, -I])
+                h = matrix([ell_upper, -ell_lower])
+                return solvers.qp(P=P, q=q, G=G, h=h)
+
+            def __min_convex_cp(Q, q, lower, upper, d):
+                i_cov = matrix(Q)
+                b = matrix(q)
+
+                def cOptFx(x=None, z=None):
+                    if x is None: return 0, matrix(0.0, (d, 1))
+                    f = (0.5 * (x.T * i_cov * x) + b.T * x)
+                    Df = (i_cov * x + b)
+                    if z is None: return f, Df.T
+                    H = z[0] * i_cov
+                    return f, Df.T, H
+
+                ll_lower = matrix(lower, (d, 1))
+                ll_upper = matrix(upper, (d, 1))
+                I = matrix(0.0, (d, d))
+                I[::d + 1] = 1
+                G = matrix([I, -I])
+                h = matrix([ll_upper, -ll_lower])
+                return solvers.cp(cOptFx, G=G, h=h)
+
+            if method == "quadratic":
+                solution = __min_convex_qp(Q, q, mean_lower, mean_upper, self._p)
+            elif method == "nonlinear":
+                solution = __min_convex_cp(Q, q, mean_lower, mean_upper, self._p)
+            else:
+                raise Exception("Yet doesn't exist optimisation implemented")
+
+            if solution['status'] != 'optimal':
+                self._logger.info("[Solution-not-Optimal] %s", solution)
+                raise Exception("Not exist solution optimal!!")
+
+            return [v for v in solution['x']]
+        else:
+            return self.quadprogbb(Q, q, mean_lower, mean_upper, self._eng, clazz)
+
+    def quadprogbb(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
+        """ This method use a solver implemented in https://github.com/sburer/QuadProgBB
+            Authors: Samuel Burer
+            QUADPROGBB globally solves the following nonconvex quadratic programming problem
+                min  1/2*x'*H*x + f'*x
+                s.t.    A * x <= b
+                        Aeq * x == beq
+                        LB <= x <= UB
+            Therefore, I optimize max this non-convex problem, we multiply by -1:
+                max  1/2*x'*(-H)*x - f'*x
+                s.t.  ....(same)
+        """
+        if eng_session is None: raise Exception("Environment matlab hadn't been initialized.")
+        _debug = is_level_debug(self._logger)
+        __out = None if _debug else io.StringIO()
+        __err = io.StringIO()
         try:
-            Q = matlab.double((-1 * Q).tolist())
-            q = matlab.double(q.tolist())
-            LB = matlab.double(mean_lower.tolist())
-            UB = matlab.double(mean_upper.tolist())
+            Q_m = matlab.double(Q.tolist())
+            q_m = eng_session.transpose(matlab.double(q.tolist()))
+            LB = eng_session.transpose(matlab.double(mean_lower.tolist()))
+            UB = eng_session.transpose(matlab.double(mean_upper.tolist()))
             A = matlab.double([])
             b = matlab.double([])
             Aeq = matlab.double([])
             beq = matlab.double([])
-            x, f_val, time, stats = self._eng.quadprogbb(Q, self._eng.transpose(q), A, b, Aeq, beq,
-                                                         self._eng.transpose(LB), self._eng.transpose(UB), nargout=4)
-        except matlab.engine.MatlabExecutionError:
-            print("Some error in the QuadProgBB code, inputs:")
-            print("Q:", Q)
-            print("q:", q)
-            print("LB", LB, "UP", UB)
-            raise Exception("Matlab ERROR execution QuadProgBB")
+            x, _, _, _ = eng_session.quadprogbb(Q_m, q_m, A, b, Aeq, beq, LB, UB,
+                                                nargout=4, stdout=__out, stderr=__err)
+            self.__nb_rebuild_opt = 0
+        except Exception as e:
+            self._logger.debug("[DEBUG_MATHLAB_EXCEPTION] %s", __err.getvalue())
+            self._logger.debug("[DEBUG_MATHLAB_EXCEPTION] %s", e)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT]: Crash QuadProgBB, inputs:class %s", clazz)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Q matrix: %s", Q)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] q vector: %s", q)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Lower Bound: %s", mean_lower)
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] Upper Bound %s", mean_upper)
+            # In the cases matlab crash and session is lost, so we need a new session
+            self._eng = matlab.engine.start_matlab()
+            for _in_path in self._add_path_matlab: self._eng.addpath(_in_path)
+            # In case, MATHLAB crash 3 times, optimal point will take mean of category
+            if self.__nb_rebuild_opt > 2:
+                self.__nb_rebuild_opt = 0
+                return self.get_mean_by_clazz(clazz)
+            self.__nb_rebuild_opt += 1
+            self._logger.debug("[DEBUG_MATHLAB_OUTPUT] New MATHLAB LOADING")
+            return self.quadprogbb(Q, q, mean_lower, mean_upper, self._eng, clazz)
 
         return np.asarray(x).reshape((1, self._p))[0]
 
-    def fit_max_likelihood(self, query):
-        means, probabilities = dict(), dict()
-        cov, inv, det = self.__cov_group_sample()
-        for clazz in self._clazz:
-            means[clazz] = self.get_mean_by_clazz(clazz)
-            probabilities[clazz] = self.__compute_probability(means[clazz], inv, det, query)
-        return means, cov, probabilities
+    def infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
+        return self.quadprogbb((-1 * Q), (-1 * q), mean_lower, mean_upper, eng_session, clazz)
 
-    def __repr__(self):
-        print("lower:", self._mean_lower)
-        print("upper:", self._mean_upper)
-        print("group cov", self.__cov_group_sample())
-        return "WADA!!"
 
-    ## Plotting for 2D data
+class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
+    """
+        Imprecise Euclidean Distance Discriminant implemented with a
+        imprecise gaussian distribution and conjugate exponential family.
+    """
 
-    def __check_data_available(self):
+    def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
+        super(EuclideanDiscriminant, self).__init__(init_matlab=False,
+                                                    add_path_matlab=add_path_matlab)
+        self._logger = create_logger("IEDA", DEBUG)
 
-        X = self._data.iloc[:, :-1].as_matrix()
-        y = self._data.y.tolist()
-        if X is None: raise ValueError("It needs to learn one sample training")
+    def get_cov_by_clazz(self, clazz):
+        if clazz not in self._gp_cov:
+            self._gp_cov[clazz] = np.identity(self._p)
+            self._gp_icov[clazz] = np.identity(self._p)
+        return self._gp_cov[clazz], self._gp_icov[clazz]
 
-        n_row, _ = X.shape
-        if not isinstance(y, list): raise ValueError("Y isn't corrected form.")
-        if n_row != len(y): raise ValueError("The number of column is not same in (X,y)")
-        return X, np.array(y)
-
-    def plot2D_classification(self, query=None, colors=None, markers=['*', 'v', 'o', '+', '-', '.', ',']):
-
-        X, y = self.__check_data_available()
-        n_row, n_col = X.shape
-
-        import matplotlib.pyplot as plt
-        import matplotlib as mpl
-
-        c_map = plt.cm.get_cmap("hsv", self._nb_clazz + 1)
-        colors = dict((self._clazz[idx], c_map(idx)) for idx in range(0, self._nb_clazz)) \
-            if colors is None else colors
-        markers = dict((self._clazz[idx], markers[idx]) for idx in range(0, self._nb_clazz))
-
-        def plot_constraints(lower, upper, _linestyle="solid"):
-            plt.plot([lower[0], lower[0], upper[0], upper[0], lower[0]],
-                     [lower[1], upper[1], upper[1], lower[1], lower[1]],
-                     linestyle=_linestyle)
-            plt.grid()
-
-        def plot2D_scatter(X, y):
-            for row in range(0, len(y)):
-                plt.scatter(X[row, 0], X[row, 1], marker=markers[y[row]], c=colors[y[row]])
-
-        def plot_ellipse(splot, mean, cov, color):
-            from scipy import linalg
-
-            v, w = linalg.eigh(cov)
-            u = w[0] / linalg.norm(w[0])
-            angle = np.arctan(u[1] / u[0])
-            angle = 180 * angle / np.pi
-            ell = mpl.patches.Ellipse(mean, 2 * v[0] ** 0.5, 2 * v[1] ** 0.5,
-                                      180 + angle, facecolor="none",
-                                      edgecolor=color,
-                                      linewidth=2, zorder=2)
-            ell.set_clip_box(splot.bbox)
-            ell.set_alpha(0.9)
-            splot.add_artist(ell)
-
-        if n_col == 2:
-            for clazz in self._clazz:
-                post_mean_lower = self._mean_lower[clazz]
-                post_mean_upper = self._mean_upper[clazz]
-                plot_constraints(post_mean_lower, post_mean_upper)
-                mean = self.get_mean_by_clazz(clazz)
-                prior_mean_lower = mean - self.ell
-                prior_mean_upper = mean + self.ell
-                plot_constraints(prior_mean_lower, prior_mean_upper, _linestyle="dashed")
-
-            if query is not None:
-                ml_mean, ml_cov, ml_prob = self.fit_max_likelihood(query)
-                plt.plot([query[0]], [query[1]], marker='h', markersize=5, color="black")
-                _, _bounds = self.evaluate(query)
-                for clazz in self._clazz:
-                    plt.plot([ml_mean[clazz][0]], [ml_mean[clazz][1]], marker='o', markersize=5, color=colors[clazz])
-                    _, est_mean_lower = _bounds[clazz]['inf']
-                    _, est_mean_upper = _bounds[clazz]['sup']
-                    plt.plot([est_mean_lower[0]], [est_mean_lower[1]], marker='x', markersize=4, color="black")
-                    plt.plot([est_mean_upper[0]], [est_mean_upper[1]], marker='x', markersize=4, color="black")
-
-            cov, inv, det = self.__cov_group_sample()
-            s_plot = plt.subplot()
-            for clazz in self._clazz:
-                mean = self.get_mean_by_clazz(clazz)
-                plot_ellipse(s_plot, mean, cov, colors[clazz])
-
-        elif n_col > 2:
-            if query is not None:
-                inference, _ = self.evaluate(query)
-                X = np.vstack([X, query])
-                y = np.append(y, inference[0])
-
-            from sklearn.manifold import Isomap
-            iso = Isomap(n_components=2)
-            projection = iso.fit_transform(X)
-            X = np.c_[projection[:, 0], projection[:, 1]]
-
-            if query is not None:
-                color_instance = colors[inference[0]] if len(inference) == 1 else 'black'
-                plt.plot([X[n_row, 0]], [X[n_row, 1]], color='red', marker='o', mfc=color_instance)
-        else:
-            raise Exception("Not implemented for one feature yet.")
-
-        plot2D_scatter(X, y)
-        plt.show()
-
-    def plot2D_decision_boundary(self, h=.1, markers=['*', 'v', 'o', '+', '-', '.', ',']):
-
-        X, y = self.__check_data_available()
-
-        _, n_col = X.shape
-
-        if n_col > 2: raise Exception("Not implemented for n-dimension yet.")
-
-        import matplotlib.pyplot as plt
-
-        x_min, x_max = X[:, 0].min() - .5, X[:, 0].max() + .5
-        y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
-        xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-
-        z = np.array([])
-        clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(self._clazz, 1))
-        NO_CLASS_COMPARABLE = -1
-        for query in np.c_[xx.ravel(), yy.ravel()]:
-            answer, _ = self.evaluate(query)
-            if len(answer) > 1 or len(answer) == 0:
-                z = np.append(z, NO_CLASS_COMPARABLE)
+    def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
+        optimal = np.zeros(self._p)
+        x = (-1 * q)  # return true query value
+        inside_hypercube = True
+        for i in range(self._p):
+            if inside_hypercube and (x[i] < mean_lower[i] or x[i] > mean_upper[i]):
+                inside_hypercube = False
+            if pow(x[i] - mean_lower[i], 2) < pow(x[i] - mean_upper[i], 2):
+                optimal[i] = mean_lower[i]
             else:
-                z = np.append(z, clazz_by_index[answer[0]])
+                optimal[i] = mean_upper[i]
 
-        y_colors = [clazz_by_index[clazz] for clazz in y]
-        markers = dict((self._clazz[idx], markers[idx]) for idx in range(0, self._nb_clazz))
-        z = z.reshape(xx.shape)
-        plt.contourf(xx, yy, z, alpha=0.4)
-        for row in range(0, len(y)):
-            plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker= markers[y[row]], edgecolor='k')
-        plt.show()
+        return x if inside_hypercube else optimal
 
-    ## Testing Optimal force brute
-    def __brute_force_search(self, clazz, query, lower, upper, inv, det, d):
+    def infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
+        optimal = np.zeros(self._p)
+        x = (-1 * q)  # return true query value
+        for i in range(self._p):
+            if pow(x[i] - mean_lower[i], 2) > pow(x[i] - mean_upper[i], 2):
+                optimal[i] = mean_lower[i]
+            else:
+                optimal[i] = mean_upper[i]
+        return optimal
 
-        def cost_Fx(x, query, inv):
-            return 0.5 * (x.T @ inv @ x) + query.T @ inv @ x
 
-        def forRecursive(lowers, uppers, level, L, optimal):
-            for current in np.array([lowers[level], uppers[level]]):
-                if level < L - 1:
-                    forRecursive(lowers, uppers, level + 1, L, np.append(optimal, current))
-                else:
-                    print("optimal value cost:", clazz, np.append(optimal, current),
-                          self.__compute_probability(np.append(optimal, current), inv, det, query),
-                          cost_Fx(np.append(optimal, current), query, inv))
+class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
+    """
+       Imprecise Linear Discriminant implemented with a imprecise gaussian distribution and
+       conjugate exponential family.
+    """
 
-        forRecursive(lower, upper, 0, d, np.array([]))
+    def __init__(self, init_matlab=True, add_path_matlab=None, DEBUG=False):
+        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab,
+                                                 add_path_matlab=add_path_matlab)
+        self._is_compute_total_cov = False
+        self._logger = create_logger("ILDA", DEBUG)
+        if DEBUG: solvers.options['show_progress'] = True
 
-    def show_all_brute_optimal(self, query):
-        cov, inv, det = self.__cov_group_sample()
-        for clazz in self._clazz:
-            mean_lower = self._mean_lower[clazz]
-            mean_upper = self._mean_upper[clazz]
-            print("box", mean_lower, mean_upper)
-            self.__brute_force_search(clazz, query, mean_lower, mean_upper, inv, det, self._p)
+    def learn(self, learn_data_set=None, ell=None, X=None, y=None):
+        self._is_compute_total_cov = False
+        super(LinearDiscriminant, self).learn(learn_data_set, ell, X, y)
+
+    def get_cov_by_clazz(self, clazz):
+        """
+        :return: cov, inv, det of empirical total covariance matrix
+        """
+        if not self._is_compute_total_cov:
+            # estimation of empirical total covariance matrix
+            _cov, _inv = np.zeros((self._p, self._p)), np.zeros((self._p, self._p))
+            for clazz_gp in self._clazz:
+                try:
+                    covClazz = super(LinearDiscriminant, self)._cov_by_clazz(clazz_gp)
+                except Exception as e: # if class does not have  1 instance, so matrix-covariance 0
+                    self._logger.info("Class %s with one instance, exception: %s", clazz_gp, e)
+                    covClazz = 0
+                _nb_instances_by_clazz = self._nb_by_clazz(clazz_gp)
+                _cov += covClazz * (_nb_instances_by_clazz - 1)  # biased estimator
+            _cov = _cov / (self._N - self._nb_clazz)  # unbiased estimator group
+
+            # Hint: Improving this method using the SVD method for computing pseudo-inverse matrix
+            if linalg.cond(_cov) < 1 / sys.float_info.epsilon:
+                _inv = linalg.inv(_cov)
+            else:  # computing pseudo-inverse matrix with a singular-value decomposition (SVD)
+                _inv = linalg.pinv(_cov)
+
+            _sdp_sys = is_sdp_symmetric(_inv)
+            for clazz_gp in self._clazz:
+                self._gp_cov[clazz_gp] = _cov
+                self._gp_icov[clazz_gp] = _inv
+                self._gp_sdp[clazz_gp] = _sdp_sys
+
+            self._is_compute_total_cov = True
+        return self._gp_cov[clazz], self._gp_icov[clazz]
+
+
+class QuadraticDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
+    """
+       Imprecise Quadratic Discriminant implemented with a imprecise gaussian distribution and
+       conjugate exponential family.
+    """
+
+    def __init__(self, init_matlab=True, add_path_matlab=None, DEBUG=False):
+        super(QuadraticDiscriminant, self).__init__(init_matlab=init_matlab,
+                                                    add_path_matlab=add_path_matlab)
+        self._logger = create_logger("IQDA", DEBUG)
+        if DEBUG: solvers.options['show_progress'] = True
+
+
+class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
+    """
+        Imprecise Euclidean Distance Discriminant implemented with a
+        imprecise gaussian distribution and conjugate exponential family.
+    """
+
+    def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
+        super(NaiveDiscriminant, self).__init__(init_matlab=False, add_path_matlab=add_path_matlab)
+        self._logger = create_logger("INDA", DEBUG)
+
+    def get_cov_by_clazz(self, clazz):
+        if clazz not in self._gp_cov:
+            cov_clazz = self._cov_by_clazz(clazz)
+            diagonal = np.einsum('ii->i', cov_clazz)
+            save = diagonal.copy()
+            save[save == 0] = pow(10, -6)
+            cov_clazz[...] = 0
+            diagonal[...] = save
+            self._gp_cov[clazz] = cov_clazz
+            self._gp_icov[clazz] = linalg.inv(cov_clazz)
+        return self._gp_cov[clazz], self._gp_icov[clazz]

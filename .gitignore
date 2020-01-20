@@ -2,7 +2,10 @@
 *.log
 *.xml
 *.pyc
+*.png
+*.json
 *egg-info
 dist/
 .idea/
 build/
+docs/

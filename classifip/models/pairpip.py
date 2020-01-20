@@ -3,7 +3,6 @@ from scipy.spatial import kdtree, distance
 from ..representations.voting import Scores
 import numpy as np
 from scipy.sparse import dok_matrix
-from scipy.misc import comb
 from scipy.stats import norm
 from math import fabs
 import random
