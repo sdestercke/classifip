@@ -380,7 +380,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
             if solution['status'] != 'optimal':
                 self._logger.info("[Solution-not-Optimal] %s", solution)
-                raise Exception("Not exist solution optimal!!")
+                # raise Exception("Not exist solution optimal!!")
 
             return [v for v in solution['x']]
         else:
