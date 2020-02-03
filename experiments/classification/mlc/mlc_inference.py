@@ -85,9 +85,11 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, seed=None, nb_kFo
         data_learning = arff.ArffFile()
         data_learning.load(in_path)
         if remove_features is not None:
-            for r_feature in remove_features: data_learning.remove_col(r_feature)
+            for r_feature in remove_features:
+                data_learning.remove_col(r_feature)
         nb_labels = get_nb_labels_class(data_learning)
-        if scaling: normalize(data_learning, n_labels=nb_labels)
+        if scaling:
+            normalize(data_learning, n_labels=nb_labels)
         data_learning.discretize(discmet="eqfreq", numint=nb_disc)
 
         for time in range(nb_kFold):  # 10-10 times cross-validation
@@ -123,4 +125,4 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, seed=None, nb_kFo
 in_path = "/Users/salmuz/Downloads/datasets_mlc/nuswide-cVLADplus.arff"
 out_path = "/Users/salmuz/Downloads/results_iris.csv"
 # QPBB_PATH_SERVER = []  # executed in host
-computing_best_imprecise_mean(in_path=in_path, out_path=out_path, nb_process=1)
+computing_best_imprecise_mean(in_path=in_path, out_path=out_path, nb_process=1, remove_features=["image_name"])

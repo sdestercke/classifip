@@ -6,24 +6,40 @@ Created on 20 may 2019
 About how to use the Imprecise multilabel chaining
 '''
 from classifip.dataset import arff
+from classifip.models.mlcncc import MLCNCCOuterApprox, MLCNCCExact
+import timeit
 
 dataArff = arff.ArffFile()
-dataArff.load("yeast.arff")
+dataArff.load("labels5.arff")
 dataArff.discretize(discmet='eqfreq', numint=5)
-dataset='yeast'
+nb_labels = 5
+
+# Test instances
+new_instances = [row[0:len(row) - nb_labels] for row in dataArff.data[10:11]]
 
 # We start by creating a model
-from classifip.models.mlcncc import MLCNCC
-model = MLCNCC()
-nblab = 14
-model.learn(dataArff, nblab) #, seed_random_label=134)
-probs, chain = model.evaluate([row[0:len(row) - nblab] for row in dataArff.data[0:1]], ncc_epsilon=0.001, ncc_s_param=1)
+model = MLCNCCOuterApprox()
+model.learn(dataArff, nb_labels)  # , seed_random_label=134)
+
+probabilities, chain = model.evaluate(new_instances, ncc_epsilon=0.001, ncc_s_param=1)
 
 print("Probability intervals obtained for each label on the first test instance \n")
-print(probs[0])
+print(probabilities[0])
 
-print("Label predicts")
-print(chain, '\n')
+print("Label true", dataArff.data[0:1][0][-nb_labels:], '\n')
+print("Label predicts: ", chain, '\n')
 
-print("Label true")
-print(dataArff.data[0:1][0][-nblab:], '\n')
+# Inference exact with complexity minimal
+model = MLCNCCExact()
+model.learn(dataArff, nb_labels=nb_labels)
+
+start = timeit.default_timer()
+solution_exact_1 = model.evaluate(new_instances, ncc_epsilon=0.001, ncc_s_param=1)
+print('Solution with minimum complexity:', solution_exact_1, timeit.default_timer() - start)
+start = timeit.default_timer()
+solution_exact_2 = model.evaluate_exact(new_instances, ncc_epsilon=0.001, ncc_s_param=1)
+print('Solution with maximum complexity:', solution_exact_2, timeit.default_timer() - start)
+
+# exec('def foo(a, b):  return a + b')
+# print(foo(1, 2))
+
