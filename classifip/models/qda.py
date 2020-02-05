@@ -41,12 +41,15 @@ def inference_maximal_criterion(lower, upper, clazz):
     # O(l), l: number of pairwise comparison
     for pairwise in pairwise_comparison:
         if pairwise[0] not in down_min:
-            if pairwise[1] in top_max: top_max.pop(pairwise[1], None)
+            if pairwise[1] in top_max:
+                top_max.pop(pairwise[1], None)
             top_max[pairwise[0]] = 1
             down_min[pairwise[1]] = 0
         else:
             down_min[pairwise[1]] = 0
 
+    # O(l), l: adding indifferent elements
+    # e.g. (a, b, c) => a > c, b >< a, b >< c => maximality=(a,b)
     for pairwise in pairwise_indifferent:
         if pairwise[0] in top_max or pairwise[1] in top_max:
             if pairwise[0] not in down_min and pairwise[0] not in top_max:
@@ -257,14 +260,15 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                     p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
 
                     # if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0: # precise 10e-18 instead 0
-                    maximility = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
+                    maximality = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
                     if log_probability:
-                        maximility = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
+                        maximality = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
 
-                    self._logger.debug("Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
-                                       max_clazz, clazz, maximility)
-                    # (maximility:true) labels indifferent to maximal-label-choice for assessment maximility
-                    if maximility:
+                    self._logger.debug(
+                        "Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
+                        max_clazz, clazz, maximality)
+                    # (maximality:true) labels indifferent to maximal-label-choice for assessment maximality
+                    if maximality:
                         nopt_clazz.add(clazz)
                     else:
                         precise_probas.pop(clazz, None)
@@ -313,9 +317,9 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         if _n > 1:
             return _sub_data.cov().as_matrix()
         else:
-            ## Bug: Impossible to compute covariance of just ONE instance
-            ## assuming an identity covariance matrix
-            ## e.g. _sub_data.shape = (1, 8)
+            # Bug: Impossible to compute covariance of just ONE instance
+            # assuming an identity covariance matrix
+            # e.g. _sub_data.shape = (1, 8)
             raise Exception("it has only 1 sample in class, covariance is ill defined.")
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
@@ -508,7 +512,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             for clazz_gp in self._clazz:
                 try:
                     covClazz = super(LinearDiscriminant, self)._cov_by_clazz(clazz_gp)
-                except Exception as e: # if class does not have  1 instance, so matrix-covariance 0
+                except Exception as e:  # if class does not have  1 instance, so matrix-covariance 0
                     self._logger.info("Class %s with one instance, exception: %s", clazz_gp, e)
                     covClazz = 0
                 _nb_instances_by_clazz = self._nb_by_clazz(clazz_gp)

@@ -6,6 +6,75 @@ import queue, copy, math, abc, time
 from classifip.utils import timeit
 import numpy as np
 from .mlcncc import MLCNCC
+from classifip.utils import create_logger
+from itertools import compress
+
+
+def maximality_coherence(solutions):
+    # (1) expansion binary vector
+    solution_expansion = []
+    for solution in solutions:
+        if 3 in solution:
+            current = np.array([], dtype=int)
+            q_current = queue.Queue()
+            for label in solution:
+                q_next = queue.Queue()
+                if not q_current.empty():
+                    while not q_current.empty():
+                        current = q_current.get()
+                        if label == 3:
+                            q_next.put(np.append(current, 1))
+                            q_next.put(np.append(current, 0))
+                        else:
+                            q_next.put(np.append(current, label))
+                else:
+                    if label == 3:
+                        q_next.put(np.append(current, 1))
+                        q_next.put(np.append(current, 0))
+                    else:
+                        q_next.put(np.append(current, label))
+                q_current = q_next
+
+            while not q_current.empty():
+                solution_expansion.append(tuple(q_current.get()))
+        else:
+            solution_expansion.append(tuple(solution))
+
+    solution_dominated = []
+    for solution in solutions:
+        if 3 in solution:
+            current = np.array([], dtype=int)
+            q_current = queue.Queue()
+            for label in solution:
+                q_next = queue.Queue()
+                if not q_current.empty():
+                    while not q_current.empty():
+                        current = q_current.get()
+                        if label == 3:
+                            q_next.put(np.append(current, 1))
+                            q_next.put(np.append(current, 0))
+                        else:
+                            q_next.put(np.append(current, 1 - label))
+                else:
+                    if label == 3:
+                        q_next.put(np.append(current, 1))
+                        q_next.put(np.append(current, 0))
+                    else:
+                        q_next.put(np.append(current, 1 - label))
+                q_current = q_next
+
+            while not q_current.empty():
+                solution_dominated.append(tuple(q_current.get()))
+        else:
+            solution_dominated.append(tuple(1 - solution))
+
+    # (2) transitivity application maximality
+    solution_exact = set()
+    for solution in solution_expansion:
+        if solution not in solution_dominated:
+            solution_exact.add(solution)
+
+    return list(solution_exact)
 
 
 class BinaryMultiLabel(bt.BinaryTree):
@@ -51,10 +120,12 @@ class BinaryMultiLabel(bt.BinaryTree):
 
 class MLCNCCExact(MLCNCC):
 
-    def __init__(self):
+    def __init__(self, DEBUG=False):
         super(MLCNCCExact, self).__init__()
         self.power_set = []
         self.root = None
+        self.DEBUG = DEBUG
+        self._logger = create_logger("MLCNCCExact", DEBUG)
 
     def learn(self, learn_data_set, nb_labels=1, seed_random_label=None):
         super(MLCNCCExact, self).learn(learn_data_set, nb_labels, seed_random_label)
@@ -97,6 +168,8 @@ class MLCNCCExact(MLCNCC):
         solutions = []
         indices_labels = list(range(self.nb_labels))
         all_output_space = list(product([0, 1], repeat=self.nb_labels))
+        maximality_sets = dict.fromkeys(all_output_space, True)
+        PARTIAL_VALUE = self.LABEL_PARTIAL_VALUE
 
         # @timeit
         def calculation_cost(a_sub_vector, neq_idx_labels=None):
@@ -106,144 +179,140 @@ class MLCNCCExact(MLCNCC):
                 _cost_vector.append(hamming_distance(y_sub_array, a_sub_vector))
             return np.array(_cost_vector)
 
-        # it only works for one test item for a moment
-        for item in test_dataset:
-            start = time.time()
-            for i in range(self.nb_labels - 1):
-                n_not_equal_indices = (self.nb_labels - 1) - i
-                a_set_indices = list(combinations(indices_labels, n_not_equal_indices))
-                # print(n_not_equal_indices, a_set_indices)
-                for neq_idx in a_set_indices:
-                    for a_vector in product([0, 1], repeat=n_not_equal_indices):
-                        cost_vector = calculation_cost(list(a_vector), list(neq_idx))
-                        inf_expectation = self.root.getlowerexpectation(cost_vector, item, ncc_s_param, ncc_epsilon)
-                        # print(a_vector, n_not_equal_indices, cost_vector, inf_expectation)
-                        # print("->", n_not_equal_indices, neq_idx, a_vector, cost_vector, inf_expectation)
-                        if (n_not_equal_indices * 0.5) > inf_expectation:
-                            no_one_prediction = 3 * np.ones(self.nb_labels, dtype=int)
-                            no_one_prediction[list(neq_idx)] = list(a_vector)
-                            # print("solution", no_one_prediction, a_vector, inf_expectation, neq_idx, cost_vector)
-                            solutions.append(no_one_prediction)
-
-            for a_vector in product([0, 1], repeat=self.nb_labels):
-                cost_vector = calculation_cost(list(a_vector))
-                # print("->", not_a_vector, cost_vector)
-                inf_expectation = self.root.getlowerexpectation(cost_vector, item, ncc_s_param, ncc_epsilon)
-                # print(a_vector, cost_vector, inf_expectation)
-                if (self.nb_labels * 0.5) > inf_expectation:
-                    # print("solution", not_a_vector, a_vector, inf_expectation, cost_vector)
-                    solutions.append(np.array(a_vector))
-            end = time.time()
-            # print("Time-Inference-Instance %s " % (end - start))
-
-        # print(solutions)
-        # (0) remove cycle transition
-        start = time.time()
-        for solution in solutions.copy():
-            inverse = []
-            for label in solution:
-                if label == 3:
-                    inverse.append(3)
-                else:
-                    inverse.append(1 - label)
-            for idx, sol2 in enumerate(solutions.copy()):
-                if np.array_equal(sol2, inverse):
-                    del solutions[idx]
-                    break
-
-        # print(solutions)
-        # (1) expansion binary vector
-        solution_expansion = []
-        for solution in solutions:
-            if 3 in solution:
-                current = np.array([], dtype=int)
-                q_current = queue.Queue()
-                for label in solution:
-                    q_next = queue.Queue()
-                    if not q_current.empty():
-                        while not q_current.empty():
-                            current = q_current.get()
-                            if label == 3:
-                                q_next.put(np.append(current, 1))
-                                q_next.put(np.append(current, 0))
-                            else:
-                                q_next.put(np.append(current, label))
-                    else:
+        def expansion_partial_binary_vector(binary_vector):
+            set_binary_vector = []
+            set_dominated_vector = []
+            current = np.array([], dtype=int)
+            q_current = queue.Queue()
+            partial_index = np.ones(len(binary_vector), dtype=bool)
+            for idx, label in enumerate(binary_vector):
+                q_next = queue.Queue()
+                if not q_current.empty():
+                    while not q_current.empty():
+                        current = q_current.get()
                         if label == 3:
+                            partial_index[idx] = False
                             q_next.put(np.append(current, 1))
                             q_next.put(np.append(current, 0))
                         else:
                             q_next.put(np.append(current, label))
-                    q_current = q_next
-
-                while not q_current.empty():
-                    solution_expansion.append(tuple(q_current.get()))
-            else:
-                solution_expansion.append(tuple(solution))
-
-        solution_dominated = []
-        for solution in solutions:
-            if 3 in solution:
-                current = np.array([], dtype=int)
-                q_current = queue.Queue()
-                for label in solution:
-                    q_next = queue.Queue()
-                    if not q_current.empty():
-                        while not q_current.empty():
-                            current = q_current.get()
-                            if label == 3:
-                                q_next.put(np.append(current, 1))
-                                q_next.put(np.append(current, 0))
-                            else:
-                                q_next.put(np.append(current, 1 - label))
+                else:
+                    if label == 3:
+                        partial_index[idx] = False
+                        q_next.put(np.append(current, 1))
+                        q_next.put(np.append(current, 0))
                     else:
-                        if label == 3:
-                            q_next.put(np.append(current, 1))
-                            q_next.put(np.append(current, 0))
-                        else:
-                            q_next.put(np.append(current, 1 - label))
-                    q_current = q_next
+                        q_next.put(np.append(current, label))
+                q_current = q_next
 
-                while not q_current.empty():
-                    solution_dominated.append(tuple(q_current.get()))
+            while not q_current.empty():
+                solution = q_current.get()
+                neg_solution = np.array(solution)
+                neg_solution[partial_index] = 1 - neg_solution[partial_index]
+                set_binary_vector.append(tuple(solution))
+                set_dominated_vector.append(tuple(neg_solution))
+
+            return set_binary_vector, set_dominated_vector
+
+        # @timeit
+        def is_solution_not_dominated(partial_prediction):
+            # print("-partial--->", partial_prediction)
+            if PARTIAL_VALUE in partial_prediction:
+                set_dominant, set_dominated = expansion_partial_binary_vector(partial_prediction)
             else:
-                solution_dominated.append(tuple(1 - solution))
+                set_dominant, set_dominated = [tuple(partial_prediction)], [tuple(1 - partial_prediction)]
+            is_not_dominated = False
+            for idx in range(len(set_dominant)):
+                # print("---->", set_dominant[idx], set_dominated[idx],
+                #       maximality_sets[set_dominant[idx]] and maximality_sets[set_dominated[idx]])
+                if maximality_sets[set_dominant[idx]] and maximality_sets[set_dominated[idx]]:
+                    is_not_dominated = True
+                    break
+            return is_not_dominated, set_dominated
 
-        # (2) transitivity application maximality
-        solution_exact = []
-        # print(solution_expansion)
-        # print(solution_dominated)
-        for solution in solution_expansion:
-            if solution not in solution_dominated:
-                solution_exact.append(np.array(solution))
-        # print("Time-Expansion-Transition-Cycle %s " % (time.time() - start))
+        def mark_solution_dominated(set_dominated_preds):
+            for dominated in set_dominated_preds:
+                # print("--dominated-->", dominated)
+                maximality_sets[dominated] = False
 
-        return self.create_partial_vector(solution_exact)
+        # @timeit
+        def inf_not_equal_labels(root, nb_labels, p_n_not_equal_indices, p_neq_idx=None):
+            for a_vector in product([0, 1], repeat=p_n_not_equal_indices):
+                partial_prediction = PARTIAL_VALUE * np.ones(nb_labels, dtype=int)
+                partial_prediction[p_neq_idx] = np.array(a_vector)
+                is_not_dominated, set_dominated_preds = is_solution_not_dominated(partial_prediction)
+                if is_not_dominated:
+                    not_a_vector = 1 - np.array(a_vector)
+                    cost_vector = calculation_cost(not_a_vector, p_neq_idx)
+                    inf_expectation = root.getlowerexpectation(cost_vector, item, ncc_s_param, ncc_epsilon)
+                    # print(a_vector, n_not_equal_indices, cost_vector, inf_expectation)
+                    # print("->", n_not_equal_indices, neq_idx, a_vector, cost_vector, inf_expectation)
+                    # print(a_vector, ">", not_a_vector, "==>", (p_n_not_equal_indices * 0.5), "<", inf_expectation)
+                    if (p_n_not_equal_indices * 0.5) < inf_expectation:
+                        # print("solution", no_one_prediction, a_vector, inf_expectation, neq_idx, cost_vector)
+                        solutions.append(partial_prediction)
+                        mark_solution_dominated(set_dominated_preds)
+
+        # it only works for one test item for a moment
+        for item in test_dataset:
+            start = time.time()
+            # some equal labels in comparison (m1 > m2)
+            for i in range(self.nb_labels - 1):
+                n_not_equal_indices = (self.nb_labels - 1) - i
+                a_set_indices = list(combinations(indices_labels, n_not_equal_indices))
+                for neq_idx in a_set_indices:
+                    inf_not_equal_labels(self.root, self.nb_labels, n_not_equal_indices, list(neq_idx))
+            # none equal labels (all different)
+            inf_not_equal_labels(self.root, self.nb_labels, self.nb_labels)
+            self._logger.debug("Time-Inference-Instance %s ", (time.time() - start))
+            if self.DEBUG:
+                self._logger.debug("Tree-probabilities")
+                self.root.printProba(item)
+
+        # self._logger.info("set partial solutions exact inference %s", solutions)
+        # self._logger.info("222set partial solutions exact inference %s",
+        #                   list(filter(lambda k: maximality_sets[k], maximality_sets.keys())))
+
+        # start = time.time()
+        # if len(solutions) > 0:
+        #     solution_exact = maximality_coherence(solutions)
+        # else:
+        #     solution_exact = all_output_space
+        solution_exact = list(filter(lambda k: maximality_sets[k], maximality_sets.keys()))
+        self._logger.debug("set solutions improved exact inference %s", solution_exact)
+        # self._logger.debug("Time-Expansion-Transition-Cycle %s ", (time.time() - start))
+        return solution_exact
 
     def evaluate_exact(self, test_dataset, ncc_s_param=2, ncc_epsilon=0.001):
-        solution_exact_set_m2 = set()
-        solution_exact_set_m1 = set()
+        """
+            This algorithm use the criterion of maximality used in CredalSet class
+            it exploits the transitivity property checking only dominant class with
+            uncheck class, e.g.
+                If a > b (a dominates b) and if b dominates c, then it is not necessary
+                to check b > c, because the expectation of a > c should be positive par
+                transitivity, in other words, a dominates c (this last is checked)
+        :param test_dataset:
+        :param ncc_s_param:
+        :param ncc_epsilon:
+        :return:
+        """
         all_output_space = list(product([0, 1], repeat=self.nb_labels))
+        maximality_idx = np.ones(len(all_output_space), dtype=bool)
         # it only works for one test item for a moment
         for item in test_dataset:
             for i1, m1 in enumerate(all_output_space):
                 for i2, m2 in enumerate(all_output_space):
-                    if i1 != i2:
+                    if i1 != i2 and maximality_idx[i1] and maximality_idx[i2]:
                         m1_cost_vector, m2_cost_vector = [], []
                         for y in all_output_space:
                             m1_cost_vector.append(hamming_distance(y, m1))
                             m2_cost_vector.append(hamming_distance(y, m2))
                         l_cost_vector = np.array(m2_cost_vector) - np.array(m1_cost_vector)
                         l_exp = self.root.getlowerexpectation(l_cost_vector, item, ncc_s_param, ncc_epsilon)
-                        # print(m1, ">", m2, l_exp)
+                        self._logger.debug("%s >_M %s  <=>  %s >? 0 ", m1, m2, l_exp)
                         if l_exp > 0:
-                            solution_exact_set_m1.add(m1)
-                            solution_exact_set_m2.add(m2)
+                            maximality_idx[i2] = False
+        solution_exact = list(compress(all_output_space, maximality_idx))
+        self._logger.debug("set solutions exact inference %s", solution_exact)
 
-        # verifier transitive maximality solutions (and remove elements dominated)
-        solution_exact = []
-        for solution in solution_exact_set_m1:
-            if solution not in solution_exact_set_m2:
-                solution_exact.append(np.array(solution))
-
-        return self.create_partial_vector(solution_exact)
+        return solution_exact

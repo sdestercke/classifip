@@ -1,8 +1,8 @@
 from classifip.evaluation import k_fold_cross_validation
 from classifip.utils import create_logger
 from classifip.dataset import arff
-from classifip.models import nccbr
-from classifip.models.mlcncc import MLCNCCExact
+from classifip.models.mlc import nccbr
+from classifip.models.mlc.exactncc import MLCNCCExact
 import math, os, random, sys, csv, numpy as np
 
 
@@ -11,15 +11,27 @@ def get_nb_labels_class(dataArff, type_class='nominal'):
     return len(nominal_class)
 
 
+def distance_cardinal_exact_inference(inference_exact, inference_exact_improved):
+    """
+        This method aims to check if the improved exact inference (3^m-1 comparisons)
+        has same number of solutions than the exact inference (all comparisons)
+    :param inference_exact:
+    :param inference_exact_improved:
+    :return:
+    """
+    return abs(len(inference_exact) - len(inference_exact_improved))
+
+
 def distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels):
-    power_outer, power_exact = 0, 0
-    for j in range(nb_labels):
-        # if isinstance(inference_outer[j], list):
-        if inference_outer[j] == -1:
-            power_outer += 1
-        if isinstance(inference_exact[j], list):
-            power_exact += 1
-    return abs(math.pow(2, power_exact) - math.pow(2, power_outer))
+    # power_outer, power_exact = 0, 0
+    # for j in range(nb_labels):
+    #     if inference_outer[j] == -1:
+    #         power_outer += 1
+    # if inference_exact[j] == -1:
+    #     power_exact += 1
+    # return abs(math.pow(2, power_exact) - math.pow(2, power_outer))
+    # return abs(math.pow(2, power_outer) - )
+    return abs(len(inference_exact) - len(inference_outer))
 
 
 def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, nb_kFold=10,
@@ -73,9 +85,13 @@ def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, n
                         set_prob_marginal = model_br.evaluate([test[:-nb_labels]], ncc_s_param=s_ncc)
                         inference_outer = set_prob_marginal[0].multilab_dom()
                         inference_exact = model_exact.evaluate([test[:-nb_labels]], ncc_s_param=s_ncc)
-                        # inference_all_exact = model_exact.evaluate_exact([test[:-nb_labels]], ncc_s_param=s_ncc)
-                        dist_measure = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
-                        # print("--->", inference_outer, inference_exact, inference_all_exact, dist_measure, flush=True)
+                        inference_all_exact = model_exact.evaluate_exact([test[:-nb_labels]], ncc_s_param=s_ncc)
+                        # distance_cardinal_set_inferences(inference_all_exact, inference_exact, nb_labels)
+                        dist_measure = distance_cardinal_exact_inference(inference_all_exact, inference_exact)
+                        if dist_measure > 0:
+                            print("--->", inference_outer, inference_exact, inference_all_exact, dist_measure,
+                                  flush=True)
+                            model_exact.root.printProba(item=test[:-nb_labels])
                         diff_inferences[disc][str(s_ncc)] += dist_measure / nb_testing
                 diff_inferences[disc][str(s_ncc)] = diff_inferences[disc][str(s_ncc)] / nb_kFold
                 writer.writerow([str(nb_disc), s_ncc, time, diff_inferences[disc][str(s_ncc)] / nb_kFold])
@@ -85,7 +101,7 @@ def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, n
     logger.debug("Results Final: %s", diff_inferences)
 
 
-_name = "labels3"
+_name = "labels5"
 sys_in_path = _name + ".arff"
 sys_out_path = "results_" + _name + ".csv"
 # QPBB_PATH_SERVER = []  # executed in host

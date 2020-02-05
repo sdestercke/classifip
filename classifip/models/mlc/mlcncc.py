@@ -12,6 +12,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.label_counts = []
         self.nb_labels = 0
         self.training_size = 0
+        self.LABEL_PARTIAL_VALUE = 3
 
     def learn(self, learn_data_set, nb_labels=1, seed_random_label=None):
         self.__init__()
@@ -139,19 +140,20 @@ class MLCNCC(metaclass=abc.ABCMeta):
         return u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0
 
     def create_partial_vector(self, solutions):
-        """
+        """ À VERIFIER ALGORITHM PARTIAL VECTOR LOL
+        [[0 0 0] [0 0 1] [0 1 1] [1 0 0] [1 0 1]] IS NOT PARTIAL IS SINGLE SOLUTIONS
         Naive version calculate partial vector from a set of solutions.
         Here, we consider that the value of a partial solution inside each solution of solutions is 3.
-        :return:
+        :param solutions: list of solution each of type tuple, e.g [(1, 0 , 1, ..., 1), ..., (1, 0 , 0, ..., 1)]
+        :return: return a binary partial vector, in other words, if solution of one label is [0, 1] = -1,
+                 otherwise it is either 1 or 0.
         """
-        if len(solutions) == 0:
-            partial_solution = 4 * np.ones(self.nb_labels, dtype=int)
-        else:
-            partial_solution = solutions[0]
-            for solution in solutions[1:]:
-                for j in range(self.nb_labels):
-                    if partial_solution[j] == 3 and solution[j] != 3:
-                        partial_solution[j] = solution[j]
-                    if abs(partial_solution[j] - solution[j]) == 1:
-                        partial_solution[j] = 4  # represent partial vector {0,1}
-        return [[0, 1] if y == 4 else y for y in partial_solution]
+
+        partial_solution = solutions[0]
+        for solution in solutions[1:]:
+            for j in range(self.nb_labels):
+                if partial_solution[j] == 3 and solution[j] != 3:
+                    partial_solution[j] = solution[j]
+                if abs(partial_solution[j] - solution[j]) == 1:
+                    partial_solution[j] = 4  # represent partial vector {0,1}
+        return [-1 if y == 4 else y for y in partial_solution]
