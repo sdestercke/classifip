@@ -1,4 +1,4 @@
-from multiprocessing import Process, Queue, cpu_count, JoinableQueue
+from multiprocessing import Process, Queue, cpu_count, JoinableQueue, Manager
 import importlib
 
 
@@ -23,7 +23,8 @@ def prediction(pid, tasks, queue, results, class_model):
             model.learn(**training)
             while True:
                 task = tasks.get()
-                if task is None: break
+                if task is None:
+                    break
                 prediction = model.evaluate(**task['kwargs'])
                 print("(pid, prediction, ground-truth) ", pid, prediction, task['y_test'], flush=True)
                 results.put(dict({'prediction': prediction, 'ground_truth': task['y_test']}))
@@ -36,18 +37,20 @@ def prediction(pid, tasks, queue, results, class_model):
 
 class ManagerWorkers:
 
-    def __init__(self, nb_process):
+    def __init__(self, nb_process, fun_prediction=None):
         self.workers = None
         self.tasks = Queue()
-        self.results = Queue()
+        self.manager = Manager()
+        self.results = self.manager.list()
         self.qeTraining = [JoinableQueue() for _ in range(nb_process)]
         self.NUMBER_OF_PROCESSES = cpu_count() if nb_process is None else nb_process
+        self.fun_prediction = fun_prediction
 
     def executeAsync(self, class_model):
         print("Starting %d workers" % self.NUMBER_OF_PROCESSES, flush=True)
         self.workers = []
         for i in range(self.NUMBER_OF_PROCESSES):
-            p = Process(target=prediction,
+            p = Process(target=prediction if self.fun_prediction is None else self.fun_prediction,
                         args=(i, self.tasks, self.qeTraining[i], self.results, class_model,))
             self.workers.append(p)
 
@@ -59,10 +62,12 @@ class ManagerWorkers:
             self.qeTraining[i].put(kwargs)
 
     def poisonPillTraining(self):
-        for i in range(self.NUMBER_OF_PROCESSES): self.qeTraining[i].put(None)
+        for i in range(self.NUMBER_OF_PROCESSES):
+            self.qeTraining[i].put(None)
 
     def joinTraining(self):
-        for i in range(self.NUMBER_OF_PROCESSES): self.qeTraining[i].join()
+        for i in range(self.NUMBER_OF_PROCESSES):
+            self.qeTraining[i].join()
 
     def addTask(self, task):
         self.tasks.put(task)
