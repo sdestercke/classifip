@@ -200,14 +200,14 @@ class Scores(object):
             known. 
         :rtype: :class:`~numpy.array`
         """
-        multilab_classe=np.ones(self.nbDecision)
+        multilab_classe = np.ones(self.nbDecision, dtype=int)
         for i in range(self.nbDecision):
-                if self.scores[i,0] > 0.5:
-                    multilab_classe[i]=1
-                elif self.scores[i,1] < 0.5:
-                    multilab_classe[i]=0
-                else:
-                    multilab_classe[i]=-1
+            if self.scores[i, 0] > 0.5:
+                multilab_classe[i] = 1
+            elif self.scores[i, 1] < 0.5:
+                multilab_classe[i] = 0
+            else:
+                multilab_classe[i] = -1
         return multilab_classe
         
     

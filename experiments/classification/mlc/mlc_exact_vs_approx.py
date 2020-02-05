@@ -23,15 +23,11 @@ def distance_cardinal_exact_inference(inference_exact, inference_exact_improved)
 
 
 def distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels):
-    # power_outer, power_exact = 0, 0
-    # for j in range(nb_labels):
-    #     if inference_outer[j] == -1:
-    #         power_outer += 1
-    # if inference_exact[j] == -1:
-    #     power_exact += 1
-    # return abs(math.pow(2, power_exact) - math.pow(2, power_outer))
-    # return abs(math.pow(2, power_outer) - )
-    return abs(len(inference_exact) - len(inference_outer))
+    power_outer = 0
+    for j in range(nb_labels):
+        if inference_outer[j] == -1:
+            power_outer += 1
+    return abs(math.pow(2, power_outer) - len(inference_exact))
 
 
 def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, nb_kFold=10,
@@ -40,7 +36,7 @@ def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, n
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
-    logger = create_logger("computing_best_imprecise_mean_cv", True)
+    logger = create_logger("computing_best_imprecise_mean_cv", False)
     logger.info('Training dataset (%s, %s)', in_path, out_path)
 
     # Seeding a random value for k-fold top learning-testing data
@@ -85,23 +81,19 @@ def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, n
                         set_prob_marginal = model_br.evaluate([test[:-nb_labels]], ncc_s_param=s_ncc)
                         inference_outer = set_prob_marginal[0].multilab_dom()
                         inference_exact = model_exact.evaluate([test[:-nb_labels]], ncc_s_param=s_ncc)
-                        inference_all_exact = model_exact.evaluate_exact([test[:-nb_labels]], ncc_s_param=s_ncc)
-                        # distance_cardinal_set_inferences(inference_all_exact, inference_exact, nb_labels)
-                        dist_measure = distance_cardinal_exact_inference(inference_all_exact, inference_exact)
-                        if dist_measure > 0:
-                            print("--->", inference_outer, inference_exact, inference_all_exact, dist_measure,
-                                  flush=True)
-                            model_exact.root.printProba(item=test[:-nb_labels])
+                        dist_measure = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
+                        # inference_all_exact = model_exact.evaluate_exact([test[:-nb_labels]], ncc_s_param=s_ncc)
+                        # dist_measure = distance_cardinal_exact_inference(inference_all_exact, inference_exact)
+                        logger.debug("Outer %s, Exact %s, Distance %s", inference_outer, inference_exact, dist_measure)
                         diff_inferences[disc][str(s_ncc)] += dist_measure / nb_testing
                 diff_inferences[disc][str(s_ncc)] = diff_inferences[disc][str(s_ncc)] / nb_kFold
                 writer.writerow([str(nb_disc), s_ncc, time, diff_inferences[disc][str(s_ncc)] / nb_kFold])
                 file_csv.flush()
-                logger.debug("Partial-s-k_step (%s, %s, %s, %s)", disc, s_ncc, time, diff_inferences[disc][str(s_ncc)])
-
+                logger.info("Partial-s-k_step (%s, %s, %s, %s)", disc, s_ncc, time, diff_inferences[disc][str(s_ncc)])
     logger.debug("Results Final: %s", diff_inferences)
 
 
-_name = "labels5"
+_name = "labels2"
 sys_in_path = _name + ".arff"
 sys_out_path = "results_" + _name + ".csv"
 # QPBB_PATH_SERVER = []  # executed in host
