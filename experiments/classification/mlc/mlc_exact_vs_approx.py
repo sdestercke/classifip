@@ -28,9 +28,6 @@ def distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels
     for j in range(nb_labels):
         if inference_outer[j] == -1:
             power_outer += 1
-
-    if math.pow(2, power_outer) - len(inference_exact) < 0:
-        print(inference_outer, inference_exact, flush=True)
     return abs(math.pow(2, power_outer) - len(inference_exact))
 
 
@@ -52,10 +49,11 @@ def prediction_dist(pid, tasks, queue, results, class_model):
                 nb_labels = len(task['y_test'])
                 set_prob_marginal = model_br.evaluate(**task['kwargs'])
                 inference_outer = set_prob_marginal[0].multilab_dom()
-                inference_exact = model_exact.evaluate(**task['kwargs'])
-                dist_measure += distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
+                inference_exact = model_exact.evaluate(**task['kwargs'])[0]
+                distance_cardinal = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
+                dist_measure += distance_cardinal
                 print("(pid, exact, outer, ground-truth, distance) ", pid, inference_exact, inference_outer,
-                      task['y_test'], dist_measure, flush=True)
+                      task['y_test'], distance_cardinal, flush=True)
             results.append(dict({'dist_measure': dist_measure}))
             queue.task_done()
     except Exception as e:
