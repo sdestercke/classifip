@@ -31,10 +31,12 @@ class ManagerWorkers:
             self.qeTraining[i].put(kwargs)
 
     def poisonPillTraining(self):
-        for i in range(self.NUMBER_OF_PROCESSES): self.qeTraining[i].put(None)
+        for i in range(self.NUMBER_OF_PROCESSES):
+            self.qeTraining[i].put(None)
 
     def joinTraining(self):
-        for i in range(self.NUMBER_OF_PROCESSES): self.qeTraining[i].join()
+        for i in range(self.NUMBER_OF_PROCESSES):
+            self.qeTraining[i].join()
 
     def addTask(self, task):
         self.tasks.put(task)
@@ -78,7 +80,8 @@ def computing_training_testing_step(X_training, y_training, X_testing, y_testing
     manager.addNewTraining(X=X_training, y=y_training, ell=ell_current)
 
     # Send testing data to every parallel process
-    for i, test in enumerate(X_testing): manager.addTask({'X_test': test, 'y_test': y_testing[i]})
+    for i, test in enumerate(X_testing):
+        manager.addTask({'X_test': test, 'y_test': y_testing[i]})
     manager.poisonPillWorkers()
     manager.joinTraining()  # wait all process for computing results
 

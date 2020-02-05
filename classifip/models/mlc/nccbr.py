@@ -34,30 +34,30 @@ class NCCBR(object):
         self.trainingsize = 0
         self.labelcounts = []
 
-    def learn(self, learndataset, nblabels):
+    def learn(self, learn_data_set, nb_labels):
         """learn the NCC for each label, mainly storing counts of feature/label pairs
         
-        :param learndataset: learning instances
-        :type learndataset: :class:`~classifip.dataset.arff.ArffFile`
-        :param nblabels: number of labels
-        :type nblabels: integer
+        :param learn_data_set: learning instances
+        :type learn_data_set: :class:`~classifip.dataset.arff.ArffFile`
+        :param nb_labels: number of labels
+        :type nb_labels: integer
         """
         self.__init__()
-        self.nblabels = nblabels
-        self.trainingsize = len(learndataset.data)
+        self.nblabels = nb_labels
+        self.trainingsize = len(learn_data_set.data)
         # Initializing the counts
-        self.feature_names = learndataset.attributes[:-self.nblabels]
-        self.label_names = learndataset.attributes[-self.nblabels:]
-        self.feature_values = learndataset.attribute_data.copy()
+        self.feature_names = learn_data_set.attributes[:-self.nblabels]
+        self.label_names = learn_data_set.attributes[-self.nblabels:]
+        self.feature_values = learn_data_set.attribute_data.copy()
         for label_value in self.label_names:
-            label_set_one = learndataset.select_col_vals(label_value, ['1'])
+            label_set_one = learn_data_set.select_col_vals(label_value, ['1'])
             self.labelcounts.append(len(label_set_one.data))
-            label_set_zero = learndataset.select_col_vals(label_value, ['0'])
+            label_set_zero = learn_data_set.select_col_vals(label_value, ['0'])
             for feature in self.feature_names:
                 count_vector_one = []
                 count_vector_zero = []
-                feature_index = learndataset.attributes.index(feature)
-                for feature_value in learndataset.attribute_data[feature]:
+                feature_index = learn_data_set.attributes.index(feature)
+                for feature_value in learn_data_set.attribute_data[feature]:
                     nb_items_one = [row[feature_index] for row in label_set_one.data].count(feature_value)
                     count_vector_one.append(nb_items_one)
                     nb_items_zero = [row[feature_index] for row in label_set_zero.data].count(feature_value)
@@ -65,10 +65,10 @@ class NCCBR(object):
                 self.feature_count[label_value + '|in|' + feature] = count_vector_one
                 self.feature_count[label_value + '|out|' + feature] = count_vector_zero
 
-    def evaluate(self, testdataset, ncc_epsilon=0.001, ncc_s_param=2.0):
+    def evaluate(self, test_dataset, ncc_epsilon=0.001, ncc_s_param=2.0):
         """evaluate the instances and return a list of probability intervals.
         
-        :param testdataset: list of input features of instances to evaluate
+        :param test_dataset: list of input features of instances to evaluate
         :type dataset: list
         :param ncc_epsilon: espilon issued from [#corani2010]_ (should be > 0)
             to avoid zero count issues
@@ -98,7 +98,7 @@ class NCCBR(object):
         # computing label proportions
         label_prop = [n / float(self.trainingsize) for n in self.labelcounts]
         answers = []
-        for item in testdataset:
+        for item in test_dataset:
 
             # initializing scores
             resulting_score = np.zeros((self.nblabels, 2))

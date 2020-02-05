@@ -3,6 +3,7 @@ from classifip.utils import create_logger
 from classifip.dataset import arff
 from classifip.models.mlc import nccbr
 from classifip.models.mlc.exactncc import MLCNCCExact
+from mlc_manager import ManagerWorkers, __create_dynamic_class
 import math, os, random, sys, csv, numpy as np
 
 
@@ -27,11 +28,71 @@ def distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels
     for j in range(nb_labels):
         if inference_outer[j] == -1:
             power_outer += 1
+
+    if math.pow(2, power_outer) - len(inference_exact) < 0:
+        print(inference_outer, inference_exact, flush=True)
     return abs(math.pow(2, power_outer) - len(inference_exact))
 
 
+def prediction_dist(pid, tasks, queue, results, class_model):
+    try:
+        model_br = nccbr.NCCBR()
+        model_exact = __create_dynamic_class(class_model)
+        while True:
+            training = queue.get()
+            if training is None:
+                break
+            model_exact.learn(**training)
+            model_br.learn(**training)
+            dist_measure = 0
+            while True:
+                task = tasks.get()
+                if task is None:
+                    break
+                nb_labels = len(task['y_test'])
+                set_prob_marginal = model_br.evaluate(**task['kwargs'])
+                inference_outer = set_prob_marginal[0].multilab_dom()
+                inference_exact = model_exact.evaluate(**task['kwargs'])
+                dist_measure += distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
+                print("(pid, exact, outer, ground-truth, distance) ", pid, inference_exact, inference_outer,
+                      task['y_test'], dist_measure, flush=True)
+            results.append(dict({'dist_measure': dist_measure}))
+            queue.task_done()
+    except Exception as e:
+        raise Exception(e, "Error in job of PID " + pid)
+    finally:
+        print("Worker PID finished", pid, flush=True)
+
+
+def computing_training_testing_step(learn_data_set,
+                                    test_data_set,
+                                    nb_labels,
+                                    ncc_imprecise,
+                                    manager,
+                                    dist_measure):
+    # Send training data model to every parallel process
+    manager.addNewTraining(learn_data_set=learn_data_set, nb_labels=nb_labels)
+
+    # Send testing data to every parallel process
+    for test in test_data_set.data:
+        manager.addTask(
+            {'kwargs': {'test_dataset': [test[:-nb_labels]],
+                        'ncc_epsilon': 0.001,
+                        'ncc_s_param': ncc_imprecise},
+             'y_test': test[-nb_labels:]})
+    manager.poisonPillWorkers()
+    manager.joinTraining()  # wait all process for computing results
+    nb_testing = len(test_data_set.data)
+    # Recovery all inference data of all parallel process
+    shared_results = manager.getResults()
+    for _ in range(manager.NUMBER_OF_PROCESSES):
+        utility = shared_results.pop()
+        dist_measure += utility["dist_measure"] / nb_testing
+    return dist_measure
+
+
 def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, nb_kFold=10,
-                                       intvl_ncc_s_param=None, step_ncc_s=1.0):
+                                       intvl_ncc_s_param=None, step_ncc_s=1.0, nb_process=1):
     intvl_ncc_s_param = list([2, 5]) if intvl_ncc_s_param is None else intvl_ncc_s_param
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
@@ -49,9 +110,9 @@ def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, n
     file_csv = open(out_path, 'a')
     writer = csv.writer(file_csv)
 
-    # Create the models
-    model_br = nccbr.NCCBR()
-    model_exact = MLCNCCExact()
+    # Create manager
+    manager = ManagerWorkers(nb_process=nb_process, fun_prediction=prediction_dist)
+    manager.executeAsync(class_model="classifip.models.mlc.exactncc.MLCNCCExact")
 
     diff_inferences = dict()
     min_discretize, max_discretize = 5, 6
@@ -72,24 +133,18 @@ def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, n
             disc = str(nb_disc) + "-" + str(time)
             diff_inferences[disc] = dict()
             for s_ncc in np.arange(intvl_ncc_s_param[0], intvl_ncc_s_param[1], step_ncc_s):
-                diff_inferences[disc][str(s_ncc)] = 0
+                ks_ncc = str(s_ncc)
+                diff_inferences[disc][ks_ncc] = 0
                 for idx_fold, (training, testing) in enumerate(splits_s):
-                    model_br.learn(training, nb_labels)
-                    model_exact.learn(training, nb_labels)
-                    nb_testing = len(testing.data)
-                    for test in testing.data:
-                        set_prob_marginal = model_br.evaluate([test[:-nb_labels]], ncc_s_param=s_ncc)
-                        inference_outer = set_prob_marginal[0].multilab_dom()
-                        inference_exact = model_exact.evaluate([test[:-nb_labels]], ncc_s_param=s_ncc)
-                        dist_measure = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
-                        # inference_all_exact = model_exact.evaluate_exact([test[:-nb_labels]], ncc_s_param=s_ncc)
-                        # dist_measure = distance_cardinal_exact_inference(inference_all_exact, inference_exact)
-                        logger.debug("Outer %s, Exact %s, Distance %s", inference_outer, inference_exact, dist_measure)
-                        diff_inferences[disc][str(s_ncc)] += dist_measure / nb_testing
-                diff_inferences[disc][str(s_ncc)] = diff_inferences[disc][str(s_ncc)] / nb_kFold
-                writer.writerow([str(nb_disc), s_ncc, time, diff_inferences[disc][str(s_ncc)] / nb_kFold])
+                    diff_inferences[disc][ks_ncc] = computing_training_testing_step(training, testing,
+                                                                                    nb_labels, s_ncc, manager,
+                                                                                    diff_inferences[disc][ks_ncc])
+                diff_inferences[disc][ks_ncc] = diff_inferences[disc][ks_ncc] / nb_kFold
+                writer.writerow([str(nb_disc), s_ncc, time, diff_inferences[disc][ks_ncc] / nb_kFold])
                 file_csv.flush()
-                logger.info("Partial-s-k_step (%s, %s, %s, %s)", disc, s_ncc, time, diff_inferences[disc][str(s_ncc)])
+                logger.info("Partial-s-k_step (%s, %s, %s, %s)", disc, s_ncc, time, diff_inferences[disc][ks_ncc])
+    manager.poisonPillTraining()
+    file_csv.close()
     logger.debug("Results Final: %s", diff_inferences)
 
 
@@ -98,4 +153,4 @@ sys_in_path = _name + ".arff"
 sys_out_path = "results_" + _name + ".csv"
 # QPBB_PATH_SERVER = []  # executed in host
 computing_outer_vs_exact_inference(in_path=sys_in_path, out_path=sys_out_path,
-                                   intvl_ncc_s_param=[1, 5], step_ncc_s=0.5)
+                                   intvl_ncc_s_param=[1, 5], step_ncc_s=0.5, nb_process=1)
