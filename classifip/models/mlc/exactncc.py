@@ -189,7 +189,7 @@ class MLCNCCExact(MLCNCC):
                         mark_solution_dominated(set_dominated_preds)
 
         # some equal labels in comparison (m1 > m2)
-        for i in range(self.nb_labels - 1):
+        for i in reversed(range(self.nb_labels - 1)):
             n_not_equal_indices = (self.nb_labels - 1) - i
             a_set_indices = list(combinations(indices_labels, n_not_equal_indices))
             for neq_idx in a_set_indices:
