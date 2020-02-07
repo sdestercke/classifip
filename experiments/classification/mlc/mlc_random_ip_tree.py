@@ -186,8 +186,8 @@ def parallel_inferences(pid_tree, nb_labels, epsilon):
     set_marginal_probabilities = marginal_probabilities_v1(root, nb_labels)
     inference_outer = set_marginal_probabilities.multilab_dom()
     distance_cardinal = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
-    print("Pid (%s) Exact versus Outer (%s, %s, %s)" %
-          (pid, len(inference_exact), inference_outer, distance_cardinal))
+    print("Pid (%s, %s) Exact versus Outer (%s, %s, %s)" %
+          (pid, pid_tree, len(inference_exact), inference_outer, distance_cardinal), flush=True)
     if distance_cardinal < 0:
         raise Exception("Not possible %s, %s" % (inference_exact, inference_outer))
     return distance_cardinal
