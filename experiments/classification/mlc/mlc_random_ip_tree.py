@@ -179,12 +179,15 @@ def inference_exact_inference(root, nb_labels):
     return solution_exact
 
 
-def parallel_inferences(pid, nb_labels, epsilon):
+def parallel_inferences(pid_tree, nb_labels, epsilon):
+    pid = multiprocessing.current_process().name
     root = generation_independent_labels(nb_labels, epsilon=epsilon)
     inference_exact = inference_exact_inference(root, nb_labels)
     set_marginal_probabilities = marginal_probabilities_v1(root, nb_labels)
     inference_outer = set_marginal_probabilities.multilab_dom()
     distance_cardinal = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
+    print("Pid (%s) Exact versus Outer (%s, %s, %s)" %
+          (pid, len(inference_exact), inference_outer, distance_cardinal))
     if distance_cardinal < 0:
         raise Exception("Not possible %s, %s" % (inference_exact, inference_outer))
     return distance_cardinal
@@ -212,7 +215,7 @@ def computing_outer_vs_exact_inference_random_tree(out_path,
     for epsilon in np.arange(0.05, 0.5, step_ncc_s):
         target_function = partial(parallel_inferences, nb_labels=nb_labels, epsilon=epsilon)
         set_distance_cardinal = POOL.map(target_function, range(nb_repeats))
-        writer.writerow([str(epsilon), sum(set_distance_cardinal) / nb_repeats])
+        writer.writerow(np.hstack((epsilon, set_distance_cardinal)))
         file_csv.flush()
         logger.info("Partial-s-k_step (%s, %s)", str(epsilon), sum(set_distance_cardinal) / nb_repeats)
     file_csv.close()
@@ -224,4 +227,4 @@ sys_out_path = "results_labels" + str(sys_nb_labels) + ".csv"
 computing_outer_vs_exact_inference_random_tree(out_path=sys_out_path,
                                                nb_labels=sys_nb_labels,
                                                nb_repeats=10000,
-                                               nb_process=2)
+                                               nb_process=1)
