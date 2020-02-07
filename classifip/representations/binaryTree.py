@@ -599,14 +599,15 @@ class BinaryTree(credalset.CredalSet):
             print("    " * _p + str(self.right.node.label))
             self.right.printTree(_p)
 
-    def printProba(self, item=None):
+    def printProba(self, item=None, ncc_s_param=2, ncc_epsilon=0.001):
         """
         Method for printing each node's probability intervals.
         """
 
         def printP(tree, _p=0):
             if isinstance(tree.node.proba, types.FunctionType):
-                bound_probabilities = tree.node.proba(item, ncc_s_param=1)
+                # class exactncc.py -> __learning_sub_model return function
+                bound_probabilities = tree.node.proba(item, ncc_s_param, ncc_epsilon)
             else:
                 bound_probabilities = tree.node.proba
 

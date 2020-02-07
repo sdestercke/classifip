@@ -5,6 +5,7 @@ from classifip.models.mlc import nccbr
 from classifip.models.mlc.exactncc import MLCNCCExact
 from mlc_manager import ManagerWorkers, __create_dynamic_class
 import math, os, random, sys, csv, numpy as np
+from mlc_common import distance_cardinal_set_inferences
 
 
 def get_nb_labels_class(dataArff, type_class='nominal'):
@@ -21,14 +22,6 @@ def distance_cardinal_exact_inference(inference_exact, inference_exact_improved)
     :return:
     """
     return abs(len(inference_exact) - len(inference_exact_improved))
-
-
-def distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels):
-    power_outer = 0
-    for j in range(nb_labels):
-        if inference_outer[j] == -1:
-            power_outer += 1
-    return abs(math.pow(2, power_outer) - len(inference_exact))
 
 
 def prediction_dist(pid, tasks, queue, results, class_model):
@@ -50,6 +43,7 @@ def prediction_dist(pid, tasks, queue, results, class_model):
                 set_prob_marginal = model_br.evaluate(**task['kwargs'])
                 inference_outer = set_prob_marginal[0].multilab_dom()
                 inference_exact = model_exact.evaluate(**task['kwargs'])[0]
+                # inference_exact_all = model_exact.evaluate_exact(**task['kwargs'])[0]
                 distance_cardinal = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
                 dist_measure += distance_cardinal
                 print("(pid, exact, outer, ground-truth, distance) ", pid, inference_exact, inference_outer,
@@ -95,7 +89,7 @@ def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, n
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
-    logger = create_logger("computing_best_imprecise_mean_cv", False)
+    logger = create_logger("computing_outer_vs_exact_inference", True)
     logger.info('Training dataset (%s, %s)', in_path, out_path)
 
     # Seeding a random value for k-fold top learning-testing data

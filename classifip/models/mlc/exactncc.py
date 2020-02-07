@@ -183,7 +183,7 @@ class MLCNCCExact(MLCNCC):
                     not_a_vector = 1 - np.array(a_vector)
                     cost_vector = calculation_cost(not_a_vector, p_neq_idx)
                     inf_expectation = root.getlowerexpectation(cost_vector, new_instance, ncc_s_param, ncc_epsilon)
-                    __logger.debug("%s >_M %s ==> %s <? %s", a_vector, not_a_vector,
+                    __logger.debug("%s >_M %s ==> %s <? %s", partial_prediction, not_a_vector,
                                    (p_n_not_equal_indices * 0.5), inf_expectation)
                     if (p_n_not_equal_indices * 0.5) < inf_expectation:
                         mark_solution_dominated(set_dominated_preds)

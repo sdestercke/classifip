@@ -61,7 +61,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
     def lower_upper_probability(self, feature, feature_value, ncc_s_param, feature_class_name, ncc_epsilon):
 
         def __restricting_idm(probability, ncc_epsilon_ip, len_features):
-            return (1 - ncc_epsilon) * probability + ncc_epsilon_ip / len_features
+            return (1 - ncc_epsilon_ip) * probability + ncc_epsilon_ip / len_features
 
         f_val_index = self.feature_values[feature].index(feature_value)  #
         num_items = float(sum(self.feature_count[feature_class_name]))
@@ -138,22 +138,3 @@ class MLCNCC(metaclass=abc.ABCMeta):
         u_denominator_0 = u_denominator_0 * u_denominator_label_0
         l_denominator_0 = l_denominator_0 * l_denominator_label_0
         return u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0
-
-    def create_partial_vector(self, solutions):
-        """ À VERIFIER ALGORITHM PARTIAL VECTOR LOL
-        [[0 0 0] [0 0 1] [0 1 1] [1 0 0] [1 0 1]] IS NOT PARTIAL IS SINGLE SOLUTIONS
-        Naive version calculate partial vector from a set of solutions.
-        Here, we consider that the value of a partial solution inside each solution of solutions is 3.
-        :param solutions: list of solution each of type tuple, e.g [(1, 0 , 1, ..., 1), ..., (1, 0 , 0, ..., 1)]
-        :return: return a binary partial vector, in other words, if solution of one label is [0, 1] = -1,
-                 otherwise it is either 1 or 0.
-        """
-
-        partial_solution = solutions[0]
-        for solution in solutions[1:]:
-            for j in range(self.nb_labels):
-                if partial_solution[j] == 3 and solution[j] != 3:
-                    partial_solution[j] = solution[j]
-                if abs(partial_solution[j] - solution[j]) == 1:
-                    partial_solution[j] = 4  # represent partial vector {0,1}
-        return [-1 if y == 4 else y for y in partial_solution]
