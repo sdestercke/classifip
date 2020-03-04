@@ -14,10 +14,11 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.training_size = 0
         self.LABEL_PARTIAL_VALUE = 3
 
-    def learn(self, learn_data_set, nb_labels=1, seed_random_label=None):
+    def learn(self, learn_data_set, nb_labels=1, missing_pct=0.0, seed_random_label=None):
         self.__init__()
         self.nb_labels = nb_labels
-        self.training_size = len(learn_data_set.data)
+        self.training_size = int(len(learn_data_set.data) * (1 - missing_pct)) if missing_pct > 0.0 \
+            else len(learn_data_set.data)
 
         # Initializing the counts
         self.feature_names = learn_data_set.attributes[:-self.nb_labels]
@@ -29,10 +30,15 @@ class MLCNCC(metaclass=abc.ABCMeta):
             np.random.shuffle(self.label_names)
         self.feature_values = learn_data_set.attribute_data.copy()
         for label_value in self.label_names:
-            label_set_one = learn_data_set.select_col_vals(label_value, ['1'])
+            missing_label_index = None
+            if missing_pct > 0:
+                missing_label_index = np.random.choice(len(learn_data_set.data),
+                                                       int(len(learn_data_set.data) * missing_pct),
+                                                       replace=False)
+            # recovery count of class 1 and 0
+            label_set_one = learn_data_set.select_col_vals(label_value, ['1'], missing_label_index)
             self.label_counts.append(len(label_set_one.data))
-            label_set_zero = learn_data_set.select_col_vals(label_value, ['0'])
-
+            label_set_zero = learn_data_set.select_col_vals(label_value, ['0'], missing_label_index)
             for feature in self.feature_names:
                 count_vector_one, count_vector_zero = [], []
                 feature_index = learn_data_set.attributes.index(feature)

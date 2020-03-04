@@ -73,10 +73,15 @@ class ManagerWorkers:
         self.tasks.put(task)
 
     def waitWorkers(self):
-        for w in self.workers: w.join()
+        for w in self.workers:
+            w.join()
 
     def getResults(self):
         return self.results
 
+    def restartResults(self):
+        self.results[:] = []
+
     def poisonPillWorkers(self):
-        for i in range(self.NUMBER_OF_PROCESSES): self.addTask(None)
+        for i in range(self.NUMBER_OF_PROCESSES):
+            self.addTask(None)

@@ -24,10 +24,10 @@ from classifip.models.mlc import nccbr
 model = nccbr.NCCBR()
 
 # Learning
-model.learn(data, nblab)
+model.learn(data, nblab, missing_pct=0.1)
 
 # Evaluation : we can set the parametersof the classifier
-test = model.evaluate([row[0:len(row) - nblab] for row in data.data[0:10]], ncc_epsilon=0.001, ncc_s_param=1)
+test = model.evaluate([row[0:len(row) - nblab] for row in data.data[0:10]], ncc_epsilon=0.001, ncc_s_param=0.5)
 
 # The output is a list of probability intervals, we can print each instance :
 print("Probability intervals obtained for each label on the first test instance \n")

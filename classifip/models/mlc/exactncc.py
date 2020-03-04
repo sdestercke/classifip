@@ -60,8 +60,9 @@ class MLCNCCExact(MLCNCC):
         self.DEBUG = DEBUG
         self._logger = create_logger("MLCNCCExact", DEBUG)
 
-    def learn(self, learn_data_set, nb_labels=1, seed_random_label=None):
-        super(MLCNCCExact, self).learn(learn_data_set, nb_labels, seed_random_label)
+    @timeit
+    def learn(self, learn_data_set, nb_labels=1, missing_pct=0.0, seed_random_label=None):
+        super(MLCNCCExact, self).learn(learn_data_set, nb_labels, missing_pct, seed_random_label)
 
         label_prior = [lab_count / float(self.training_size) for lab_count in self.label_counts]
         self.power_set = ["".join(seq) for seq in product("01", repeat=self.nb_labels)]
@@ -119,43 +120,21 @@ class MLCNCCExact(MLCNCC):
                 _cost_vector.append(hamming_distance(y_sub_array, a_sub_vector))
             return np.array(_cost_vector)
 
-        # @timeit
         def expansion_partial_binary_vector(binary_vector):
-            set_binary_vector = []
-            set_dominated_vector = []
-            current = np.array([], dtype=int)
-            q_current = queue.Queue()
-            partial_index = np.ones(len(binary_vector), dtype=bool)
-            for idx, label in enumerate(binary_vector):
-                q_next = queue.Queue()
-                if not q_current.empty():
-                    while not q_current.empty():
-                        current = q_current.get()
-                        if label == 3:
-                            partial_index[idx] = False
-                            q_next.put(np.append(current, 1))
-                            q_next.put(np.append(current, 0))
-                        else:
-                            q_next.put(np.append(current, label))
+            new_partial_vector = list()
+            new_net_partial_vector = list()
+            for label in binary_vector:
+                if label == PARTIAL_VALUE:
+                    new_partial_vector.append([1, 0])
+                    new_net_partial_vector.append([1, 0])
                 else:
-                    if label == 3:
-                        partial_index[idx] = False
-                        q_next.put(np.append(current, 1))
-                        q_next.put(np.append(current, 0))
-                    else:
-                        q_next.put(np.append(current, label))
-                q_current = q_next
+                    new_partial_vector.append([label])
+                    new_net_partial_vector.append([1 - label])
 
-            while not q_current.empty():
-                solution = q_current.get()
-                neg_solution = np.array(solution)
-                neg_solution[partial_index] = 1 - neg_solution[partial_index]
-                set_binary_vector.append(tuple(solution))
-                set_dominated_vector.append(tuple(neg_solution))
-
+            set_binary_vector = list(product(*new_partial_vector))
+            set_dominated_vector = list(product(*new_net_partial_vector))
             return set_binary_vector, set_dominated_vector
 
-        # @timeit
         def is_solution_not_dominated(partial_prediction):
             if PARTIAL_VALUE in partial_prediction:
                 set_dominant, set_dominated = expansion_partial_binary_vector(partial_prediction)
@@ -168,12 +147,10 @@ class MLCNCCExact(MLCNCC):
                     break
             return is_not_dominated, set_dominated
 
-        # @timeit
         def mark_solution_dominated(set_dominated_preds):
             for dominated in set_dominated_preds:
                 maximality_sets[dominated] = False
 
-        # @timeit
         def inf_not_equal_labels(root, nb_labels, p_n_not_equal_indices, p_neq_idx=None):
             for a_vector in product([0, 1], repeat=p_n_not_equal_indices):
                 partial_prediction = PARTIAL_VALUE * np.ones(nb_labels, dtype=int)

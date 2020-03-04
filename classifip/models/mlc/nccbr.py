@@ -34,25 +34,36 @@ class NCCBR(object):
         self.trainingsize = 0
         self.labelcounts = []
 
-    def learn(self, learn_data_set, nb_labels):
+    def learn(self, learn_data_set, nb_labels, missing_pct=0.0):
         """learn the NCC for each label, mainly storing counts of feature/label pairs
         
         :param learn_data_set: learning instances
         :type learn_data_set: :class:`~classifip.dataset.arff.ArffFile`
         :param nb_labels: number of labels
         :type nb_labels: integer
+        :param missing_pct: percentage of missing labels
+        :type missing_pct: float
         """
         self.__init__()
+        if missing_pct < 0.0 or missing_pct > 1.0:
+            raise Exception('Negative percentage or Percentage higher than one.')
         self.nblabels = nb_labels
-        self.trainingsize = len(learn_data_set.data)
+        self.trainingsize = int(len(learn_data_set.data) * (1 - missing_pct)) if missing_pct > 0.0 \
+            else len(learn_data_set.data)
         # Initializing the counts
         self.feature_names = learn_data_set.attributes[:-self.nblabels]
         self.label_names = learn_data_set.attributes[-self.nblabels:]
         self.feature_values = learn_data_set.attribute_data.copy()
         for label_value in self.label_names:
-            label_set_one = learn_data_set.select_col_vals(label_value, ['1'])
+            missing_label_index = None
+            if missing_pct > 0:
+                missing_label_index = np.random.choice(len(learn_data_set.data),
+                                                       int(len(learn_data_set.data) * missing_pct),
+                                                       replace=False)
+
+            label_set_one = learn_data_set.select_col_vals(label_value, ['1'], missing_label_index)
             self.labelcounts.append(len(label_set_one.data))
-            label_set_zero = learn_data_set.select_col_vals(label_value, ['0'])
+            label_set_zero = learn_data_set.select_col_vals(label_value, ['0'], missing_label_index)
             for feature in self.feature_names:
                 count_vector_one = []
                 count_vector_zero = []
@@ -114,21 +125,21 @@ class NCCBR(object):
                     count_string = self.label_names[j] + '|in|' + feature
                     num_items = float(sum(self.feature_count[count_string]))
                     lower = (self.feature_count[count_string][f_val_index] / (num_items + ncc_s_param))
-                    l_denom = l_denom * ((1 - ncc_epsilon) * lower +
-                                         ncc_epsilon / len(self.feature_count[count_string]))
+                    l_denom = l_denom * (
+                            (1 - ncc_epsilon) * lower + ncc_epsilon / len(self.feature_count[count_string]))
                     upper = ((self.feature_count[count_string][f_val_index] + ncc_s_param) / (num_items + ncc_s_param))
-                    u_denom = u_denom * ((1 - ncc_epsilon) * upper +
-                                         ncc_epsilon / len(self.feature_count[count_string]))
+                    u_denom = u_denom * (
+                            (1 - ncc_epsilon) * upper + ncc_epsilon / len(self.feature_count[count_string]))
 
                     # computation of numerator (label=0)
                     count_string = self.label_names[j] + '|out|' + feature
                     num_items = float(sum(self.feature_count[count_string]))
-                    lower = ((self.feature_count[count_string][f_val_index] + ncc_s_param) / (num_items + ncc_s_param))
-                    l_numerator = l_numerator * ((1 - ncc_epsilon) * lower +
-                                                 ncc_epsilon / len(self.feature_count[count_string]))
-                    upper = (self.feature_count[count_string][f_val_index]) / (num_items + ncc_s_param)
-                    u_numerator = u_numerator * ((1 - ncc_epsilon) * upper +
-                                                 ncc_epsilon / len(self.feature_count[count_string]))
+                    upper = ((self.feature_count[count_string][f_val_index] + ncc_s_param) / (num_items + ncc_s_param))
+                    l_numerator = l_numerator * (
+                            (1 - ncc_epsilon) * upper + ncc_epsilon / len(self.feature_count[count_string]))
+                    lower = (self.feature_count[count_string][f_val_index]) / (num_items + ncc_s_param)
+                    u_numerator = u_numerator * (
+                            (1 - ncc_epsilon) * lower + ncc_epsilon / len(self.feature_count[count_string]))
                 resulting_score[j, 1] = u_denom / (u_denom + u_numerator)
                 resulting_score[j, 0] = l_denom / (l_denom + l_numerator)
             result = Scores(resulting_score)

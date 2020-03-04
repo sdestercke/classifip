@@ -1,4 +1,4 @@
-import numpy as np
+import random, numpy as np
 import queue, os, multiprocessing, csv
 from functools import partial
 from classifip.utils import create_logger
@@ -7,6 +7,7 @@ from classifip.representations.intervalsProbability import IntervalsProbability
 from classifip.representations.voting import Scores
 from classifip.evaluation.measures import hamming_distance
 from mlc_common import distance_cardinal_set_inferences
+from classifip.utils import timeit
 
 
 def print_binary_tree(root):
@@ -103,38 +104,18 @@ def inference_exact_inference(root, nb_labels):
         return np.array(_cost_vector)
 
     def expansion_partial_binary_vector(binary_vector):
-        set_binary_vector = []
-        set_dominated_vector = []
-        current = np.array([], dtype=int)
-        q_current = queue.Queue()
-        partial_index = np.ones(len(binary_vector), dtype=bool)
-        for idx, label in enumerate(binary_vector):
-            q_next = queue.Queue()
-            if not q_current.empty():
-                while not q_current.empty():
-                    current = q_current.get()
-                    if label == 3:
-                        partial_index[idx] = False
-                        q_next.put(np.append(current, 1))
-                        q_next.put(np.append(current, 0))
-                    else:
-                        q_next.put(np.append(current, label))
+        new_partial_vector = list()
+        new_net_partial_vector = list()
+        for label in binary_vector:
+            if label == 3:
+                new_partial_vector.append([1, 0])
+                new_net_partial_vector.append([1, 0])
             else:
-                if label == 3:
-                    partial_index[idx] = False
-                    q_next.put(np.append(current, 1))
-                    q_next.put(np.append(current, 0))
-                else:
-                    q_next.put(np.append(current, label))
-            q_current = q_next
+                new_partial_vector.append([label])
+                new_net_partial_vector.append([1 - label])
 
-        while not q_current.empty():
-            solution = q_current.get()
-            neg_solution = np.array(solution)
-            neg_solution[partial_index] = 1 - neg_solution[partial_index]
-            set_binary_vector.append(tuple(solution))
-            set_dominated_vector.append(tuple(neg_solution))
-
+        set_binary_vector = list(product(*new_partial_vector))
+        set_dominated_vector = list(product(*new_net_partial_vector))
         return set_binary_vector, set_dominated_vector
 
     def is_solution_not_dominated(partial_prediction):
@@ -158,10 +139,14 @@ def inference_exact_inference(root, nb_labels):
             partial_prediction = PARTIAL_VALUE * np.ones(nb_labels, dtype=int)
             partial_prediction[p_neq_idx] = np.array(a_vector)
             is_not_dominated, set_dominated_preds = is_solution_not_dominated(partial_prediction)
+            # print("%s ==> is_dominated %s" % (partial_prediction, is_not_dominated), flush=True)
             if is_not_dominated:
                 not_a_vector = 1 - np.array(a_vector)
                 cost_vector = calculation_cost(not_a_vector, p_neq_idx)
                 inf_expectation = getlowerexpectation(cost_vector, root)
+                # print("%s >_M %s ==> %s <? %s" % (
+                #     partial_prediction, not_a_vector, (p_n_not_equal_indices * 0.5),
+                #     inf_expectation), flush=True)
                 if (p_n_not_equal_indices * 0.5) < inf_expectation:
                     mark_solution_dominated(set_dominated_preds)
 
@@ -194,7 +179,7 @@ def parallel_inferences(pid_tree, nb_labels, epsilon):
 
 
 def computing_outer_vs_exact_inference_random_tree(out_path,
-                                                   step_ncc_s=0.05,
+                                                   step_ncc_s=0.1,
                                                    nb_labels=3,
                                                    nb_repeats=100,
                                                    nb_process=1,
@@ -202,7 +187,6 @@ def computing_outer_vs_exact_inference_random_tree(out_path,
     assert os.path.exists(out_path), "File for putting results does not exist"
 
     logger = create_logger("computing_outer_vs_exact_inference_random_tree", True)
-    # Seeding a random value for k-fold top learning-testing data
     if seed is not None:
         random.seed(seed)
     logger.debug("[FIRST-STEP-SEED] SEED: %s", seed)
@@ -219,7 +203,7 @@ def computing_outer_vs_exact_inference_random_tree(out_path,
         file_csv.flush()
         logger.info("Partial-s-k_step (%s, %s)", str(epsilon), sum(set_distance_cardinal) / nb_repeats)
     file_csv.close()
-    logger.debug("Results Final")
+    logger.info("Results Final")
 
 
 sys_nb_labels = 4

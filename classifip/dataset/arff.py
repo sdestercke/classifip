@@ -145,35 +145,38 @@ class ArffFile(object):
         selection.comment=self.comment[:]
 
         return selection
-    
-    def select_col_vals(self,column,select):
+
+    def select_col_vals(self, column, select, missing_index=None):
         """return an ARFF File where only some rows are selected in data
         
         :param select: the values to retain
         :type select: list
         :param column: name of the attribute
         :type column: string
+        :param missing_index: set index missing labels
+        :type missing_index: list
         :return: a new ArffFile structure containing only selected values in the column
         :rtype: :class:`~classifip.dataset.arff.ArffFile`
         """
-        
+
         if column not in self.attribute_data.keys():
             raise NameError("Cannot find specified column.")
-        selection=ArffFile()
-        col_ind=self.attributes.index(column)
-        #construct list with sets of indices matching infos
-        indices=[i for i,val in enumerate(self.data) if val[col_ind] in select]
-        
-        selected_data=[self.data[i] for i in indices]
-        
-        selection.attribute_data=self.attribute_data.copy()
-        selection.attribute_types=self.attribute_types.copy()
-        if self.attribute_types[column]=='nominal':
-            selection.attribute_data[column]=select
+        if missing_index is None:
+            missing_index = list()
+        selection = ArffFile()
+        col_ind = self.attributes.index(column)
+        # construct list with sets of indices matching infos
+        indices = [i for i, val in enumerate(self.data) if val[col_ind] in select]
+        selected_data = [self.data[i] for i in set(indices) - set(missing_index)]
+
+        selection.attribute_data = self.attribute_data.copy()
+        selection.attribute_types = self.attribute_types.copy()
+        if self.attribute_types[column] == 'nominal':
+            selection.attribute_data[column] = select
         selection.data = selected_data
-        selection.relation=self.relation
-        selection.attributes=self.attributes[:]
-        selection.comment=self.comment[:]
+        selection.relation = self.relation
+        selection.attributes = self.attributes[:]
+        selection.comment = self.comment[:]
         
         return selection
     
@@ -229,7 +232,7 @@ class ArffFile(object):
     
         return selection
     
-    def remove_col(self,column):
+    def remove_col(self, column):
         """return an ARFF File where the specified column is removed
         
         :param column: name of the attribute
