@@ -67,6 +67,9 @@ def skeptical_prediction(pid, tasks, queue, results, class_model):
 def computing_training_testing_step(learn_data_set,
                                     test_data_set,
                                     missing_pct,
+                                    noise_label_pct,
+                                    noise_label_type,
+                                    noise_label_prob,
                                     nb_labels,
                                     ncc_imprecise,
                                     manager,
@@ -74,7 +77,12 @@ def computing_training_testing_step(learn_data_set,
                                     ich_out, cph_out,
                                     acc_prec, jacc_skep):
     # Send training data model to every parallel process
-    manager.addNewTraining(learn_data_set=learn_data_set, nb_labels=nb_labels, missing_pct=missing_pct)
+    manager.addNewTraining(learn_data_set=learn_data_set,
+                           nb_labels=nb_labels,
+                           missing_pct=missing_pct,
+                           noise_label_pct=noise_label_pct,
+                           noise_label_type=noise_label_type,
+                           noise_label_prob=noise_label_prob)
 
     # Send testing data to every parallel process
     for test in test_data_set.data:
@@ -111,6 +119,9 @@ def computing_best_imprecise_mean(in_path=None,
                                   out_path=None,
                                   seed=None,
                                   missing_pct=0.0,
+                                  noise_label_pct=0.0,
+                                  noise_label_type=-1,
+                                  noise_label_prob=0.5,
                                   nb_kFold=10,
                                   nb_process=1,
                                   scaling=True,
@@ -121,6 +132,10 @@ def computing_best_imprecise_mean(in_path=None,
 
     logger = create_logger("computing_best_imprecise_mean_cv", True)
     logger.info('Training dataset (%s, %s)', in_path, out_path)
+    logger.info("(scaling, max_ncc_s, remove_features, process) (%s, %s, %s, %s)",
+                scaling, max_ncc_s_param, remove_features, nb_process)
+    logger.info("(missing_pct, noise_label_pct, noise_label_type, noise_label_prob) (%s, %s, %s, %s)",
+                missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
 
     # Seeding a random value for k-fold top learning-testing data
     if seed is not None:
@@ -172,6 +187,9 @@ def computing_best_imprecise_mean(in_path=None,
                     rs = computing_training_testing_step(training,
                                                          testing,
                                                          missing_pct,
+                                                         noise_label_pct,
+                                                         noise_label_type,
+                                                         noise_label_prob,
                                                          nb_labels,
                                                          s_ncc,
                                                          manager,
@@ -213,4 +231,7 @@ computing_best_imprecise_mean(in_path=in_path,
                               out_path=out_path,
                               nb_process=1,
                               missing_pct=0.0,
+                              noise_label_pct=0.0,
+                              noise_label_type=-1,
+                              noise_label_prob=0.5,
                               remove_features=["image_name"])

@@ -1,68 +1,50 @@
 from classifip.dataset.arff import ArffFile
 from classifip.representations.voting import Scores
+from classifip.models.mlc.mlcncc import MLCNCC
 import numpy as np
 from math import exp
 
 
-class NCCBR(object):
-    """NCCBR implements the naive credal classification method using the IDM for
-    multilabel classification with binary relevance.
-    
-    If data are all precise, it returns
-    :class:`~classifip.representations.voting.Scores`. The base classifier method
-    is based on [#zaffalon2002]_ and on the improvement proposed by [#corani2010]_
-    
-    :param feature_count: store counts of couples label/feature
-    :type feature_count: dictionnary with keys label/feature
-    :param label_counts: store counts of class labels (to instanciate prior)
-    :type label_counts: list
-    :param feature_names: store the names of features
-    :type feature_names: list
-    :param feature_values: store modalities of features
-    :type feature_values: dictionnary associating each feature name to a list
-    
-    """
+class NCCBR(MLCNCC):
 
     def __init__(self):
-        """Build an empty NCCBR structure
-        """
-        self.feature_names = []
-        self.label_names = []
-        self.feature_values = dict()
-        self.feature_count = dict()
-        self.nblabels = 0
-        self.trainingsize = 0
-        self.labelcounts = []
+        """Build an empty NCCBR structure """
+        super(NCCBR, self).__init__()
 
-    def learn(self, learn_data_set, nb_labels, missing_pct=0.0):
-        """learn the NCC for each label, mainly storing counts of feature/label pairs
-        
-        :param learn_data_set: learning instances
-        :type learn_data_set: :class:`~classifip.dataset.arff.ArffFile`
-        :param nb_labels: number of labels
-        :type nb_labels: integer
-        :param missing_pct: percentage of missing labels
-        :type missing_pct: float
-        """
+    def learn(self,
+              learn_data_set,
+              nb_labels,
+              missing_pct=0.0,
+              noise_label_pct=0.0,
+              noise_label_type=-1,
+              noise_label_prob=0.5,
+              seed_random_label=None):
         self.__init__()
         if missing_pct < 0.0 or missing_pct > 1.0:
-            raise Exception('Negative percentage or Percentage higher than one.')
-        self.nblabels = nb_labels
-        self.trainingsize = int(len(learn_data_set.data) * (1 - missing_pct)) if missing_pct > 0.0 \
+            raise Exception('Negative percentage or higher than one of missing label.')
+        if noise_label_type not in [1, 2, -1]:
+            raise Exception('Configuration noise label is not implemented yet.')
+        if noise_label_pct < 0.0 or noise_label_pct > 1.0:
+            raise Exception('Negative percentage or higher than one of noise label.')
+
+        self.nb_labels = nb_labels
+        self.training_size = int(len(learn_data_set.data) * (1 - missing_pct)) if missing_pct > 0.0 \
             else len(learn_data_set.data)
         # Initializing the counts
-        self.feature_names = learn_data_set.attributes[:-self.nblabels]
-        self.label_names = learn_data_set.attributes[-self.nblabels:]
+        self.feature_names = learn_data_set.attributes[:-self.nb_labels]
+        self.label_names = learn_data_set.attributes[-self.nb_labels:]
         self.feature_values = learn_data_set.attribute_data.copy()
+
+        # noise labels procedure
+        self.noise_labels_learn_data_set(learn_data_set, noise_label_pct, noise_label_type, noise_label_prob)
         for label_value in self.label_names:
             missing_label_index = None
             if missing_pct > 0:
                 missing_label_index = np.random.choice(len(learn_data_set.data),
                                                        int(len(learn_data_set.data) * missing_pct),
                                                        replace=False)
-
             label_set_one = learn_data_set.select_col_vals(label_value, ['1'], missing_label_index)
-            self.labelcounts.append(len(label_set_one.data))
+            self.label_counts.append(len(label_set_one.data))
             label_set_zero = learn_data_set.select_col_vals(label_value, ['0'], missing_label_index)
             for feature in self.feature_names:
                 count_vector_one = []
@@ -107,14 +89,14 @@ class NCCBR(object):
             
         """
         # computing label proportions
-        label_prop = [n / float(self.trainingsize) for n in self.labelcounts]
+        label_prop = [n / float(self.training_size) for n in self.label_counts]
         answers = []
         for item in test_dataset:
 
             # initializing scores
-            resulting_score = np.zeros((self.nblabels, 2))
+            resulting_score = np.zeros((self.nb_labels, 2))
             # computes product of lower/upper prob for each class
-            for j in range(self.nblabels):
+            for j in range(self.nb_labels):
                 u_numerator = 1 - label_prop[j]
                 l_numerator = 1 - label_prop[j]
                 u_denom = label_prop[j]

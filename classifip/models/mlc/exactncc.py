@@ -61,8 +61,21 @@ class MLCNCCExact(MLCNCC):
         self._logger = create_logger("MLCNCCExact", DEBUG)
 
     @timeit
-    def learn(self, learn_data_set, nb_labels=1, missing_pct=0.0, seed_random_label=None):
-        super(MLCNCCExact, self).learn(learn_data_set, nb_labels, missing_pct, seed_random_label)
+    def learn(self,
+              learn_data_set,
+              nb_labels,
+              missing_pct=0.0,
+              noise_label_pct=0.0,
+              noise_label_type=-1,
+              noise_label_prob=0.5,
+              seed_random_label=None):
+        super(MLCNCCExact, self).learn(learn_data_set,
+                                       nb_labels,
+                                       missing_pct,
+                                       noise_label_pct,
+                                       noise_label_type,
+                                       noise_label_prob,
+                                       seed_random_label)
 
         label_prior = [lab_count / float(self.training_size) for lab_count in self.label_counts]
         self.power_set = ["".join(seq) for seq in product("01", repeat=self.nb_labels)]

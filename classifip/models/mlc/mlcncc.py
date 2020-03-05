@@ -3,6 +3,24 @@ import numpy as np
 
 
 class MLCNCC(metaclass=abc.ABCMeta):
+    """
+        NCCBR implements the naive credal classification method using the IDM for
+            multilabel classification with binary relevance.
+
+        If data are all precise, it returns
+        :class:`~classifip.representations.voting.Scores`. The base classifier method
+        is based on [#zaffalon2002]_ and on the improvement proposed by [#corani2010]_
+
+        :param feature_count: store counts of couples label/feature
+        :type feature_count: dictionnary with keys label/feature
+        :param label_counts: store counts of class labels (to instanciate prior)
+        :type label_counts: list
+        :param feature_names: store the names of features
+        :type feature_names: list
+        :param feature_values: store modalities of features
+        :type feature_values: dictionnary associating each feature name to a list
+
+    """
 
     def __init__(self):
         self.feature_names = []
@@ -14,8 +32,39 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.training_size = 0
         self.LABEL_PARTIAL_VALUE = 3
 
-    def learn(self, learn_data_set, nb_labels=1, missing_pct=0.0, seed_random_label=None):
+    def learn(self,
+              learn_data_set,
+              nb_labels,
+              missing_pct=0.0,
+              noise_label_pct=0.0,
+              noise_label_type=-1,
+              noise_label_prob=0.5,
+              seed_random_label=None):
+        """learn the NCC for each label, mainly storing counts of feature/label pairs
+
+        :param learn_data_set: learning instances
+        :type learn_data_set: :class:`~classifip.dataset.arff.ArffFile`
+        :param nb_labels: number of labels
+        :type nb_labels: integer
+        :param missing_pct: percentage of missing labels
+        :type missing_pct: float
+        :type noise_label_pct: percentage noise labels
+        :param noise_label_pct: float
+        :param noise_label_type: type of noise label flipping
+        :type noise_label_type: integer
+        :param noise_label_prob: probability to flip a label
+        :type noise_label_prob: float
+        :param seed_random_label: randomly mixing labels Y1, Y2, ..., Ym
+        :type seed_random_label: float
+        """
         self.__init__()
+        if missing_pct < 0.0 or missing_pct > 1.0:
+            raise Exception('Negative percentage or higher than one of missing label.')
+        if noise_label_type not in [1, 2, -1]:
+            raise Exception('Configuration noise label is not implemented yet.')
+        if noise_label_pct < 0.0 or noise_label_pct > 1.0:
+            raise Exception('Negative percentage or higher than one of noise label.')
+
         self.nb_labels = nb_labels
         self.training_size = int(len(learn_data_set.data) * (1 - missing_pct)) if missing_pct > 0.0 \
             else len(learn_data_set.data)
@@ -29,6 +78,9 @@ class MLCNCC(metaclass=abc.ABCMeta):
             np.random.seed(seed_random_label)
             np.random.shuffle(self.label_names)
         self.feature_values = learn_data_set.attribute_data.copy()
+
+        # noise labels procedure
+        self.noise_labels_learn_data_set(learn_data_set, noise_label_pct, noise_label_type, noise_label_prob)
         for label_value in self.label_names:
             missing_label_index = None
             if missing_pct > 0:
@@ -63,6 +115,53 @@ class MLCNCC(metaclass=abc.ABCMeta):
                         count_vector_zero.append(nb_items_zero)
                     self.feature_count[label_value + '|in|' + label_feature] = count_vector_one
                     self.feature_count[label_value + '|out|' + label_feature] = count_vector_zero
+
+    def noise_labels_learn_data_set(self, learn_data_set, noise_label_pct, noise_label_type, noise_label_prob):
+        """
+        :type noise_label_pct: percentage noise labels
+        :param noise_label_pct: float
+        :param noise_label_type: type of noise label flipping
+            (1) reverse change 1-0
+            (2) with probability p label relevant 1 (bernoulli trials)
+            (3) label relevant 1 with probability greater than p (uniform randomly)
+        :type noise_label_type: integer
+        :param noise_label_prob: probability to flip a label
+        :type noise_label_prob: float
+        """
+        if noise_label_pct > 0 and noise_label_type in [1, 2]:
+            size_learn_data = len(learn_data_set.data)
+            set_label_index = np.zeros((size_learn_data, self.nb_labels), dtype=int)
+            for i in range(self.nb_labels):
+                noise_index_by_label = np.random.choice(size_learn_data,
+                                                        int(size_learn_data * noise_label_pct),
+                                                        replace=False)
+                if noise_label_type == 1:
+                    set_label_index[noise_index_by_label, i] = 1
+                elif noise_label_type == 2:
+                    noise_label_flip = np.random.choice([0, 1],
+                                                        size=int(size_learn_data * noise_label_pct),
+                                                        p=[1 - noise_label_prob, noise_label_prob])
+                    set_label_index[noise_index_by_label, i] = 3 - noise_label_flip  # 2:=1 and 3:=0
+                elif noise_label_type == 3:
+                    noise_uniform_rand = np.random.uniform(size=int(size_learn_data * noise_label_pct))
+                    noise_uniform_rand[noise_uniform_rand >= noise_label_prob] = 1
+                    noise_uniform_rand[noise_uniform_rand < noise_label_prob] = 0
+                    set_label_index[noise_index_by_label, i] = 3 - noise_uniform_rand  # 2:=1 and 3:=0
+
+            if noise_label_type == 1:
+                for i, instance in enumerate(learn_data_set.data):
+                    noise_label_by_inst = abs(set_label_index[i, :] - np.array(instance[-self.nb_labels:], dtype=int))
+                    instance[-self.nb_labels:] = noise_label_by_inst.astype('<U1').tolist()
+            elif noise_label_type == 2 or noise_label_type == 3:
+                for i, instance in enumerate(learn_data_set.data):
+                    idx_zero = np.where(set_label_index[i, :] == 3)
+                    idx_one = np.where(set_label_index[i, :] == 2)
+                    noise_labels_value = np.array(instance[-self.nb_labels:], dtype=int)
+                    noise_labels_value[idx_zero] = 0
+                    noise_labels_value[idx_one] = 1
+                    instance[-self.nb_labels:] = noise_labels_value.astype('<U1').tolist()
+            else:
+                raise Exception('Configuration noise label is not implemented yet.')
 
     def lower_upper_probability(self, feature, feature_value, ncc_s_param, feature_class_name, ncc_epsilon):
 

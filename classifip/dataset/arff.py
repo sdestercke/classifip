@@ -153,7 +153,7 @@ class ArffFile(object):
         :type select: list
         :param column: name of the attribute
         :type column: string
-        :param missing_index: set index missing labels
+        :param missing_index: set index missing instances
         :type missing_index: list
         :return: a new ArffFile structure containing only selected values in the column
         :rtype: :class:`~classifip.dataset.arff.ArffFile`
