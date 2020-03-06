@@ -134,8 +134,10 @@ def computing_best_imprecise_mean(in_path=None,
 
     logger = create_logger("computing_best_imprecise_mean_cv", True)
     logger.info('Training dataset (%s, %s)', in_path, out_path)
-    logger.info("(scaling, max_ncc_s, remove_features, process) (%s, %s, %s, %s)",
-                scaling, max_ncc_s_param, remove_features, nb_process)
+    logger.info("(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param) (%s, %s, %s)",
+                min_ncc_s_param, max_ncc_s_param, step_ncc_s_param)
+    logger.info("(scaling, remove_features, process) (%s, %s, %s)",
+                scaling, remove_features, nb_process)
     logger.info("(missing_pct, noise_label_pct, noise_label_type, noise_label_prob) (%s, %s, %s, %s)",
                 missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
 

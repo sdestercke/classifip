@@ -20,8 +20,8 @@ class Scores(object):
     lower bound | 0.500 0.300 0.800
     
     """
-    
-    def __init__(self,sc_values):
+
+    def __init__(self, sc_values, precision_decimal=16):
         """instanciate a vote structure
         
         :param sc_values: array providing lower and upper score values
@@ -30,14 +30,17 @@ class Scores(object):
         """
         if sc_values.__class__.__name__ != 'ndarray':
             raise Exception('Expecting a numpy array as argument')
-        if sc_values[0,:].size != 2:
+        if sc_values[0, :].size != 2:
             raise Exception('Array should contain two columns: minimum and maximal values')
         if sc_values.ndim != 2:
             raise Exception('Bad dimension of array: should contain 2 dimensions')
-        self.scores=sc_values
-        self.nbDecision=sc_values[:,0].size
-        if np.all(sc_values[:,1] >=sc_values[:,0]) != 1:
-            raise Exception('Some minimal values higher than maximal ones')
+        self.scores = sc_values
+        self.nbDecision = sc_values[:, 0].size
+        # approximation due to precision decimal greater than 16 decimals
+        sc_values = np.around(sc_values, decimals=precision_decimal)
+        if np.all(sc_values[:, 1] >= sc_values[:, 0]) != 1:
+            np.set_printoptions(precision=40, suppress=True)
+            raise Exception('Some minimal values higher than maximal ones', sc_values)
 
     def isproper(self):
         """coherence with generic representation class
