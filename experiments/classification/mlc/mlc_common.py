@@ -1,11 +1,13 @@
 import math
 import numpy as np
 
+CONST_PARTIAL_VALUE = -1
+
 
 def distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels):
     power_outer = 0
     for j in range(nb_labels):
-        if inference_outer[j] == -1:
+        if inference_outer[j] == CONST_PARTIAL_VALUE:
             power_outer += 1
     return math.pow(2, power_outer) - len(inference_exact)
 
@@ -29,7 +31,7 @@ def get_nb_labels_class(dataArff, type_class='nominal'):
 def incorrectness_completeness_measure(y_true, y_prediction):
     Q, m, hamming = [], len(y_true), 0
     for i, y in enumerate(y_true):
-        if y_prediction[i] != -1:
+        if y_prediction[i] != CONST_PARTIAL_VALUE:
             Q.append(y_prediction[i])
             if y_prediction[i] != y:
                 hamming += 1

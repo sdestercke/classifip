@@ -6,6 +6,7 @@ from classifip.models.mlc import nccbr
 from mlc_manager import ManagerWorkers, __create_dynamic_class
 import sys, os, random, csv, numpy as np
 from mlc_common import *
+from itertools import product
 
 
 def transform_semi_partial_vector(full_binary_vector):
@@ -23,10 +24,22 @@ def transform_semi_partial_vector(full_binary_vector):
     for idx_label in range(nb_labels):
         label_value = np.unique(full_binary_vector[:, idx_label])
         if len(label_value) > 1:
-            result[idx_label] = -1
+            result[idx_label] = CONST_PARTIAL_VALUE
         else:
             result[idx_label] = label_value[0]
     return result
+
+
+def expansion_partial_to_full_set_binary_vector(partial_binary_vector):
+    new_set_binary_vector = list()
+    for label in partial_binary_vector:
+        if label == CONST_PARTIAL_VALUE:
+            new_set_binary_vector.append([1, 0])
+        else:
+            new_set_binary_vector.append([label])
+
+    set_binary_vector = list(product(*new_set_binary_vector))
+    return set_binary_vector
 
 
 def skeptical_prediction(pid, tasks, queue, results, class_model):
@@ -98,13 +111,15 @@ def computing_training_testing_step(learn_data_set,
     shared_results = manager.getResults()
     for prediction in shared_results:
         y_true = np.array(prediction['ground_truth'], dtype=np.int)
-        y_skeptical_exact = transform_semi_partial_vector(prediction['skeptical'])
+        y_skeptical_exact = prediction['skeptical']
         y_outer = prediction['outer']
         y_precise = prediction['precise']
-        inc_ich_skep, inc_cph_skep = incorrectness_completeness_measure(y_true, y_skeptical_exact)
+        y_skeptical_exact_partial = transform_semi_partial_vector(y_skeptical_exact)
+        inc_ich_skep, inc_cph_skep = incorrectness_completeness_measure(y_true, y_skeptical_exact_partial)
         inc_ich_out, inc_cph_out = incorrectness_completeness_measure(y_true, y_outer)
         inc_acc_prec, _ = incorrectness_completeness_measure(y_true, y_precise)
-        inc_jacc = compute_jaccard_similarity_score(y_outer, y_skeptical_exact)
+        y_outer_full_set = expansion_partial_to_full_set_binary_vector(y_outer)
+        inc_jacc = compute_jaccard_similarity_score(y_outer_full_set, y_skeptical_exact)
         ich_skep += inc_ich_skep / nb_tests
         cph_skep += inc_cph_skep / nb_tests
         ich_out += inc_ich_out / nb_tests
@@ -176,8 +191,8 @@ def computing_best_imprecise_mean(in_path=None,
             splits_s = list([])
             for training, testing in cv_kfold:
                 splits_s.append((training, testing))
-                logger.info("Splits %s train %s", len(training.data), training.data[0])
-                logger.info("Splits %s test %s", len(testing.data), testing.data[0])
+                logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
+                logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
 
             disc = str(nb_disc) + "-" + str(time)
             ich_skep[disc], cph_skep[disc], jacc_skep[disc] = dict(), dict(), dict()
@@ -237,7 +252,7 @@ computing_best_imprecise_mean(in_path=in_path,
                               noise_label_pct=0.0,
                               noise_label_type=-1,
                               noise_label_prob=0.5,
-                              min_ncc_s_param=0.05,
-                              max_ncc_s_param=0.5,
-                              step_ncc_s_param=0.1,
+                              min_ncc_s_param=0.5,
+                              max_ncc_s_param=6,
+                              step_ncc_s_param=1,
                               remove_features=["image_name"])
