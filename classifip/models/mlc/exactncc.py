@@ -25,6 +25,13 @@ class BinaryMultiLabel(bt.BinaryTree):
         def lowerExp(NDtree):
             bound_probabilities = NDtree.node.proba(item, ncc_s_param, ncc_epsilon)
             if bound_probabilities.isreachable() == 0:
+                # do approximation in precise case with parameter s nearly zero 0
+                # check precision 0.9...9 (10 times), supremum should be greater than 1
+                sum_sup_prob = bound_probabilities.lproba[0, :].sum()
+                if (1 - 1e-10) < sum_sup_prob < 1:
+                    idx_big_prob = np.argmin(bound_probabilities.lproba[0, :])
+                    value_big_prob = bound_probabilities.lproba[0, idx_big_prob]
+                    bound_probabilities.lproba[0, idx_big_prob] = value_big_prob + (1 - sum_sup_prob)
                 bound_probabilities.setreachableprobability()
 
             if NDtree.left.node.count() == 1 and NDtree.left.node.count() == 1:

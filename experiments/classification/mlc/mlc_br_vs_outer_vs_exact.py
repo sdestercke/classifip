@@ -125,7 +125,9 @@ def computing_best_imprecise_mean(in_path=None,
                                   nb_kFold=10,
                                   nb_process=1,
                                   scaling=True,
-                                  max_ncc_s_param=5,
+                                  min_ncc_s_param=0.5,
+                                  max_ncc_s_param=6.0,
+                                  step_ncc_s_param=1.0,
                                   remove_features=None):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
@@ -138,9 +140,8 @@ def computing_best_imprecise_mean(in_path=None,
                 missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
 
     # Seeding a random value for k-fold top learning-testing data
-    if seed is not None:
-        random.seed(seed)
-    seed = [random.randrange(sys.maxsize) for _ in range(nb_kFold)]
+    if seed is None:
+        seed = [random.randrange(sys.maxsize) for _ in range(nb_kFold)]
     logger.debug("[FIRST-STEP-SEED] SEED: %s", seed)
 
     # Create a CSV file for saving results
@@ -179,7 +180,7 @@ def computing_best_imprecise_mean(in_path=None,
             disc = str(nb_disc) + "-" + str(time)
             ich_skep[disc], cph_skep[disc], jacc_skep[disc] = dict(), dict(), dict()
             ich_out[disc], cph_out[disc], acc_prec[disc] = dict(), dict(), dict()
-            for s_ncc in np.arange(0.5, max_ncc_s_param + 1, 1):
+            for s_ncc in np.arange(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param):
                 ks_ncc = str(s_ncc)
                 ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc], jacc_skep[disc][ks_ncc] = 0, 0, 0
                 ich_out[disc][ks_ncc], cph_out[disc][ks_ncc], acc_prec[disc][ks_ncc] = 0, 0, 0
@@ -234,4 +235,7 @@ computing_best_imprecise_mean(in_path=in_path,
                               noise_label_pct=0.0,
                               noise_label_type=-1,
                               noise_label_prob=0.5,
+                              min_ncc_s_param=0.05,
+                              max_ncc_s_param=0.5,
+                              step_ncc_s_param=0.1,
                               remove_features=["image_name"])

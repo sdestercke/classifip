@@ -22,10 +22,6 @@ class NCCBR(MLCNCC):
         self.__init__()
         if missing_pct < 0.0 or missing_pct > 1.0:
             raise Exception('Negative percentage or higher than one of missing label.')
-        if noise_label_type not in [1, 2, -1]:
-            raise Exception('Configuration noise label is not implemented yet.')
-        if noise_label_pct < 0.0 or noise_label_pct > 1.0:
-            raise Exception('Negative percentage or higher than one of noise label.')
 
         self.nb_labels = nb_labels
         self.training_size = int(len(learn_data_set.data) * (1 - missing_pct)) if missing_pct > 0.0 \
