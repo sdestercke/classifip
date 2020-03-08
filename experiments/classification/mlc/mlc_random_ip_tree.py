@@ -212,7 +212,7 @@ def inference_exact_inference(root, nb_labels):
             if is_not_dominated:
                 not_a_vector = 1 - np.array(a_vector)
                 cost_vector = calculation_cost(not_a_vector, p_neq_idx)
-                inf_expectation = exec_expectation_inf(cost_vector)  # getlowerexpectationV2(cost_vector, root)
+                inf_expectation = exec_expectation_inf(cost_vector)
                 # print("%s >_M %s ==> %s <? %s" % (
                 #     partial_prediction, not_a_vector, (p_n_not_equal_indices * 0.5),
                 #     inf_expectation), flush=True)
@@ -240,6 +240,10 @@ def parallel_inferences(pid_tree, nb_labels, epsilon):
     set_marginal_probabilities = marginal_probabilities_v1(root, nb_labels)
     inference_outer = set_marginal_probabilities.multilab_dom()
     distance_cardinal = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
+    # if len(inference_exact) > 1 and len(inference_exact) % 2 == 1:
+    #     print('Example Lemme 5 (%s, %s)' % (inference_exact, inference_outer))
+    #     print_binary_tree(root)
+
     print("Pid (%s, %s) Exact versus Outer (%s, %s, %s)" %
           (pid, pid_tree, len(inference_exact), inference_outer, distance_cardinal), flush=True)
     if distance_cardinal < 0:
@@ -252,13 +256,18 @@ def computing_outer_vs_exact_inference_random_tree(out_path,
                                                    nb_repeats=100,
                                                    nb_process=1,
                                                    seed=None,
-                                                   min_epsilon_param=0.05,
+                                                   min_epsilon_param=0.1,
                                                    max_epsilon_param=0.5,
                                                    step_epsilon_param=0.1):
     assert os.path.exists(out_path), "File for putting results does not exist"
 
     logger = create_logger("computing_outer_vs_exact_inference_random_tree", True)
-    if seed is not None:
+    logger.info('Results file (%s)', out_path)
+    logger.info("(nb_repeats, nb_process, nb_labels) (%s, %s, %s)",
+                nb_repeats, nb_process, nb_labels)
+    logger.info("(min_epsilon_param, max_epsilon_param, step_epsilon_param) (%s, %s, %s)",
+                min_epsilon_param, max_epsilon_param, step_epsilon_param)
+    if seed is None:
         seed = random.randrange(pow(2, 20))
     random.seed(seed)
     logger.debug("[FIRST-STEP-SEED] SEED: %s", seed)
@@ -283,7 +292,4 @@ sys_out_path = "results_labels" + str(sys_nb_labels) + ".csv"
 computing_outer_vs_exact_inference_random_tree(out_path=sys_out_path,
                                                nb_labels=sys_nb_labels,
                                                nb_repeats=10,
-                                               nb_process=1,
-                                               min_epsilon_param=0.5,
-                                               max_epsilon_param=6.0,
-                                               step_epsilon_param=1.0)
+                                               nb_process=1)
