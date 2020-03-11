@@ -75,8 +75,6 @@ class MLCNCC(metaclass=abc.ABCMeta):
             np.random.shuffle(self.label_names)
         self.feature_values = learn_data_set.attribute_data.copy()
 
-        # noise labels procedure
-        self.noise_labels_learn_data_set(learn_data_set, noise_label_pct, noise_label_type, noise_label_prob)
         for label_value in self.label_names:
             missing_label_index = None
             if missing_pct > 0:
@@ -112,10 +110,17 @@ class MLCNCC(metaclass=abc.ABCMeta):
                     self.feature_count[label_value + '|in|' + label_feature] = count_vector_one
                     self.feature_count[label_value + '|out|' + label_feature] = count_vector_zero
 
-    def noise_labels_learn_data_set(self, learn_data_set, noise_label_pct, noise_label_type, noise_label_prob):
+    @staticmethod
+    def noise_labels_learn_data_set(learn_data_set,
+                                    nb_labels,
+                                    noise_label_pct,
+                                    noise_label_type,
+                                    noise_label_prob):
         """
-        :param learn_data_set
-        :type noise_label_pct: percentage noise labels
+        :param learn_data_set: percentage noise labels
+        :type noise_label_pct; float
+        :param nb_labels: number of labels
+        :type nb_labels: integer
         :param noise_label_pct: float
         :param noise_label_type: type of noise label flipping
             (1) reverse change 1-0
@@ -132,8 +137,8 @@ class MLCNCC(metaclass=abc.ABCMeta):
 
         if noise_label_pct > 0 and noise_label_type in [1, 2, 3]:
             size_learn_data = len(learn_data_set.data)
-            set_label_index = np.zeros((size_learn_data, self.nb_labels), dtype=int)
-            for i in range(self.nb_labels):
+            set_label_index = np.zeros((size_learn_data, nb_labels), dtype=int)
+            for i in range(nb_labels):
                 noise_index_by_label = np.random.choice(size_learn_data,
                                                         int(size_learn_data * noise_label_pct),
                                                         replace=False)
@@ -152,16 +157,16 @@ class MLCNCC(metaclass=abc.ABCMeta):
 
             if noise_label_type == 1:
                 for i, instance in enumerate(learn_data_set.data):
-                    noise_label_by_inst = abs(set_label_index[i, :] - np.array(instance[-self.nb_labels:], dtype=int))
-                    instance[-self.nb_labels:] = noise_label_by_inst.astype('<U1').tolist()
+                    noise_label_by_inst = abs(set_label_index[i, :] - np.array(instance[-nb_labels:], dtype=int))
+                    instance[-nb_labels:] = noise_label_by_inst.astype('<U1').tolist()
             elif noise_label_type == 2 or noise_label_type == 3:
                 for i, instance in enumerate(learn_data_set.data):
                     idx_zero = np.where(set_label_index[i, :] == 3)
                     idx_one = np.where(set_label_index[i, :] == 2)
-                    noise_labels_value = np.array(instance[-self.nb_labels:], dtype=int)
+                    noise_labels_value = np.array(instance[-nb_labels:], dtype=int)
                     noise_labels_value[idx_zero] = 0
                     noise_labels_value[idx_one] = 1
-                    instance[-self.nb_labels:] = noise_labels_value.astype('<U1').tolist()
+                    instance[-nb_labels:] = noise_labels_value.astype('<U1').tolist()
             else:
                 raise Exception('Configuration noise label is not implemented yet.')
 

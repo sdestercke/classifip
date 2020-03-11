@@ -212,6 +212,7 @@ def inference_exact_inference(root, nb_labels):
             if is_not_dominated:
                 not_a_vector = 1 - np.array(a_vector)
                 cost_vector = calculation_cost(not_a_vector, p_neq_idx)
+                # inf_expectation = getlowerexpectation(cost_vector, root)
                 inf_expectation = exec_expectation_inf(cost_vector)
                 # print("%s >_M %s ==> %s <? %s" % (
                 #     partial_prediction, not_a_vector, (p_n_not_equal_indices * 0.5),

@@ -3,6 +3,7 @@ from classifip.evaluation.measures import u65, u80
 from classifip.utils import create_logger
 from classifip.dataset import arff
 from classifip.models.mlc import nccbr
+from classifip.models.mlc.mlcncc import MLCNCC
 from mlc_manager import ManagerWorkers, __create_dynamic_class
 import sys, os, random, csv, numpy as np
 from mlc_common import *
@@ -50,6 +51,11 @@ def skeptical_prediction(pid, tasks, queue, results, class_model):
             training = queue.get()
             if training is None:
                 break
+            MLCNCC.noise_labels_learn_data_set(learn_data_set=training["learn_data_set"],
+                                               nb_labels=training["nb_labels"],
+                                               noise_label_pct=training["noise_label_pct"],
+                                               noise_label_type=training["noise_label_type"],
+                                               noise_label_prob=training["noise_label_prob"])
             model_br.learn(**training)
             model_exact.learn(**training)
             while True:
@@ -190,7 +196,8 @@ def computing_best_imprecise_mean(in_path=None,
 
             splits_s = list([])
             for training, testing in cv_kfold:
-                splits_s.append((training, testing))
+                # making a clone because it send the same address memory
+                splits_s.append((training.make_clone(), testing.make_clone()))
                 logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
                 logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
 
@@ -202,6 +209,8 @@ def computing_best_imprecise_mean(in_path=None,
                 ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc], jacc_skep[disc][ks_ncc] = 0, 0, 0
                 ich_out[disc][ks_ncc], cph_out[disc][ks_ncc], acc_prec[disc][ks_ncc] = 0, 0, 0
                 for idx_fold, (training, testing) in enumerate(splits_s):
+                    logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
+                    logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
                     rs = computing_training_testing_step(training,
                                                          testing,
                                                          missing_pct,
@@ -249,10 +258,6 @@ computing_best_imprecise_mean(in_path=in_path,
                               out_path=out_path,
                               nb_process=1,
                               missing_pct=0.0,
-                              noise_label_pct=0.0,
-                              noise_label_type=-1,
-                              noise_label_prob=0.5,
-                              min_ncc_s_param=0.5,
-                              max_ncc_s_param=6,
-                              step_ncc_s_param=1,
+                              noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.5,
+                              min_ncc_s_param=0.5, max_ncc_s_param=6, step_ncc_s_param=1,
                               remove_features=["image_name"])

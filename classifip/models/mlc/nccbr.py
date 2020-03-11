@@ -31,8 +31,6 @@ class NCCBR(MLCNCC):
         self.label_names = learn_data_set.attributes[-self.nb_labels:]
         self.feature_values = learn_data_set.attribute_data.copy()
 
-        # noise labels procedure
-        self.noise_labels_learn_data_set(learn_data_set, noise_label_pct, noise_label_type, noise_label_prob)
         for label_value in self.label_names:
             missing_label_index = None
             if missing_pct > 0:
