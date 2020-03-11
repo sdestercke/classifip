@@ -36,9 +36,6 @@ class MLCNCC(metaclass=abc.ABCMeta):
               learn_data_set,
               nb_labels,
               missing_pct=0.0,
-              noise_label_pct=0.0,
-              noise_label_type=-1,
-              noise_label_prob=0.5,
               seed_random_label=None):
         """learn the NCC for each label, mainly storing counts of feature/label pairs
 
@@ -48,19 +45,10 @@ class MLCNCC(metaclass=abc.ABCMeta):
         :type nb_labels: integer
         :param missing_pct: percentage of missing labels
         :type missing_pct: float
-        :type noise_label_pct: percentage noise labels
-        :param noise_label_pct: float
-        :param noise_label_type: type of noise label flipping
-        :type noise_label_type: integer
-        :param noise_label_prob: probability to flip a label
-        :type noise_label_prob: float
         :param seed_random_label: randomly mixing labels Y1, Y2, ..., Ym
         :type seed_random_label: float
         """
         self.__init__()
-        if missing_pct < 0.0 or missing_pct > 1.0:
-            raise Exception('Negative percentage or higher than one of missing label.')
-
         self.nb_labels = nb_labels
         self.training_size = int(len(learn_data_set.data) * (1 - missing_pct)) if missing_pct > 0.0 \
             else len(learn_data_set.data)
@@ -76,15 +64,10 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.feature_values = learn_data_set.attribute_data.copy()
 
         for label_value in self.label_names:
-            missing_label_index = None
-            if missing_pct > 0:
-                missing_label_index = np.random.choice(len(learn_data_set.data),
-                                                       int(len(learn_data_set.data) * missing_pct),
-                                                       replace=False)
             # recovery count of class 1 and 0
-            label_set_one = learn_data_set.select_col_vals(label_value, ['1'], missing_label_index)
+            label_set_one = learn_data_set.select_col_vals(label_value, ['1'])
             self.label_counts.append(len(label_set_one.data))
-            label_set_zero = learn_data_set.select_col_vals(label_value, ['0'], missing_label_index)
+            label_set_zero = learn_data_set.select_col_vals(label_value, ['0'])
             for feature in self.feature_names:
                 count_vector_one, count_vector_zero = [], []
                 feature_index = learn_data_set.attributes.index(feature)
@@ -111,17 +94,44 @@ class MLCNCC(metaclass=abc.ABCMeta):
                     self.feature_count[label_value + '|out|' + label_feature] = count_vector_zero
 
     @staticmethod
+    def missing_labels_learn_data_set(learn_data_set,
+                                      nb_labels,
+                                      missing_pct=0.0):
+        """
+        :param learn_data_set:
+        :type learn_data_set: arff
+        :param nb_labels: number of labels
+        :type nb_labels: integer
+        :param missing_pct: percentage of missing labels
+        :type missing_pct: float
+        :return:
+        """
+        if missing_pct < 0.0 or missing_pct > 1.0:
+            raise Exception('Negative percentage or higher than one of missing label.')
+        if missing_pct > 0.0:
+            label_names = learn_data_set.attributes[-nb_labels:]
+            for label_value in label_names:
+                missing_label_index = np.random.choice(len(learn_data_set.data),
+                                                       int(len(learn_data_set.data) * missing_pct),
+                                                       replace=False)
+                col_ind = learn_data_set.attributes.index(label_value)
+                for index, value in enumerate(learn_data_set.data):
+                    if index in missing_label_index:
+                        value[col_ind] = -1
+
+    @staticmethod
     def noise_labels_learn_data_set(learn_data_set,
                                     nb_labels,
                                     noise_label_pct,
                                     noise_label_type,
                                     noise_label_prob):
         """
-        :param learn_data_set: percentage noise labels
-        :type noise_label_pct; float
+        :param learn_data_set:
+        :type learn_data_set: arff
         :param nb_labels: number of labels
         :type nb_labels: integer
-        :param noise_label_pct: float
+        :param noise_label_pct: percentage noise labels
+        :type noise_label_pct: float
         :param noise_label_type: type of noise label flipping
             (1) reverse change 1-0
             (2) with probability p label relevant 1 (bernoulli trials)
@@ -135,7 +145,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
         if noise_label_pct < 0.0 or noise_label_pct > 1.0:
             raise Exception('Negative percentage or higher than one of noise label.')
 
-        if noise_label_pct > 0 and noise_label_type in [1, 2, 3]:
+        if noise_label_pct > 0.0 and noise_label_type in [1, 2, 3]:
             size_learn_data = len(learn_data_set.data)
             set_label_index = np.zeros((size_learn_data, nb_labels), dtype=int)
             for i in range(nb_labels):

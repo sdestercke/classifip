@@ -156,16 +156,10 @@ class MLCNCCExact(MLCNCC):
               learn_data_set,
               nb_labels,
               missing_pct=0.0,
-              noise_label_pct=0.0,
-              noise_label_type=-1,
-              noise_label_prob=0.5,
               seed_random_label=None):
         super(MLCNCCExact, self).learn(learn_data_set,
                                        nb_labels,
                                        missing_pct,
-                                       noise_label_pct,
-                                       noise_label_type,
-                                       noise_label_prob,
                                        seed_random_label)
 
         label_prior = [lab_count / float(self.training_size) for lab_count in self.label_counts]

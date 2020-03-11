@@ -51,11 +51,18 @@ def skeptical_prediction(pid, tasks, queue, results, class_model):
             training = queue.get()
             if training is None:
                 break
+            MLCNCC.missing_labels_learn_data_set(learn_data_set=training["learn_data_set"],
+                                                 nb_labels=training["nb_labels"],
+                                                 missing_pct=training["missing_pct"])
             MLCNCC.noise_labels_learn_data_set(learn_data_set=training["learn_data_set"],
                                                nb_labels=training["nb_labels"],
                                                noise_label_pct=training["noise_label_pct"],
                                                noise_label_type=training["noise_label_type"],
                                                noise_label_prob=training["noise_label_prob"])
+            # remove some keys of dict unused for learn method
+            del training['noise_label_pct']
+            del training['noise_label_type']
+            del training['noise_label_prob']
             model_br.learn(**training)
             model_exact.learn(**training)
             while True:

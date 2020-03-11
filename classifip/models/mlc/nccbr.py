@@ -15,13 +15,8 @@ class NCCBR(MLCNCC):
               learn_data_set,
               nb_labels,
               missing_pct=0.0,
-              noise_label_pct=0.0,
-              noise_label_type=-1,
-              noise_label_prob=0.5,
               seed_random_label=None):
         self.__init__()
-        if missing_pct < 0.0 or missing_pct > 1.0:
-            raise Exception('Negative percentage or higher than one of missing label.')
 
         self.nb_labels = nb_labels
         self.training_size = int(len(learn_data_set.data) * (1 - missing_pct)) if missing_pct > 0.0 \
@@ -32,14 +27,9 @@ class NCCBR(MLCNCC):
         self.feature_values = learn_data_set.attribute_data.copy()
 
         for label_value in self.label_names:
-            missing_label_index = None
-            if missing_pct > 0:
-                missing_label_index = np.random.choice(len(learn_data_set.data),
-                                                       int(len(learn_data_set.data) * missing_pct),
-                                                       replace=False)
-            label_set_one = learn_data_set.select_col_vals(label_value, ['1'], missing_label_index)
+            label_set_one = learn_data_set.select_col_vals(label_value, ['1'])
             self.label_counts.append(len(label_set_one.data))
-            label_set_zero = learn_data_set.select_col_vals(label_value, ['0'], missing_label_index)
+            label_set_zero = learn_data_set.select_col_vals(label_value, ['0'])
             for feature in self.feature_names:
                 count_vector_one = []
                 count_vector_zero = []
