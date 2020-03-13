@@ -71,8 +71,11 @@ def skeptical_prediction(pid, tasks, queue, results, class_model):
                     break
                 set_prob_marginal = model_br.evaluate(**task['kwargs'])
                 outer_inference = set_prob_marginal[0].multilab_dom()
-                skeptical_inference = model_exact.evaluate(**task['kwargs'])[0]
-                # skeptical_inference_exact = model_exact.evaluate_exact(**task['kwargs'])[0]
+                if task['do_inference_exact']:
+                    skeptical_inference = model_exact.evaluate(**task['kwargs'])[0]
+                    # skeptical_inference_exact = model_exact.evaluate_exact(**task['kwargs'])[0]
+                else:
+                    skeptical_inference = [-1]*len(task['y_test'])
                 task['kwargs']['ncc_s_param'] = 0.0
                 set_prob_marginal = model_br.evaluate(**task['kwargs'])
                 precise_inference = set_prob_marginal[0].multilab_dom()
@@ -99,6 +102,7 @@ def computing_training_testing_step(learn_data_set,
                                     nb_labels,
                                     ncc_imprecise,
                                     manager,
+                                    do_inference_exact,
                                     ich_skep, cph_skep,
                                     ich_out, cph_out,
                                     acc_prec, jacc_skep):
@@ -116,7 +120,8 @@ def computing_training_testing_step(learn_data_set,
             {'kwargs': {'test_dataset': [test[:-nb_labels]],
                         'ncc_epsilon': 0.001,
                         'ncc_s_param': ncc_imprecise},
-             'y_test': test[-nb_labels:]})
+             'y_test': test[-nb_labels:],
+             'do_inference_exact': do_inference_exact})
     manager.poisonPillWorkers()
     manager.joinTraining()  # wait all process for computing results
     # Recovery all inference data of all parallel process
@@ -127,12 +132,19 @@ def computing_training_testing_step(learn_data_set,
         y_skeptical_exact = prediction['skeptical']
         y_outer = prediction['outer']
         y_precise = prediction['precise']
-        y_skeptical_exact_partial = transform_semi_partial_vector(y_skeptical_exact)
-        inc_ich_skep, inc_cph_skep = incorrectness_completeness_measure(y_true, y_skeptical_exact_partial)
+        # if enable to do the exact skeptical inference
+        if do_inference_exact:
+            y_skeptical_exact_partial = transform_semi_partial_vector(y_skeptical_exact)
+            inc_ich_skep, inc_cph_skep = incorrectness_completeness_measure(y_true, y_skeptical_exact_partial)
+            y_outer_full_set = expansion_partial_to_full_set_binary_vector(y_outer)
+            inc_jacc = compute_jaccard_similarity_score(y_outer_full_set, y_skeptical_exact)
+        else:
+            inc_jacc = -1
+            inc_ich_skep, inc_cph_skep = -1, -1
         inc_ich_out, inc_cph_out = incorrectness_completeness_measure(y_true, y_outer)
         inc_acc_prec, _ = incorrectness_completeness_measure(y_true, y_precise)
-        y_outer_full_set = expansion_partial_to_full_set_binary_vector(y_outer)
-        inc_jacc = compute_jaccard_similarity_score(y_outer_full_set, y_skeptical_exact)
+        # print("(outer, precise, y_outer, y_precise, y_true)  (%s, %s, %s, %s, %s)" %
+        #       (round(inc_ich_out, 3), round(inc_acc_prec, 3), y_outer, y_precise, y_true), flush=True)
         ich_skep += inc_ich_skep / nb_tests
         cph_skep += inc_cph_skep / nb_tests
         ich_out += inc_ich_out / nb_tests
@@ -156,11 +168,12 @@ def computing_best_imprecise_mean(in_path=None,
                                   min_ncc_s_param=0.5,
                                   max_ncc_s_param=6.0,
                                   step_ncc_s_param=1.0,
-                                  remove_features=None):
+                                  remove_features=None,
+                                  do_inference_exact=False):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
-    logger = create_logger("computing_best_imprecise_mean_cv", True)
+    logger = create_logger("computing_best_imprecise_mean", True)
     logger.info('Training dataset (%s, %s)', in_path, out_path)
     logger.info("(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param) (%s, %s, %s)",
                 min_ncc_s_param, max_ncc_s_param, step_ncc_s_param)
@@ -227,15 +240,15 @@ def computing_best_imprecise_mean(in_path=None,
                                                          nb_labels,
                                                          s_ncc,
                                                          manager,
-                                                         ich_skep[disc][ks_ncc],
-                                                         cph_skep[disc][ks_ncc],
-                                                         ich_out[disc][ks_ncc],
-                                                         cph_out[disc][ks_ncc],
-                                                         acc_prec[disc][ks_ncc],
-                                                         jacc_skep[disc][ks_ncc])
+                                                         do_inference_exact,
+                                                         ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc],
+                                                         ich_out[disc][ks_ncc], cph_out[disc][ks_ncc],
+                                                         acc_prec[disc][ks_ncc], jacc_skep[disc][ks_ncc])
                     ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc] = rs[0], rs[1]
                     ich_out[disc][ks_ncc], cph_out[disc][ks_ncc] = rs[2], rs[3]
                     acc_prec[disc][ks_ncc], jacc_skep[disc][ks_ncc] = rs[4], rs[5]
+                    logger.debug("Partial-s-k_step (acc, ich_out) (%s, %s)",
+                                 acc_prec[disc][ks_ncc], ich_out[disc][ks_ncc])
                 writer.writerow([str(nb_disc), s_ncc, time,
                                  ich_skep[disc][ks_ncc] / nb_kFold,
                                  cph_skep[disc][ks_ncc] / nb_kFold,
@@ -265,6 +278,6 @@ computing_best_imprecise_mean(in_path=in_path,
                               out_path=out_path,
                               nb_process=1,
                               missing_pct=0.0,
-                              noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.5,
+                              noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.2,
                               min_ncc_s_param=0.5, max_ncc_s_param=6, step_ncc_s_param=1,
                               remove_features=["image_name"])
