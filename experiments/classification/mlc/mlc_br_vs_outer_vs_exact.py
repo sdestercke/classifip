@@ -43,7 +43,7 @@ def expansion_partial_to_full_set_binary_vector(partial_binary_vector):
     return set_binary_vector
 
 
-def skeptical_prediction(pid, tasks, queue, results, class_model):
+def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_challenger=None):
     try:
         model_br = nccbr.NCCBR()
         model_exact = __create_dynamic_class(class_model)
@@ -272,8 +272,8 @@ def computing_best_imprecise_mean(in_path=None,
                  ich_skep, cph_skep, ich_out, cph_out, acc_prec, jacc_skep)
 
 
-in_path = ".../datasets_mlc/emotions.arff"
-out_path = ".../results.csv"
+in_path = "/Users/salmuz/Downloads/datasets_mlc/emotions.arff"
+out_path = "/Users/salmuz/Downloads/results_iris.csv"
 computing_best_imprecise_mean(in_path=in_path,
                               out_path=out_path,
                               nb_process=1,

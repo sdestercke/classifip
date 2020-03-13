@@ -30,7 +30,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.label_counts = []
         self.nb_labels = 0
         self.training_size = 0
-        self.LABEL_PARTIAL_VALUE = 3
+        self.LABEL_PARTIAL_VALUE = -1
 
     def learn(self,
               learn_data_set,

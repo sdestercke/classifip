@@ -14,20 +14,34 @@ def __create_dynamic_class(clazz):
         raise Exception(e, "Creation dynamic class does not complete.")
 
 
-def prediction(pid, tasks, queue, results, class_model):
+def prediction(pid, tasks, queue, results, class_model, class_model_challenger=None):
     try:
         model = __create_dynamic_class(class_model)
+        model_challenger = None
+        if class_model_challenger is not None:
+            model_challenger = __create_dynamic_class(class_model_challenger)
         while True:
             training = queue.get()
-            if training is None: break
+            if training is None:
+                break
             model.learn(**training)
+            if class_model_challenger is not None:
+                model_challenger.learn(**training)
+            predictions = []
             while True:
                 task = tasks.get()
                 if task is None:
                     break
                 prediction = model.evaluate(**task['kwargs'])
-                print("(pid, prediction, ground-truth) ", pid, prediction, task['y_test'], flush=True)
-                results.put(dict({'prediction': prediction, 'ground_truth': task['y_test']}))
+                prediction_precise = None
+                if class_model_challenger is not None:
+                    task['kwargs']['ncc_s_param'] = 0.0
+                    prediction_precise = model.evaluate(**task['kwargs'])
+                print("(pid, prediction, ground-truth) ", pid, task['y_test'], flush=True)
+                predictions.append(dict({'prediction': prediction,
+                                         'precise': prediction_precise,
+                                         'ground_truth': task['y_test']}))
+            results.append(predictions)
             queue.task_done()
     except Exception as e:
         raise Exception(e, "Error in job of PID " + pid)
@@ -46,12 +60,13 @@ class ManagerWorkers:
         self.NUMBER_OF_PROCESSES = cpu_count() if nb_process is None else nb_process
         self.fun_prediction = fun_prediction
 
-    def executeAsync(self, class_model):
+    def executeAsync(self, class_model, class_model_challenger=None):
         print("Starting %d workers" % self.NUMBER_OF_PROCESSES, flush=True)
         self.workers = []
         for i in range(self.NUMBER_OF_PROCESSES):
             p = Process(target=prediction if self.fun_prediction is None else self.fun_prediction,
-                        args=(i, self.tasks, self.qeTraining[i], self.results, class_model,))
+                        args=(i, self.tasks, self.qeTraining[i], self.results,
+                              class_model, class_model_challenger,))
             self.workers.append(p)
 
         for w in self.workers:

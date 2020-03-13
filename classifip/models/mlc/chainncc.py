@@ -6,7 +6,20 @@ from .mlcncc import MLCNCC
 
 class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
 
-    def evaluate(self, test_dataset, ncc_epsilon=0.001, ncc_s_param=2):
+    def transform_partial_vector(self, chain_prediction):
+        partial_vector = []
+        for idx in range(self.nb_labels):
+            if len(chain_prediction[idx]) > 1:
+                partial_vector.append(-1)
+            else:
+                partial_vector.append(chain_prediction[idx][0])
+        return partial_vector
+
+    def evaluate(self,
+                 test_dataset,
+                 ncc_epsilon=0.001,
+                 ncc_s_param=2,
+                 has_set_probabilities=False):
         label_prior = [n / float(self.training_size) for n in self.label_counts]
         interval_prob_answers, predict_chain_answers = [], []
 
@@ -35,6 +48,9 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
 
             result = Scores(resulting_score)
             interval_prob_answers.append(result)
-            predict_chain_answers.append(chain_predict_labels)
+            predict_chain_answers.append(self.transform_partial_vector(chain_predict_labels))
 
-        return interval_prob_answers, predict_chain_answers
+        if has_set_probabilities:
+            return predict_chain_answers, interval_prob_answers
+        else:
+            return predict_chain_answers
