@@ -45,7 +45,7 @@ def expansion_partial_to_full_set_binary_vector(partial_binary_vector):
 
 def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_challenger=None):
     try:
-        model_br = nccbr.NCCBR()
+        model_br = __create_dynamic_class(class_model_challenger)
         model_exact = __create_dynamic_class(class_model)
         while True:
             training = queue.get()
@@ -65,26 +65,44 @@ def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_ch
             del training['noise_label_prob']
             model_br.learn(**training)
             model_exact.learn(**training)
+            nb_labels = training["nb_labels"]
             while True:
                 task = tasks.get()
                 if task is None:
                     break
-                set_prob_marginal = model_br.evaluate(**task['kwargs'])
-                outer_inference = set_prob_marginal[0].multilab_dom()
-                if task['do_inference_exact']:
-                    skeptical_inference = model_exact.evaluate(**task['kwargs'])[0]
-                    # skeptical_inference_exact = model_exact.evaluate_exact(**task['kwargs'])[0]
-                else:
-                    skeptical_inference = [-1]*len(task['y_test'])
+                # outer-approximation binary relevance
+                set_prob_marginal = model_br.evaluate(**task['kwargs'])[0]
+                outer_inference = set_prob_marginal.multilab_dom()
+
+                # naive and improvement exact maximality inference
+                # skeptical_inference_exact = model_exact.evaluate_exact(**task['kwargs'])[0]
+                skeptical_inference = model_exact.evaluate(**task['kwargs'])[0] if task['do_inference_exact'] \
+                    else [-1] * len(task['y_test'])
+
+                # precise and e-precise inference with s equal 0, epsilon > 0.0
                 task['kwargs']['ncc_s_param'] = 0.0
-                set_prob_marginal = model_br.evaluate(**task['kwargs'])
-                precise_inference = set_prob_marginal[0].multilab_dom()
-                print("(pid, skeptical, outer, precise, ground-truth) ",
+                set_prob_marginal = model_br.evaluate(**task['kwargs'])[0]
+                precise_inference = set_prob_marginal.multilab_dom()
+                precise_reject = np.array(precise_inference)
+                epsilon_reject = task["epsilon_reject"]
+                if epsilon_reject > 0.0:
+                    all_idx = set(range(nb_labels))
+                    probabilities_yi_eq_1 = set_prob_marginal.scores[:, 0]
+                    ones = set(np.where(probabilities_yi_eq_1 >= 0.5 + epsilon_reject)[0])
+                    zeros = set(np.where(probabilities_yi_eq_1 <= 0.5 - epsilon_reject)[0])
+                    stars = all_idx - ones - zeros
+                    precise_reject[list(stars)] = -1
+                    precise_reject[list(zeros)] = 0
+                    precise_reject[list(ones)] = 1
+
+                # print partial prediction results
+                print("(pid, skeptical, outer, precise, precise_reject ground-truth) ",
                       pid, len(skeptical_inference), outer_inference, precise_inference,
-                      task['y_test'], flush=True)
+                      precise_reject, task['y_test'], flush=True)
                 results.append(dict({'skeptical': skeptical_inference,
                                      'outer': outer_inference,
                                      'precise': precise_inference,
+                                     'reject': precise_reject,
                                      'ground_truth': task['y_test']}))
             queue.task_done()
     except Exception as e:
@@ -103,9 +121,12 @@ def computing_training_testing_step(learn_data_set,
                                     ncc_imprecise,
                                     manager,
                                     do_inference_exact,
+                                    epsilon_reject,
                                     ich_skep, cph_skep,
                                     ich_out, cph_out,
-                                    acc_prec, jacc_skep):
+                                    acc_prec, jacc_skep,
+                                    ich_reject, cph_reject,
+                                    jacc_reject):
     # Send training data model to every parallel process
     manager.addNewTraining(learn_data_set=learn_data_set,
                            nb_labels=nb_labels,
@@ -121,7 +142,8 @@ def computing_training_testing_step(learn_data_set,
                         'ncc_epsilon': 0.001,
                         'ncc_s_param': ncc_imprecise},
              'y_test': test[-nb_labels:],
-             'do_inference_exact': do_inference_exact})
+             'do_inference_exact': do_inference_exact,
+             'epsilon_reject': epsilon_reject})
     manager.poisonPillWorkers()
     manager.joinTraining()  # wait all process for computing results
     # Recovery all inference data of all parallel process
@@ -132,27 +154,35 @@ def computing_training_testing_step(learn_data_set,
         y_skeptical_exact = prediction['skeptical']
         y_outer = prediction['outer']
         y_precise = prediction['precise']
+        y_reject = prediction['reject']
+        # decompose the partial to full prediction
+        y_outer_full_set = expansion_partial_to_full_set_binary_vector(y_outer)
+        y_reject_full_set = expansion_partial_to_full_set_binary_vector(y_reject)
         # if enable to do the exact skeptical inference
+        inc_jacc = -1
+        inc_ich_skep, inc_cph_skep = -1, -1
         if do_inference_exact:
             y_skeptical_exact_partial = transform_semi_partial_vector(y_skeptical_exact)
             inc_ich_skep, inc_cph_skep = incorrectness_completeness_measure(y_true, y_skeptical_exact_partial)
-            y_outer_full_set = expansion_partial_to_full_set_binary_vector(y_outer)
             inc_jacc = compute_jaccard_similarity_score(y_outer_full_set, y_skeptical_exact)
-        else:
-            inc_jacc = -1
-            inc_ich_skep, inc_cph_skep = -1, -1
+        # if enable rejection option
+        inc_ich_reject, inc_cph_reject = incorrectness_completeness_measure(y_true, y_reject)
+        inc_jacc_reject = compute_jaccard_similarity_score(y_outer_full_set, y_reject_full_set)
         inc_ich_out, inc_cph_out = incorrectness_completeness_measure(y_true, y_outer)
         inc_acc_prec, _ = incorrectness_completeness_measure(y_true, y_precise)
-        # print("(outer, precise, y_outer, y_precise, y_true)  (%s, %s, %s, %s, %s)" %
-        #       (round(inc_ich_out, 3), round(inc_acc_prec, 3), y_outer, y_precise, y_true), flush=True)
+        # increase global values
         ich_skep += inc_ich_skep / nb_tests
         cph_skep += inc_cph_skep / nb_tests
         ich_out += inc_ich_out / nb_tests
         cph_out += inc_cph_out / nb_tests
         acc_prec += inc_acc_prec / nb_tests
         jacc_skep += inc_jacc / nb_tests
+        ich_reject += inc_ich_reject / nb_tests
+        cph_reject += inc_cph_reject / nb_tests
+        jacc_reject += inc_jacc_reject / nb_tests
     manager.restartResults()
-    return ich_skep, cph_skep, ich_out, cph_out, acc_prec, jacc_skep
+    return (ich_skep, cph_skep, ich_out, cph_out,
+            acc_prec, jacc_skep, ich_reject, cph_reject, jacc_reject)
 
 
 def computing_best_imprecise_mean(in_path=None,
@@ -165,6 +195,7 @@ def computing_best_imprecise_mean(in_path=None,
                                   nb_kFold=10,
                                   nb_process=1,
                                   scaling=True,
+                                  epsilon_reject=0.0,
                                   min_ncc_s_param=0.5,
                                   max_ncc_s_param=6.0,
                                   step_ncc_s_param=1.0,
@@ -191,9 +222,12 @@ def computing_best_imprecise_mean(in_path=None,
     file_csv = open(out_path, 'a')
     writer = csv.writer(file_csv)
     manager = ManagerWorkers(nb_process=nb_process, fun_prediction=skeptical_prediction)
-    manager.executeAsync(class_model="classifip.models.mlc.exactncc.MLCNCCExact")
+    manager.executeAsync(class_model="classifip.models.mlc.exactncc.MLCNCCExact",
+                         class_model_challenger="classifip.models.mlc.nccbr.NCCBR")
 
-    ich_skep, cph_skep, jacc_skep, ich_out, cph_out, acc_prec = dict(), dict(), dict(), dict(), dict(), dict()
+    ich_skep, cph_skep, jacc_skep = dict(), dict(), dict()
+    ich_out, cph_out, acc_prec = dict(), dict(), dict()
+    ich_reject, cph_reject, jacc_reject = dict(), dict(), dict()
     min_discretize, max_discretize = 5, 7
     for nb_disc in range(min_discretize, max_discretize):
         data_learning = arff.ArffFile()
@@ -224,10 +258,12 @@ def computing_best_imprecise_mean(in_path=None,
             disc = str(nb_disc) + "-" + str(time)
             ich_skep[disc], cph_skep[disc], jacc_skep[disc] = dict(), dict(), dict()
             ich_out[disc], cph_out[disc], acc_prec[disc] = dict(), dict(), dict()
+            ich_reject[disc], cph_reject[disc], jacc_reject[disc] = dict(), dict(), dict()
             for s_ncc in np.arange(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param):
                 ks_ncc = str(s_ncc)
                 ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc], jacc_skep[disc][ks_ncc] = 0, 0, 0
                 ich_out[disc][ks_ncc], cph_out[disc][ks_ncc], acc_prec[disc][ks_ncc] = 0, 0, 0
+                ich_reject[disc][ks_ncc], cph_reject[disc][ks_ncc], jacc_reject[disc][ks_ncc] = 0, 0, 0
                 for idx_fold, (training, testing) in enumerate(splits_s):
                     logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
                     logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
@@ -241,12 +277,17 @@ def computing_best_imprecise_mean(in_path=None,
                                                          s_ncc,
                                                          manager,
                                                          do_inference_exact,
+                                                         epsilon_reject,
                                                          ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc],
                                                          ich_out[disc][ks_ncc], cph_out[disc][ks_ncc],
-                                                         acc_prec[disc][ks_ncc], jacc_skep[disc][ks_ncc])
+                                                         acc_prec[disc][ks_ncc], jacc_skep[disc][ks_ncc],
+                                                         ich_reject[disc][ks_ncc], cph_reject[disc][ks_ncc],
+                                                         jacc_reject[disc][ks_ncc])
                     ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc] = rs[0], rs[1]
                     ich_out[disc][ks_ncc], cph_out[disc][ks_ncc] = rs[2], rs[3]
                     acc_prec[disc][ks_ncc], jacc_skep[disc][ks_ncc] = rs[4], rs[5]
+                    ich_reject[disc][ks_ncc], cph_reject[disc][ks_ncc] = rs[6], rs[7]
+                    jacc_reject[disc][ks_ncc] = rs[8]
                     logger.debug("Partial-s-k_step (acc, ich_out) (%s, %s)",
                                  acc_prec[disc][ks_ncc], ich_out[disc][ks_ncc])
                 writer.writerow([str(nb_disc), s_ncc, time,
@@ -255,29 +296,37 @@ def computing_best_imprecise_mean(in_path=None,
                                  ich_out[disc][ks_ncc] / nb_kFold,
                                  cph_out[disc][ks_ncc] / nb_kFold,
                                  acc_prec[disc][ks_ncc] / nb_kFold,
-                                 jacc_skep[disc][ks_ncc] / nb_kFold])
+                                 jacc_skep[disc][ks_ncc] / nb_kFold,
+                                 ich_reject[disc][ks_ncc] / nb_kFold,
+                                 cph_reject[disc][ks_ncc] / nb_kFold,
+                                 jacc_reject[disc][ks_ncc] / nb_kFold])
                 file_csv.flush()
-                logger.debug("Partial-s-k_step (disc, s, time, ich_skep, cph_skep, ich_out, cph_out, acc, jacc) "
-                             "(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                logger.debug("Partial-s-k_step (disc, s, time, ich_skep, cph_skep, ich_out, "
+                             "cph_out, acc, jacc, ich_reject, cph_reject, jacc_reject) "
+                             "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                              disc, s_ncc, time,
                              ich_skep[disc][ks_ncc] / nb_kFold,
                              cph_skep[disc][ks_ncc] / nb_kFold,
                              ich_out[disc][ks_ncc] / nb_kFold,
                              cph_out[disc][ks_ncc] / nb_kFold,
                              acc_prec[disc][ks_ncc] / nb_kFold,
-                             jacc_skep[disc][ks_ncc] / nb_kFold)
+                             jacc_skep[disc][ks_ncc] / nb_kFold,
+                             ich_reject[disc][ks_ncc] / nb_kFold,
+                             cph_reject[disc][ks_ncc] / nb_kFold,
+                             jacc_reject[disc][ks_ncc] / nb_kFold)
     manager.poisonPillTraining()
     file_csv.close()
     logger.debug("Results Final: %s, %s, %s, %s, %s, %s",
                  ich_skep, cph_skep, ich_out, cph_out, acc_prec, jacc_skep)
 
 
-in_path = "/Users/salmuz/Downloads/datasets_mlc/emotions.arff"
-out_path = "/Users/salmuz/Downloads/results_iris.csv"
+in_path = ".../datasets_mlc/emotions.arff"
+out_path = ".../results_iris.csv"
 computing_best_imprecise_mean(in_path=in_path,
                               out_path=out_path,
                               nb_process=1,
                               missing_pct=0.0,
                               noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.2,
                               min_ncc_s_param=0.5, max_ncc_s_param=6, step_ncc_s_param=1,
+                              epsilon_reject=0.0,
                               remove_features=["image_name"])

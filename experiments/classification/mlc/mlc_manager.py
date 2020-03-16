@@ -37,7 +37,7 @@ def prediction(pid, tasks, queue, results, class_model, class_model_challenger=N
                 if class_model_challenger is not None:
                     task['kwargs']['ncc_s_param'] = 0.0
                     prediction_precise = model.evaluate(**task['kwargs'])
-                print("(pid, prediction, ground-truth) ", pid, task['y_test'], flush=True)
+                print("(pid, prediction, ground-truth) ", pid, prediction, task['y_test'], flush=True)
                 predictions.append(dict({'prediction': prediction,
                                          'precise': prediction_precise,
                                          'ground_truth': task['y_test']}))
