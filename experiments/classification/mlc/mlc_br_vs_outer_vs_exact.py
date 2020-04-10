@@ -117,28 +117,30 @@ def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_ch
 
                 outer_inference = set_prob_marginal.multilab_dom()
                 precise_inference = prec_prob_marginal.multilab_dom()
-                precise_reject = np.array(precise_inference)
-
                 # procedure to reject option
-                epsilon_reject = task["epsilon_reject"]
-                if epsilon_reject > 0.0:
-                    all_idx = set(range(nb_labels))
-                    probabilities_yi_eq_1 = prec_prob_marginal.scores[:, 0]
-                    ones = set(np.where(probabilities_yi_eq_1 >= 0.5 + epsilon_reject)[0])
-                    zeros = set(np.where(probabilities_yi_eq_1 <= 0.5 - epsilon_reject)[0])
-                    stars = all_idx - ones - zeros
-                    precise_reject[list(stars)] = -1
-                    precise_reject[list(zeros)] = 0
-                    precise_reject[list(ones)] = 1
+                epsilon_rejects = task["epsilon_rejects"]
+                precise_rejects = dict()
+                if epsilon_rejects is not None and len(epsilon_rejects) > 0:
+                    for epsilon_reject in epsilon_rejects:
+                        precise_reject = np.array(precise_inference)
+                        all_idx = set(range(nb_labels))
+                        probabilities_yi_eq_1 = prec_prob_marginal.scores[:, 0]
+                        ones = set(np.where(probabilities_yi_eq_1 >= 0.5 + epsilon_reject)[0])
+                        zeros = set(np.where(probabilities_yi_eq_1 <= 0.5 - epsilon_reject)[0])
+                        stars = all_idx - ones - zeros
+                        precise_reject[list(stars)] = -1
+                        precise_reject[list(zeros)] = 0
+                        precise_reject[list(ones)] = 1
+                        precise_rejects[str(epsilon_reject)] = precise_reject
 
                 # print partial prediction results
                 print("(pid, skeptical, outer, precise, precise_reject ground-truth) ",
                       pid, len(skeptical_inference), outer_inference, precise_inference,
-                      precise_reject, task['y_test'], flush=True)
+                      precise_rejects, task['y_test'], flush=True)
                 results.append(dict({'skeptical': skeptical_inference,
                                      'outer': outer_inference,
                                      'precise': precise_inference,
-                                     'reject': precise_reject,
+                                     'reject': precise_rejects,
                                      'ground_truth': task['y_test']}))
             queue.task_done()
     except Exception as e:
@@ -158,7 +160,7 @@ def computing_training_testing_step(learn_data_set,
                                     ncc_imprecise,
                                     manager,
                                     do_inference_exact,
-                                    epsilon_reject,
+                                    epsilon_rejects,
                                     ich_skep, cph_skep,
                                     ich_out, cph_out,
                                     acc_prec, jacc_skep,
@@ -184,7 +186,7 @@ def computing_training_testing_step(learn_data_set,
                         'ncc_s_param': ncc_imprecise},
              'y_test': test[p_dimension:(p_dimension + nb_labels)],
              'do_inference_exact': do_inference_exact,
-             'epsilon_reject': epsilon_reject,
+             'epsilon_rejects': epsilon_rejects,
              'k_nearest': k_nearest_neighbors})
     manager.poisonPillWorkers()
     manager.joinTraining()  # wait all process for computing results
@@ -196,10 +198,9 @@ def computing_training_testing_step(learn_data_set,
         y_skeptical_exact = prediction['skeptical']
         y_outer = prediction['outer']
         y_precise = prediction['precise']
-        y_reject = prediction['reject']
+        y_rejects = prediction['reject']
         # decompose the partial to full prediction
         y_outer_full_set = expansion_partial_to_full_set_binary_vector(y_outer)
-        y_reject_full_set = expansion_partial_to_full_set_binary_vector(y_reject)
 
         # if enable to do the exact skeptical inference
         inc_jacc = -1
@@ -209,9 +210,6 @@ def computing_training_testing_step(learn_data_set,
             inc_ich_skep, inc_cph_skep = incorrectness_completeness_measure(y_true, y_skeptical_exact_partial)
             inc_jacc = compute_jaccard_similarity_score(y_outer_full_set, y_skeptical_exact)
 
-        # if enable rejection option
-        inc_ich_reject, inc_cph_reject = incorrectness_completeness_measure(y_true, y_reject)
-        inc_jacc_reject = compute_jaccard_similarity_score(y_outer_full_set, y_reject_full_set)
         inc_ich_out, inc_cph_out = incorrectness_completeness_measure(y_true, y_outer)
         inc_acc_prec, _ = incorrectness_completeness_measure(y_true, y_precise)
 
@@ -228,10 +226,16 @@ def computing_training_testing_step(learn_data_set,
         ich_out += inc_ich_out / nb_tests
         cph_out += inc_cph_out / nb_tests
         acc_prec += inc_acc_prec / nb_tests
-        # reject measures
-        ich_reject += inc_ich_reject / nb_tests
-        cph_reject += inc_cph_reject / nb_tests
-        jacc_reject += inc_jacc_reject / nb_tests
+        # reject measures: if enable rejection option
+        for epsilon, y_reject in y_rejects.items():
+            y_reject_full_set = expansion_partial_to_full_set_binary_vector(y_reject)
+            inc_ich_reject, inc_cph_reject = incorrectness_completeness_measure(y_true, y_reject)
+            inc_jacc_reject = compute_jaccard_similarity_score(y_outer_full_set, y_reject_full_set)
+
+            ich_reject[epsilon] += inc_ich_reject / nb_tests
+            cph_reject[epsilon] += inc_cph_reject / nb_tests
+            jacc_reject[epsilon] += inc_jacc_reject / nb_tests
+
     manager.restartResults()
     return (ich_skep, cph_skep, ich_out, cph_out,
             acc_prec, jacc_skep, ich_reject, cph_reject, jacc_reject)
@@ -247,7 +251,7 @@ def computing_best_imprecise_mean(in_path=None,
                                   nb_kFold=10,
                                   nb_process=1,
                                   scaling=True,
-                                  epsilon_reject=0.0,
+                                  epsilon_rejects=None,
                                   min_ncc_s_param=0.5,
                                   max_ncc_s_param=6.0,
                                   step_ncc_s_param=1.0,
@@ -261,8 +265,8 @@ def computing_best_imprecise_mean(in_path=None,
     logger.info('Training dataset (%s, %s)', in_path, out_path)
     logger.info("(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param) (%s, %s, %s)",
                 min_ncc_s_param, max_ncc_s_param, step_ncc_s_param)
-    logger.info("(scaling, remove_features, process, epsilon_reject) (%s, %s, %s, %s)",
-                scaling, remove_features, nb_process, epsilon_reject)
+    logger.info("(scaling, remove_features, process, epsilon_rejects) (%s, %s, %s, %s)",
+                scaling, remove_features, nb_process, epsilon_rejects)
     logger.info("(missing_pct, noise_label_pct, noise_label_type, noise_label_prob) (%s, %s, %s, %s)",
                 missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
     logger.info("(do_inference_exact, k_nearest_neighbors)  (%s, %s)",
@@ -287,7 +291,7 @@ def computing_best_imprecise_mean(in_path=None,
     ich_skep, cph_skep, jacc_skep = dict(), dict(), dict()
     ich_out, cph_out, acc_prec = dict(), dict(), dict()
     ich_reject, cph_reject, jacc_reject = dict(), dict(), dict()
-    min_discretize, max_discretize = 5, 6
+    min_discretize, max_discretize = 5, 7
     for nb_disc in range(min_discretize, max_discretize):
         data_learning = arff.ArffFile()
         data_learning.load(in_path)
@@ -332,7 +336,9 @@ def computing_best_imprecise_mean(in_path=None,
                 ks_ncc = str(s_ncc)
                 ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc], jacc_skep[disc][ks_ncc] = 0, 0, 0
                 ich_out[disc][ks_ncc], cph_out[disc][ks_ncc], acc_prec[disc][ks_ncc] = 0, 0, 0
-                ich_reject[disc][ks_ncc], cph_reject[disc][ks_ncc], jacc_reject[disc][ks_ncc] = 0, 0, 0
+                ich_reject[disc][ks_ncc] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
+                cph_reject[disc][ks_ncc] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
+                jacc_reject[disc][ks_ncc] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
                 for idx_fold, (training, testing) in enumerate(splits_s):
                     logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
                     logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
@@ -347,7 +353,7 @@ def computing_best_imprecise_mean(in_path=None,
                                                          s_ncc,
                                                          manager,
                                                          do_inference_exact,
-                                                         epsilon_reject,
+                                                         epsilon_rejects,
                                                          ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc],
                                                          ich_out[disc][ks_ncc], cph_out[disc][ks_ncc],
                                                          acc_prec[disc][ks_ncc], jacc_skep[disc][ks_ncc],
@@ -362,16 +368,25 @@ def computing_best_imprecise_mean(in_path=None,
                     jacc_reject[disc][ks_ncc] = rs[8]
                     logger.debug("Partial-s-k_step (acc, ich_out) (%s, %s)",
                                  acc_prec[disc][ks_ncc], ich_out[disc][ks_ncc])
-                writer.writerow([str(nb_disc), s_ncc, time,
-                                 ich_skep[disc][ks_ncc] / nb_kFold,
-                                 cph_skep[disc][ks_ncc] / nb_kFold,
-                                 ich_out[disc][ks_ncc] / nb_kFold,
-                                 cph_out[disc][ks_ncc] / nb_kFold,
-                                 acc_prec[disc][ks_ncc] / nb_kFold,
-                                 jacc_skep[disc][ks_ncc] / nb_kFold,
-                                 ich_reject[disc][ks_ncc] / nb_kFold,
-                                 cph_reject[disc][ks_ncc] / nb_kFold,
-                                 jacc_reject[disc][ks_ncc] / nb_kFold])
+                ich_skep[disc][ks_ncc] = ich_skep[disc][ks_ncc] / nb_kFold
+                cph_skep[disc][ks_ncc] = cph_skep[disc][ks_ncc] / nb_kFold
+                ich_out[disc][ks_ncc] = ich_out[disc][ks_ncc] / nb_kFold
+                cph_out[disc][ks_ncc] = cph_out[disc][ks_ncc] / nb_kFold
+                acc_prec[disc][ks_ncc] = acc_prec[disc][ks_ncc] / nb_kFold
+                jacc_skep[disc][ks_ncc] = jacc_skep[disc][ks_ncc] / nb_kFold
+                _partial_saving = [str(nb_disc), s_ncc, time,
+                                   ich_skep[disc][ks_ncc],
+                                   cph_skep[disc][ks_ncc],
+                                   ich_out[disc][ks_ncc],
+                                   cph_out[disc][ks_ncc],
+                                   acc_prec[disc][ks_ncc],
+                                   jacc_skep[disc][ks_ncc]]
+                _reject_ich = [e / nb_kFold for e in ich_reject[disc][ks_ncc].values()]
+                _reject_cph = [e / nb_kFold for e in cph_reject[disc][ks_ncc].values()]
+                _reject_jacc = [e / nb_kFold for e in jacc_reject[disc][ks_ncc].values()]
+                _partial_saving = _partial_saving + _reject_ich + _reject_cph + _reject_jacc
+                print(ich_reject[disc][ks_ncc])
+                writer.writerow(_partial_saving)
                 file_csv.flush()
                 logger.debug("Partial-s-k_step (disc, s, time, ich_skep, cph_skep, ich_out, "
                              "cph_out, acc, jacc, ich_reject, cph_reject, jacc_reject) "
@@ -383,9 +398,9 @@ def computing_best_imprecise_mean(in_path=None,
                              cph_out[disc][ks_ncc] / nb_kFold,
                              acc_prec[disc][ks_ncc] / nb_kFold,
                              jacc_skep[disc][ks_ncc] / nb_kFold,
-                             ich_reject[disc][ks_ncc] / nb_kFold,
-                             cph_reject[disc][ks_ncc] / nb_kFold,
-                             jacc_reject[disc][ks_ncc] / nb_kFold)
+                             _reject_ich,
+                             _reject_cph,
+                             _reject_jacc)
     manager.poisonPillTraining()
     file_csv.close()
     logger.debug("Results Final: %s, %s, %s, %s, %s, %s",
@@ -397,9 +412,9 @@ out_path = ".../results_iris.csv"
 computing_best_imprecise_mean(in_path=in_path,
                               out_path=out_path,
                               nb_process=1,
-                              missing_pct=0.0,
+                              missing_pct=0.4,
                               noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.2,
                               min_ncc_s_param=0.5, max_ncc_s_param=6, step_ncc_s_param=1,
-                              epsilon_reject=0.0,
+                              epsilon_rejects=[0.05, 0.15, 0.25, 0.35, 0.45],
                               k_nearest_neighbors=0,
                               remove_features=["image_name"])
