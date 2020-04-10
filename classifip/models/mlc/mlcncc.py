@@ -31,11 +31,11 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.nb_labels = 0
         self.training_size = 0
         self.LABEL_PARTIAL_VALUE = -1
+        self.marginal_props = None
 
     def learn(self,
               learn_data_set,
               nb_labels,
-              missing_pct=0.0,
               seed_random_label=None):
         """learn the NCC for each label, mainly storing counts of feature/label pairs
 
@@ -43,31 +43,35 @@ class MLCNCC(metaclass=abc.ABCMeta):
         :type learn_data_set: :class:`~classifip.dataset.arff.ArffFile`
         :param nb_labels: number of labels
         :type nb_labels: integer
-        :param missing_pct: percentage of missing labels
-        :type missing_pct: float
         :param seed_random_label: randomly mixing labels Y1, Y2, ..., Ym
         :type seed_random_label: float
         """
         self.__init__()
         self.nb_labels = nb_labels
-        self.training_size = int(len(learn_data_set.data) * (1 - missing_pct)) if missing_pct > 0.0 \
-            else len(learn_data_set.data)
 
         # Initializing the counts
         self.feature_names = learn_data_set.attributes[:-self.nb_labels]
-        self.label_names = learn_data_set.attributes[-self.nb_labels:]
+        self.label_names = np.array(learn_data_set.attributes[-self.nb_labels:])
 
         # Generation random position for chain label
         if seed_random_label is not None:
             np.random.seed(seed_random_label)
             np.random.shuffle(self.label_names)
         self.feature_values = learn_data_set.attribute_data.copy()
+        self.marginal_props = [0] * self.nb_labels
 
-        for label_value in self.label_names:
+        for label_index, label_value in enumerate(self.label_names):
             # recovery count of class 1 and 0
             label_set_one = learn_data_set.select_col_vals(label_value, ['1'])
-            self.label_counts.append(len(label_set_one.data))
             label_set_zero = learn_data_set.select_col_vals(label_value, ['0'])
+            nb_count_one, nb_count_zero = len(label_set_one.data), len(label_set_zero.data)
+            # if we works with missing label, the marginal changes
+            # if the data set has values -1 as labels, but if it does not have, it work anyway
+            # Computing label proportions
+            try:
+                self.marginal_props[label_index] = nb_count_one / float(nb_count_zero + nb_count_one)
+            except ZeroDivisionError:
+                self.marginal_props[label_index] = 0
             for feature in self.feature_names:
                 count_vector_one, count_vector_zero = [], []
                 feature_index = learn_data_set.attributes.index(feature)
@@ -93,6 +97,10 @@ class MLCNCC(metaclass=abc.ABCMeta):
                     self.feature_count[label_value + '|in|' + label_feature] = count_vector_one
                     self.feature_count[label_value + '|out|' + label_feature] = count_vector_zero
 
+    @abc.abstractmethod
+    def evaluate(self, test_dataset, ncc_epsilon=0.001, ncc_s_param=2.0, precision=None):
+        pass
+
     @staticmethod
     def missing_labels_learn_data_set(learn_data_set,
                                       nb_labels,
@@ -117,7 +125,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
                 col_ind = learn_data_set.attributes.index(label_value)
                 for index, value in enumerate(learn_data_set.data):
                     if index in missing_label_index:
-                        value[col_ind] = -1
+                        value[col_ind] = '-1'
 
     @staticmethod
     def noise_labels_learn_data_set(learn_data_set,
@@ -198,22 +206,22 @@ class MLCNCC(metaclass=abc.ABCMeta):
         p_upper = __restricting_idm(p_upper, ncc_epsilon, len_fi)
         return p_lower, p_upper
 
-    def lower_upper_probability_feature(self, j, label_prior, item, ncc_s_param, ncc_epsilon):
+    def lower_upper_probability_feature(self, idx_current_label, item, ncc_s_param, ncc_epsilon):
         # (n(c)+st(c))/(N+s), with s=0 (i.e. prior probabilities precise, P(Y))
-        u_denominator_0 = 1 - label_prior[j]  # \overline P(Yj=0)
-        l_denominator_0 = 1 - label_prior[j]  # \underline P(Yj=0)
-        u_numerator_1 = label_prior[j]  # \overline P(Yj=1)
-        l_numerator_1 = label_prior[j]  # \underline P(Yj=1)
+        u_denominator_0 = 1 - self.marginal_props[idx_current_label]  # \overline P(Yj=0)
+        l_denominator_0 = 1 - self.marginal_props[idx_current_label]  # \underline P(Yj=0)
+        u_numerator_1 = self.marginal_props[idx_current_label]  # \overline P(Yj=1)
+        l_numerator_1 = self.marginal_props[idx_current_label]  # \underline P(Yj=1)
         for f_index, feature in enumerate(self.feature_names):
             # computation of denominator (label=1)
-            feature_class_name = self.label_names[j] + '|in|' + feature  # (f_i, c=1)
+            feature_class_name = self.label_names[idx_current_label] + '|in|' + feature  # (f_i, c=1)
             p_lower, p_upper = self.lower_upper_probability(feature, item[f_index], ncc_s_param,
                                                             feature_class_name, ncc_epsilon)
             l_numerator_1 = l_numerator_1 * p_lower  # prod \underline{P}(f_i|c=1)
             u_numerator_1 = u_numerator_1 * p_upper  # prod \overline{P}(f_i|c=1)
 
             # computation of numerator (label=0)
-            feature_class_name = self.label_names[j] + '|out|' + feature
+            feature_class_name = self.label_names[idx_current_label] + '|out|' + feature
             p_lower, p_upper = self.lower_upper_probability(feature, item[f_index], ncc_s_param,
                                                             feature_class_name, ncc_epsilon)
             l_denominator_0 = l_denominator_0 * p_lower  # prod \underline{P}(f_i|c=0)
@@ -221,39 +229,63 @@ class MLCNCC(metaclass=abc.ABCMeta):
 
         return u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0
 
-    def lower_upper_probability_labels(self, j, augmented_labels, ncc_s_param, ncc_epsilon):
+    def lower_upper_probability_labels(self,
+                                       idx_current_label,
+                                       augmented_labels,
+                                       ncc_s_param,
+                                       ncc_epsilon,
+                                       idx_chain_predict_labels=None):
         """
-        :param j: name of label selected
+        :param idx_current_label: name of label selected
         :param augmented_labels: list of characters values '0' or '1'
         :param ncc_s_param:
         :param ncc_epsilon:
+        :param idx_chain_predict_labels:
         :return:
         """
         u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = 1, 1, 1, 1
-        for l_index, label in enumerate(self.label_names[:len(augmented_labels)]):
+        if idx_chain_predict_labels is None:
+            dependant_labels = enumerate(self.label_names[:len(augmented_labels)])
+        else:
+            dependant_labels = enumerate(self.label_names[idx_chain_predict_labels])
+
+        for l_index, label in dependant_labels:
             for label_predicted_value in augmented_labels[l_index]:
                 label_predicted_value = str(label_predicted_value)
                 # computation of denominator (label=1)
-                label_class_name = self.label_names[j] + '|in|' + label  # (l_i=1, c=1)
+                label_class_name = self.label_names[idx_current_label] + '|in|' + label  # (l_i=1, c=1)
                 p_lower, p_upper = self.lower_upper_probability(label, label_predicted_value, ncc_s_param,
                                                                 label_class_name, ncc_epsilon)
                 l_numerator_1 = l_numerator_1 * p_lower  # prod \underline{P}(f_i|c=1)
                 u_numerator_1 = u_numerator_1 * p_upper  # prod \overline{P}(f_i|c=1)
 
                 # computation of numerator (label=0)
-                label_class_name = self.label_names[j] + '|out|' + label  # (l_i=0, c=0)
+                label_class_name = self.label_names[idx_current_label] + '|out|' + label  # (l_i=0, c=0)
                 p_lower, p_upper = self.lower_upper_probability(label, label_predicted_value, ncc_s_param,
                                                                 label_class_name, ncc_epsilon)
                 l_denominator_0 = l_denominator_0 * p_lower  # prod \underline{P}(f_i|c=0)
                 u_denominator_0 = u_denominator_0 * p_upper  # prod \overline{P}(f_i|c=0)
         return u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0
 
-    def lower_upper_cond_probability(self, j, label_prior, item, chain_predict_labels, ncc_s_param, ncc_epsilon):
+    def lower_upper_cond_probability(self,
+                                     idx_current_label,
+                                     instance,
+                                     chain_predict_labels,
+                                     ncc_s_param,
+                                     ncc_epsilon,
+                                     idx_chain_predict_labels=None):
         u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
-            self.lower_upper_probability_feature(j, label_prior, item, ncc_s_param, ncc_epsilon)
+            self.lower_upper_probability_feature(idx_current_label,
+                                                 instance,
+                                                 ncc_s_param,
+                                                 ncc_epsilon)
 
         u_numerator_label_1, l_numerator_label_1, u_denominator_label_0, l_denominator_label_0 = \
-            self.lower_upper_probability_labels(j, chain_predict_labels, ncc_s_param, ncc_epsilon)
+            self.lower_upper_probability_labels(idx_current_label,
+                                                chain_predict_labels,
+                                                ncc_s_param,
+                                                ncc_epsilon,
+                                                idx_chain_predict_labels)
 
         u_numerator_1 = u_numerator_1 * u_numerator_label_1
         l_numerator_1 = l_numerator_1 * l_numerator_label_1

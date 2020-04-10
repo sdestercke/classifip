@@ -18,7 +18,7 @@ def normalize(dataArff, n_labels, method='minimax'):
     np_data = np_data[..., :-n_labels]
     if method == "minimax":
         np_data = normalize_minmax(np_data)
-        dataArff.data = [np_data[i].tolist() + dataArff.data[i][-n_labels:] for i, d in enumerate(np_data)]
+        dataArff.data = [np_data[i].tolist() + dataArff.data[i][-n_labels:] for i in range(len(np_data))]
     else:
         raise Exception("Not found method implemented yet.")
 

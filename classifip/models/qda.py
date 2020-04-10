@@ -171,7 +171,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             X = learn_data_set[:, :-1]
             y = learn_data_set[:, -1]
         elif X is not None and y is not None:
-            self._logger.info("Loading training data set from (X,y) couples.")
+            self._logger.debug("Loading training data set from (X,y) couples.")
         else:
             raise Exception('Not training data set setting.')
 

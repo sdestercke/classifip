@@ -3,6 +3,7 @@ from classifip.evaluation.measures import u65, u80
 from classifip.utils import create_logger
 from classifip.dataset import arff
 from classifip.models.mlc import nccbr
+from classifip.models.mlc import knnnccbr
 from classifip.models.mlc.mlcncc import MLCNCC
 from mlc_manager import ManagerWorkers, __create_dynamic_class
 import sys, os, random, csv, numpy as np
@@ -19,11 +20,11 @@ def transform_semi_partial_vector(full_binary_vector):
     :param full_binary_vector:
     :return:
     """
-    full_binary_vector = np.array(full_binary_vector)
+    _full_binary_vector = np.array(full_binary_vector)
     _, nb_labels = full_binary_vector.shape
     result = np.zeros(nb_labels, dtype=np.int)
     for idx_label in range(nb_labels):
-        label_value = np.unique(full_binary_vector[:, idx_label])
+        label_value = np.unique(_full_binary_vector[:, idx_label])
         if len(label_value) > 1:
             result[idx_label] = CONST_PARTIAL_VALUE
         else:
@@ -45,12 +46,24 @@ def expansion_partial_to_full_set_binary_vector(partial_binary_vector):
 
 def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_challenger=None):
     try:
-        model_br = __create_dynamic_class(class_model_challenger)
+        model_outer = __create_dynamic_class(class_model_challenger)
         model_exact = __create_dynamic_class(class_model)
         while True:
             training = queue.get()
             if training is None:
                 break
+
+            nb_labels = training["nb_labels"]
+            p_dimension_all = training.pop('p_dimension') + nb_labels
+            global_data_continuous = training.pop('data_continuous')
+            new_continuous_data = None
+            if global_data_continuous is not None:
+                new_continuous_data = global_data_continuous.make_clone()
+                new_continuous_data.data = list()
+                for row_instance in training["learn_data_set"].data:
+                    row_index = row_instance.pop(p_dimension_all)  # delete index raw instance by reference
+                    new_continuous_data.data.append(global_data_continuous.data[int(row_index)].copy())
+
             MLCNCC.missing_labels_learn_data_set(learn_data_set=training["learn_data_set"],
                                                  nb_labels=training["nb_labels"],
                                                  missing_pct=training["missing_pct"])
@@ -59,35 +72,58 @@ def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_ch
                                                noise_label_pct=training["noise_label_pct"],
                                                noise_label_type=training["noise_label_type"],
                                                noise_label_prob=training["noise_label_prob"])
+
             # remove some keys of dict unused for learn method
             del training['noise_label_pct']
             del training['noise_label_type']
             del training['noise_label_prob']
-            model_br.learn(**training)
+            del training["missing_pct"]
+
+            if new_continuous_data is not None:
+                model_outer.learn(learn_data_set=new_continuous_data,
+                                  nb_labels=training["nb_labels"],
+                                  learn_disc_set=training["learn_data_set"])
+            else:
+                model_outer.learn(**training)
+
             model_exact.learn(**training)
-            nb_labels = training["nb_labels"]
             while True:
                 task = tasks.get()
                 if task is None:
                     break
-                # outer-approximation binary relevance
-                set_prob_marginal = model_br.evaluate(**task['kwargs'])[0]
-                outer_inference = set_prob_marginal.multilab_dom()
 
                 # naive and improvement exact maximality inference
                 # skeptical_inference_exact = model_exact.evaluate_exact(**task['kwargs'])[0]
                 skeptical_inference = model_exact.evaluate(**task['kwargs'])[0] if task['do_inference_exact'] \
                     else [-1] * len(task['y_test'])
 
-                # precise and e-precise inference with s equal 0, epsilon > 0.0
-                task['kwargs']['ncc_s_param'] = 0.0
-                set_prob_marginal = model_br.evaluate(**task['kwargs'])[0]
-                precise_inference = set_prob_marginal.multilab_dom()
+                # procedure to skeptic inference
+                k_nearest = task['k_nearest']
+                if k_nearest is None or k_nearest == 0:
+                    # outer-approximation binary relevance
+                    set_prob_marginal = model_outer.evaluate(**task['kwargs'])[0]
+                    # precise and e-precise inference with s equal 0, epsilon > 0.0
+                    task['kwargs']['ncc_s_param'] = 0.0
+                    prec_prob_marginal = model_outer.evaluate(**task['kwargs'])[0]
+                else:
+                    instance_test = task['kwargs']['test_dataset'][0]
+                    index_test = instance_test.pop(p_dimension_all)
+                    raw_instance_test = global_data_continuous.data[int(index_test)]
+                    inferences = model_outer.evaluate(test_dataset=[(raw_instance_test, instance_test)],
+                                                      ncc_s_param=task['kwargs']['ncc_s_param'],
+                                                      k=k_nearest)[0]
+                    set_prob_marginal = inferences[0]
+                    prec_prob_marginal = inferences[1]
+
+                outer_inference = set_prob_marginal.multilab_dom()
+                precise_inference = prec_prob_marginal.multilab_dom()
                 precise_reject = np.array(precise_inference)
+
+                # procedure to reject option
                 epsilon_reject = task["epsilon_reject"]
                 if epsilon_reject > 0.0:
                     all_idx = set(range(nb_labels))
-                    probabilities_yi_eq_1 = set_prob_marginal.scores[:, 0]
+                    probabilities_yi_eq_1 = prec_prob_marginal.scores[:, 0]
                     ones = set(np.where(probabilities_yi_eq_1 >= 0.5 + epsilon_reject)[0])
                     zeros = set(np.where(probabilities_yi_eq_1 <= 0.5 - epsilon_reject)[0])
                     stars = all_idx - ones - zeros
@@ -118,6 +154,7 @@ def computing_training_testing_step(learn_data_set,
                                     noise_label_type,
                                     noise_label_prob,
                                     nb_labels,
+                                    p_dimension,
                                     ncc_imprecise,
                                     manager,
                                     do_inference_exact,
@@ -126,24 +163,29 @@ def computing_training_testing_step(learn_data_set,
                                     ich_out, cph_out,
                                     acc_prec, jacc_skep,
                                     ich_reject, cph_reject,
-                                    jacc_reject):
+                                    jacc_reject,
+                                    data_continuous,
+                                    k_nearest_neighbors):
     # Send training data model to every parallel process
     manager.addNewTraining(learn_data_set=learn_data_set,
                            nb_labels=nb_labels,
                            missing_pct=missing_pct,
                            noise_label_pct=noise_label_pct,
                            noise_label_type=noise_label_type,
-                           noise_label_prob=noise_label_prob)
+                           noise_label_prob=noise_label_prob,
+                           data_continuous=data_continuous,
+                           p_dimension=p_dimension)
 
     # Send testing data to every parallel process
     for test in test_data_set.data:
         manager.addTask(
-            {'kwargs': {'test_dataset': [test[:-nb_labels]],
+            {'kwargs': {'test_dataset': [test],
                         'ncc_epsilon': 0.001,
                         'ncc_s_param': ncc_imprecise},
-             'y_test': test[-nb_labels:],
+             'y_test': test[p_dimension:(p_dimension + nb_labels)],
              'do_inference_exact': do_inference_exact,
-             'epsilon_reject': epsilon_reject})
+             'epsilon_reject': epsilon_reject,
+             'k_nearest': k_nearest_neighbors})
     manager.poisonPillWorkers()
     manager.joinTraining()  # wait all process for computing results
     # Recovery all inference data of all parallel process
@@ -158,6 +200,7 @@ def computing_training_testing_step(learn_data_set,
         # decompose the partial to full prediction
         y_outer_full_set = expansion_partial_to_full_set_binary_vector(y_outer)
         y_reject_full_set = expansion_partial_to_full_set_binary_vector(y_reject)
+
         # if enable to do the exact skeptical inference
         inc_jacc = -1
         inc_ich_skep, inc_cph_skep = -1, -1
@@ -165,18 +208,27 @@ def computing_training_testing_step(learn_data_set,
             y_skeptical_exact_partial = transform_semi_partial_vector(y_skeptical_exact)
             inc_ich_skep, inc_cph_skep = incorrectness_completeness_measure(y_true, y_skeptical_exact_partial)
             inc_jacc = compute_jaccard_similarity_score(y_outer_full_set, y_skeptical_exact)
+
         # if enable rejection option
         inc_ich_reject, inc_cph_reject = incorrectness_completeness_measure(y_true, y_reject)
         inc_jacc_reject = compute_jaccard_similarity_score(y_outer_full_set, y_reject_full_set)
         inc_ich_out, inc_cph_out = incorrectness_completeness_measure(y_true, y_outer)
         inc_acc_prec, _ = incorrectness_completeness_measure(y_true, y_precise)
-        # increase global values
+
+        # why incorrectness < accuracy
+        if inc_ich_out > inc_acc_prec:
+            print("[inc < acc](outer, precise, ground-truth) ",
+                  y_outer, y_precise, y_true, inc_ich_out, inc_acc_prec, flush=True)
+
+        # skeptical measures
         ich_skep += inc_ich_skep / nb_tests
         cph_skep += inc_cph_skep / nb_tests
+        jacc_skep += inc_jacc / nb_tests
+        # outer measures
         ich_out += inc_ich_out / nb_tests
         cph_out += inc_cph_out / nb_tests
         acc_prec += inc_acc_prec / nb_tests
-        jacc_skep += inc_jacc / nb_tests
+        # reject measures
         ich_reject += inc_ich_reject / nb_tests
         cph_reject += inc_cph_reject / nb_tests
         jacc_reject += inc_jacc_reject / nb_tests
@@ -200,7 +252,8 @@ def computing_best_imprecise_mean(in_path=None,
                                   max_ncc_s_param=6.0,
                                   step_ncc_s_param=1.0,
                                   remove_features=None,
-                                  do_inference_exact=False):
+                                  do_inference_exact=False,
+                                  k_nearest_neighbors=None):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
@@ -208,10 +261,12 @@ def computing_best_imprecise_mean(in_path=None,
     logger.info('Training dataset (%s, %s)', in_path, out_path)
     logger.info("(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param) (%s, %s, %s)",
                 min_ncc_s_param, max_ncc_s_param, step_ncc_s_param)
-    logger.info("(scaling, remove_features, process) (%s, %s, %s)",
-                scaling, remove_features, nb_process)
+    logger.info("(scaling, remove_features, process, epsilon_reject) (%s, %s, %s, %s)",
+                scaling, remove_features, nb_process, epsilon_reject)
     logger.info("(missing_pct, noise_label_pct, noise_label_type, noise_label_prob) (%s, %s, %s, %s)",
                 missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
+    logger.info("(do_inference_exact, k_nearest_neighbors)  (%s, %s)",
+                do_inference_exact, k_nearest_neighbors)
 
     # Seeding a random value for k-fold top learning-testing data
     if seed is None:
@@ -222,13 +277,17 @@ def computing_best_imprecise_mean(in_path=None,
     file_csv = open(out_path, 'a')
     writer = csv.writer(file_csv)
     manager = ManagerWorkers(nb_process=nb_process, fun_prediction=skeptical_prediction)
+    _class_model_challenger = "classifip.models.mlc.nccbr.NCCBR"
+    if k_nearest_neighbors is not None and k_nearest_neighbors > 0:
+        _class_model_challenger = "classifip.models.mlc.knnnccbr.KNN_NCC_BR"
     manager.executeAsync(class_model="classifip.models.mlc.exactncc.MLCNCCExact",
-                         class_model_challenger="classifip.models.mlc.nccbr.NCCBR")
+                         class_model_challenger=_class_model_challenger)
+    logger.info('Classifier binary relevant (%s)', _class_model_challenger)
 
     ich_skep, cph_skep, jacc_skep = dict(), dict(), dict()
     ich_out, cph_out, acc_prec = dict(), dict(), dict()
     ich_reject, cph_reject, jacc_reject = dict(), dict(), dict()
-    min_discretize, max_discretize = 5, 7
+    min_discretize, max_discretize = 5, 6
     for nb_disc in range(min_discretize, max_discretize):
         data_learning = arff.ArffFile()
         data_learning.load(in_path)
@@ -239,8 +298,18 @@ def computing_best_imprecise_mean(in_path=None,
                 except Exception as err:
                     print("Remove feature error: {0}".format(err))
         nb_labels = get_nb_labels_class(data_learning)
+        p_dimension = len(data_learning.data[0]) - nb_labels
         if scaling:
             normalize(data_learning, n_labels=nb_labels)
+
+        # procedure to model the knn-and-ncc classification
+        data_continuous = None
+        if k_nearest_neighbors is not None and k_nearest_neighbors > 0:
+            # saving continuous data and index instances for KNN-NCC-BR
+            data_continuous = data_learning.make_clone()
+            # adding raw-index to each instance if we use knn-ncc
+            for idx, row_instance in enumerate(data_learning.data):
+                row_instance.insert(p_dimension + nb_labels, idx)
 
         data_learning.discretize(discmet="eqfreq", numint=nb_disc)
 
@@ -274,6 +343,7 @@ def computing_best_imprecise_mean(in_path=None,
                                                          noise_label_type,
                                                          noise_label_prob,
                                                          nb_labels,
+                                                         p_dimension,
                                                          s_ncc,
                                                          manager,
                                                          do_inference_exact,
@@ -282,7 +352,9 @@ def computing_best_imprecise_mean(in_path=None,
                                                          ich_out[disc][ks_ncc], cph_out[disc][ks_ncc],
                                                          acc_prec[disc][ks_ncc], jacc_skep[disc][ks_ncc],
                                                          ich_reject[disc][ks_ncc], cph_reject[disc][ks_ncc],
-                                                         jacc_reject[disc][ks_ncc])
+                                                         jacc_reject[disc][ks_ncc],
+                                                         data_continuous,
+                                                         k_nearest_neighbors)
                     ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc] = rs[0], rs[1]
                     ich_out[disc][ks_ncc], cph_out[disc][ks_ncc] = rs[2], rs[3]
                     acc_prec[disc][ks_ncc], jacc_skep[disc][ks_ncc] = rs[4], rs[5]
@@ -329,4 +401,5 @@ computing_best_imprecise_mean(in_path=in_path,
                               noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.2,
                               min_ncc_s_param=0.5, max_ncc_s_param=6, step_ncc_s_param=1,
                               epsilon_reject=0.0,
+                              k_nearest_neighbors=0,
                               remove_features=["image_name"])

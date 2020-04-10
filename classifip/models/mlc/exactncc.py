@@ -155,14 +155,11 @@ class MLCNCCExact(MLCNCC):
     def learn(self,
               learn_data_set,
               nb_labels,
-              missing_pct=0.0,
               seed_random_label=None):
         super(MLCNCCExact, self).learn(learn_data_set,
                                        nb_labels,
-                                       missing_pct,
                                        seed_random_label)
 
-        label_prior = [lab_count / float(self.training_size) for lab_count in self.label_counts]
         self.power_set = ["".join(seq) for seq in product("01", repeat=self.nb_labels)]
         self.root = BinaryMultiLabel(label=self.power_set)
         tbinary = queue.LifoQueue()
@@ -173,18 +170,18 @@ class MLCNCCExact(MLCNCC):
             left, right = tree_recursive.node.splitNode(label=sub_power_set)
             tree_recursive.left = bt.BinaryTree(node=left)
             tree_recursive.right = bt.BinaryTree(node=right)
-            tree_recursive.node.proba = self.__learning_sub_model(tree_recursive.node.label, label_prior)
+            tree_recursive.node.proba = self.__learning_sub_model(tree_recursive.node.label)
             if len(sub_power_set) > 1:
                 tbinary.put(tree_recursive.right)
                 tbinary.put(tree_recursive.left)
 
-    def __learning_sub_model(self, labels, label_prior):
+    def __learning_sub_model(self, labels):
         level_tree_model = int(self.nb_labels - math.log2(len(labels)))
         augmented_input_labels = [str(lab) for lab in labels[0][:level_tree_model]]
 
         def __inference(item, ncc_s_param=2, ncc_epsilon=0.001):
             u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
-                super(MLCNCCExact, self).lower_upper_cond_probability(level_tree_model, label_prior, item,
+                super(MLCNCCExact, self).lower_upper_cond_probability(level_tree_model, item,
                                                                       augmented_input_labels,
                                                                       ncc_s_param, ncc_epsilon)
             y1_upper = u_numerator_1 / (u_numerator_1 + l_denominator_0)
@@ -299,7 +296,7 @@ class MLCNCCExact(MLCNCC):
         self._logger.debug("set solutions improved exact inference %s", solution_exact)
         return solution_exact
 
-    def evaluate(self, test_dataset, ncc_s_param=2, ncc_epsilon=0.001):
+    def evaluate(self, test_dataset, ncc_s_param=2, ncc_epsilon=0.001, precision=None):
         solutions = []
         for item in test_dataset:
             start = time.time()

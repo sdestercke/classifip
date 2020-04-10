@@ -53,7 +53,7 @@ class IntervalsProbability(CredalSet):
     array([ 1.,  1.,  0.])
     """
 
-    def __init__(self, lproba, precision_decimal=16):
+    def __init__(self, lproba, precision_decimal=None):
         """Instanciate probability interval bounds
         
         :param lproba: a 2xn array containing upper (1st row) and lower bounds
@@ -68,7 +68,8 @@ class IntervalsProbability(CredalSet):
         self.lproba = lproba
         self.nbDecision = lproba[0].size
         # approximation due to precision decimal greater than 16 decimals
-        lproba = np.around(lproba, decimals=precision_decimal)
+        if precision_decimal is not None:
+            lproba = np.around(lproba, decimals=precision_decimal)
         if np.all(lproba[0] >= lproba[1]) != 1:
             np.set_printoptions(precision=40, suppress=True)
             raise Exception('Some upper bounds lower than lower bounds', lproba)
