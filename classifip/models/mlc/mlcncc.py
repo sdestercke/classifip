@@ -58,6 +58,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
             np.random.seed(seed_random_label)
             np.random.shuffle(self.label_names)
         self.feature_values = learn_data_set.attribute_data.copy()
+        # computing precise marginal P(Y) count
         self.marginal_props = [0] * self.nb_labels
 
         for label_index, label_value in enumerate(self.label_names):
@@ -250,21 +251,21 @@ class MLCNCC(metaclass=abc.ABCMeta):
             dependant_labels = enumerate(self.label_names[idx_chain_predict_labels])
 
         for l_index, label in dependant_labels:
-            for label_predicted_value in augmented_labels[l_index]:
-                label_predicted_value = str(label_predicted_value)
-                # computation of denominator (label=1)
-                label_class_name = self.label_names[idx_current_label] + '|in|' + label  # (l_i=1, c=1)
-                p_lower, p_upper = self.lower_upper_probability(label, label_predicted_value, ncc_s_param,
-                                                                label_class_name, ncc_epsilon)
-                l_numerator_1 = l_numerator_1 * p_lower  # prod \underline{P}(f_i|c=1)
-                u_numerator_1 = u_numerator_1 * p_upper  # prod \overline{P}(f_i|c=1)
+            label_predicted_value = augmented_labels[l_index]
+            label_predicted_value = str(label_predicted_value)
+            # computation of denominator (label=1)
+            label_class_name = self.label_names[idx_current_label] + '|in|' + label  # (l_i=1, c=1)
+            p_lower, p_upper = self.lower_upper_probability(label, label_predicted_value, ncc_s_param,
+                                                            label_class_name, ncc_epsilon)
+            l_numerator_1 = l_numerator_1 * p_lower  # prod \underline{P}(f_i|c=1)
+            u_numerator_1 = u_numerator_1 * p_upper  # prod \overline{P}(f_i|c=1)
 
-                # computation of numerator (label=0)
-                label_class_name = self.label_names[idx_current_label] + '|out|' + label  # (l_i=0, c=0)
-                p_lower, p_upper = self.lower_upper_probability(label, label_predicted_value, ncc_s_param,
-                                                                label_class_name, ncc_epsilon)
-                l_denominator_0 = l_denominator_0 * p_lower  # prod \underline{P}(f_i|c=0)
-                u_denominator_0 = u_denominator_0 * p_upper  # prod \overline{P}(f_i|c=0)
+            # computation of numerator (label=0)
+            label_class_name = self.label_names[idx_current_label] + '|out|' + label  # (l_i=0, c=0)
+            p_lower, p_upper = self.lower_upper_probability(label, label_predicted_value, ncc_s_param,
+                                                            label_class_name, ncc_epsilon)
+            l_denominator_0 = l_denominator_0 * p_lower  # prod \underline{P}(f_i|c=0)
+            u_denominator_0 = u_denominator_0 * p_upper  # prod \overline{P}(f_i|c=0)
         return u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0
 
     def lower_upper_cond_probability(self,
@@ -274,6 +275,20 @@ class MLCNCC(metaclass=abc.ABCMeta):
                                      ncc_s_param,
                                      ncc_epsilon,
                                      idx_chain_predict_labels=None):
+        """
+        .. note::
+            TO DO: To avoid probability zero, we use the Laplace Smoothing
+                https://en.wikipedia.org/wiki/Additive_smoothing
+        :param idx_current_label:
+        :param instance:
+        :param chain_predict_labels:
+        :param ncc_s_param:
+        :param ncc_epsilon:
+        :param idx_chain_predict_labels:
+        :return:
+        """
+
+        print("---->", chain_predict_labels, flush=True)
         u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
             self.lower_upper_probability_feature(idx_current_label,
                                                  instance,
