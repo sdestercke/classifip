@@ -74,13 +74,18 @@ class KNN_NCC_BR(MLCNCC):
     def evaluate(self, test_dataset, ncc_epsilon=0.001, ncc_s_param=2.0, k=1, type_knn=2, precision=16):
         """
         :param test_dataset:
-        :param k:
+        :param k: k*size_avg_radius pairwise all instances to get neighbors (ball)
         :param ncc_epsilon:
         :param ncc_s_param:
         :param type_knn: (1) k nearest neighbors,
                          (2) the nearest neighbors relative to ball Euclidean distance,
                              where the k*radius is equals to average on all instances
         :param precision:
+
+        ...note::
+            if row_instance[.] == '-1', thus it is a missing label,
+            not considering as training instance.
+
         :return:
         """
         if type_knn not in [1, 2]:

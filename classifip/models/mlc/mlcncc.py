@@ -3,6 +3,9 @@ import numpy as np
 
 
 class MLCNCC(metaclass=abc.ABCMeta):
+    # global static variables
+    LABEL_PARTIAL_VALUE = -1
+
     """
         NCCBR implements the naive credal classification method using the IDM for
             multilabel classification with binary relevance.
@@ -30,7 +33,6 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.label_counts = []
         self.nb_labels = 0
         self.training_size = 0
-        self.LABEL_PARTIAL_VALUE = -1
         self.marginal_props = None
 
     def learn(self,
@@ -207,22 +209,22 @@ class MLCNCC(metaclass=abc.ABCMeta):
         p_upper = __restricting_idm(p_upper, ncc_epsilon, len_fi)
         return p_lower, p_upper
 
-    def lower_upper_probability_feature(self, idx_current_label, item, ncc_s_param, ncc_epsilon):
+    def lower_upper_probability_feature(self, idx_label_to_infer, item, ncc_s_param, ncc_epsilon):
         # (n(c)+st(c))/(N+s), with s=0 (i.e. prior probabilities precise, P(Y))
-        u_denominator_0 = 1 - self.marginal_props[idx_current_label]  # \overline P(Yj=0)
-        l_denominator_0 = 1 - self.marginal_props[idx_current_label]  # \underline P(Yj=0)
-        u_numerator_1 = self.marginal_props[idx_current_label]  # \overline P(Yj=1)
-        l_numerator_1 = self.marginal_props[idx_current_label]  # \underline P(Yj=1)
+        u_denominator_0 = 1 - self.marginal_props[idx_label_to_infer]  # \overline P(Yj=0)
+        l_denominator_0 = 1 - self.marginal_props[idx_label_to_infer]  # \underline P(Yj=0)
+        u_numerator_1 = self.marginal_props[idx_label_to_infer]  # \overline P(Yj=1)
+        l_numerator_1 = self.marginal_props[idx_label_to_infer]  # \underline P(Yj=1)
         for f_index, feature in enumerate(self.feature_names):
             # computation of denominator (label=1)
-            feature_class_name = self.label_names[idx_current_label] + '|in|' + feature  # (f_i, c=1)
+            feature_class_name = self.label_names[idx_label_to_infer] + '|in|' + feature  # (f_i, c=1)
             p_lower, p_upper = self.lower_upper_probability(feature, item[f_index], ncc_s_param,
                                                             feature_class_name, ncc_epsilon)
             l_numerator_1 = l_numerator_1 * p_lower  # prod \underline{P}(f_i|c=1)
             u_numerator_1 = u_numerator_1 * p_upper  # prod \overline{P}(f_i|c=1)
 
             # computation of numerator (label=0)
-            feature_class_name = self.label_names[idx_current_label] + '|out|' + feature
+            feature_class_name = self.label_names[idx_label_to_infer] + '|out|' + feature
             p_lower, p_upper = self.lower_upper_probability(feature, item[f_index], ncc_s_param,
                                                             feature_class_name, ncc_epsilon)
             l_denominator_0 = l_denominator_0 * p_lower  # prod \underline{P}(f_i|c=0)
@@ -231,13 +233,13 @@ class MLCNCC(metaclass=abc.ABCMeta):
         return u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0
 
     def lower_upper_probability_labels(self,
-                                       idx_current_label,
+                                       idx_label_to_infer,
                                        augmented_labels,
                                        ncc_s_param,
                                        ncc_epsilon,
                                        idx_chain_predict_labels=None):
         """
-        :param idx_current_label: name of label selected
+        :param idx_label_to_infer: name of label selected
         :param augmented_labels: list of characters values '0' or '1'
         :param ncc_s_param:
         :param ncc_epsilon:
@@ -248,20 +250,19 @@ class MLCNCC(metaclass=abc.ABCMeta):
         if idx_chain_predict_labels is None:
             dependant_labels = enumerate(self.label_names[:len(augmented_labels)])
         else:
-            dependant_labels = enumerate(self.label_names[idx_chain_predict_labels])
+            dependant_labels = zip(idx_chain_predict_labels, self.label_names[idx_chain_predict_labels])
 
         for l_index, label in dependant_labels:
-            label_predicted_value = augmented_labels[l_index]
-            label_predicted_value = str(label_predicted_value)
+            label_predicted_value = str(augmented_labels[l_index])
             # computation of denominator (label=1)
-            label_class_name = self.label_names[idx_current_label] + '|in|' + label  # (l_i=1, c=1)
+            label_class_name = self.label_names[idx_label_to_infer] + '|in|' + label  # (l_i=1, c=1)
             p_lower, p_upper = self.lower_upper_probability(label, label_predicted_value, ncc_s_param,
                                                             label_class_name, ncc_epsilon)
             l_numerator_1 = l_numerator_1 * p_lower  # prod \underline{P}(f_i|c=1)
             u_numerator_1 = u_numerator_1 * p_upper  # prod \overline{P}(f_i|c=1)
 
             # computation of numerator (label=0)
-            label_class_name = self.label_names[idx_current_label] + '|out|' + label  # (l_i=0, c=0)
+            label_class_name = self.label_names[idx_label_to_infer] + '|out|' + label  # (l_i=0, c=0)
             p_lower, p_upper = self.lower_upper_probability(label, label_predicted_value, ncc_s_param,
                                                             label_class_name, ncc_epsilon)
             l_denominator_0 = l_denominator_0 * p_lower  # prod \underline{P}(f_i|c=0)
@@ -269,9 +270,9 @@ class MLCNCC(metaclass=abc.ABCMeta):
         return u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0
 
     def lower_upper_cond_probability(self,
-                                     idx_current_label,
+                                     idx_label_to_infer,
                                      instance,
-                                     chain_predict_labels,
+                                     augmented_labels,
                                      ncc_s_param,
                                      ncc_epsilon,
                                      idx_chain_predict_labels=None):
@@ -279,25 +280,24 @@ class MLCNCC(metaclass=abc.ABCMeta):
         .. note::
             TO DO: To avoid probability zero, we use the Laplace Smoothing
                 https://en.wikipedia.org/wiki/Additive_smoothing
-        :param idx_current_label:
+        :param idx_label_to_infer:
         :param instance:
-        :param chain_predict_labels:
+        :param augmented_labels:
         :param ncc_s_param:
         :param ncc_epsilon:
         :param idx_chain_predict_labels:
         :return:
         """
 
-        print("---->", chain_predict_labels, flush=True)
         u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
-            self.lower_upper_probability_feature(idx_current_label,
+            self.lower_upper_probability_feature(idx_label_to_infer,
                                                  instance,
                                                  ncc_s_param,
                                                  ncc_epsilon)
 
         u_numerator_label_1, l_numerator_label_1, u_denominator_label_0, l_denominator_label_0 = \
-            self.lower_upper_probability_labels(idx_current_label,
-                                                chain_predict_labels,
+            self.lower_upper_probability_labels(idx_label_to_infer,
+                                                augmented_labels,
                                                 ncc_s_param,
                                                 ncc_epsilon,
                                                 idx_chain_predict_labels)

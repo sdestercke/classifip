@@ -206,7 +206,7 @@ class MLCNCCExact(MLCNCC):
         maximality_sets = dict.fromkeys(all_output_space, True)
         cardinal_all_output = len(all_output_space)
         all_output_space = np.array(all_output_space)
-        PARTIAL_VALUE = self.LABEL_PARTIAL_VALUE
+        PARTIAL_VALUE = MLCNCC.LABEL_PARTIAL_VALUE
         __logger = self._logger
 
         # creation of binary tree in memory as a function (faster execution instead of recursive method)
