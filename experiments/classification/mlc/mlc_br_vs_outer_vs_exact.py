@@ -411,7 +411,7 @@ def experiments_binr_vs_imprecise(in_path=None,
                 _reject_cph = [e / nb_kFold for e in cph_reject[disc][ks_ncc].values()]
                 _reject_jacc = [e / nb_kFold for e in jacc_reject[disc][ks_ncc].values()]
                 _partial_saving = _partial_saving + _reject_ich + _reject_cph + _reject_jacc
-                print(ich_reject[disc][ks_ncc])
+                logger.debug("Partial-s-k_step reject values (%s)", ich_reject[disc][ks_ncc])
                 writer.writerow(_partial_saving)
                 file_csv.flush()
                 logger.debug("Partial-s-k_step (disc, s, time, ich_skep, cph_skep, ich_out, "

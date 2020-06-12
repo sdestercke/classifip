@@ -5,6 +5,15 @@ CONST_PARTIAL_VALUE = -1
 
 
 def distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels):
+    """
+        This method aims to check if the improved exact inference (3^m-1 comparisons)
+        has same number of solutions than the exact inference (all comparisons)
+
+    :param inference_outer:
+    :param inference_exact:
+    :param nb_labels:
+    :return:
+    """
     power_outer = 0
     for j in range(nb_labels):
         if inference_outer[j] == CONST_PARTIAL_VALUE:

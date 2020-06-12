@@ -1,5 +1,6 @@
 import abc, math, time
 import numpy as np
+from classifip.utils import create_logger
 
 
 class MLCNCC(metaclass=abc.ABCMeta):
@@ -25,7 +26,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
 
     """
 
-    def __init__(self):
+    def __init__(self, DEBUG):
         self.feature_names = []
         self.label_names = []
         self.feature_values = dict()
@@ -34,6 +35,8 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.nb_labels = 0
         self.training_size = 0
         self.marginal_props = None
+        self.DEBUG = DEBUG
+        self._logger = create_logger("MLCNCC", DEBUG)
 
     def learn(self,
               learn_data_set,
@@ -251,6 +254,9 @@ class MLCNCC(metaclass=abc.ABCMeta):
             dependant_labels = enumerate(self.label_names[:len(augmented_labels)])
         else:
             dependant_labels = zip(idx_chain_predict_labels, self.label_names[idx_chain_predict_labels])
+
+        self._logger.debug("[Bound-Labels] (label_to_infer, augmented_labels) (%s, %s)",
+                           self.label_names[idx_label_to_infer], augmented_labels)
 
         for l_index, label in dependant_labels:
             label_predicted_value = str(augmented_labels[l_index])
