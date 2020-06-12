@@ -178,9 +178,9 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                  test_dataset,
                  ncc_epsilon=0.001,
                  ncc_s_param=2,
-                 precision=None,
-                 has_set_probabilities=False,
-                 type_strategy=IMLCStrategy.IMPRECISE_BRANCHING):
+                 type_strategy=IMLCStrategy.IMPRECISE_BRANCHING,
+                 precision=16,
+                 has_set_probabilities=False):
         interval_prob_answers, predict_chain_answers = [], []
 
         for item in test_dataset:
@@ -196,7 +196,7 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                 raise Exception("Not STRATEGY implemented yet")
             else:
                 raise Exception("Not STRATEGY implemented yet")
-            interval_prob_answers.append(Scores(rs_score))
+            interval_prob_answers.append(Scores(rs_score, precision=precision))
             predict_chain_answers.append(list(map(int, prediction)))
 
         if has_set_probabilities:

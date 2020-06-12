@@ -38,6 +38,7 @@ class Scores(object):
         self.scores = sc_values
         self.nbDecision = sc_values[:, 0].size
         # approximation due to precision decimal greater than 16 decimals
+        # example: [0.9999999999999999, 0.9999999999999998] !!!
         if precision is not None:
             sc_values = np.around(sc_values, decimals=precision)
         if np.all(sc_values[:, 1] >= sc_values[:, 0]) != 1:

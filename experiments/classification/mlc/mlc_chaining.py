@@ -8,7 +8,7 @@ import sys, os, random, csv, numpy as np
 from classifip.models.mlc.chainncc import IMLCStrategy
 
 
-def transform_maximin_imprecise_to_precise(y_partial_binary, set_probabilities, y_true, y_cha):
+def transform_maximin_imprecise_to_precise(y_partial_binary, set_probabilities):
     y_maximin_precise = list()
     for y_index, y_binary in enumerate(y_partial_binary):
         if y_binary == CONST_PARTIAL_VALUE:
@@ -50,8 +50,7 @@ def computing_training_testing_step(learn_data_set,
         y_prediction, set_probabilities = prediction['prediction']
         y_challenger, _ = prediction['challenger']  # precise prediction (in this case)
         y_true = np.array(prediction['ground_truth'], dtype=np.int)
-        y_trans_precise = transform_maximin_imprecise_to_precise(y_prediction[0], set_probabilities[0],
-                                                                 y_true, y_challenger[0])
+        y_trans_precise = transform_maximin_imprecise_to_precise(y_prediction[0], set_probabilities[0])
         inc_ich, inc_cph = incorrectness_completeness_measure(y_true, y_prediction[0])
         acc_ich_trans, _ = incorrectness_completeness_measure(y_true, y_trans_precise)
         acc_ich, _ = incorrectness_completeness_measure(y_true, y_challenger[0])
@@ -160,12 +159,12 @@ def experiments_chaining_imprecise(in_path=None,
 
 
 # np.set_printoptions(suppress=True)
-in_path = "/Users/salmuz/Downloads/datasets_mlc/yeast.arff"
-out_path = "/Users/salmuz/Downloads/results_iris.csv"
+in_path = ".../datasets_mlc/emotions.arff"
+out_path = ".../results_iris.csv"
 # QPBB_PATH_SERVER = []  # executed in host
 experiments_chaining_imprecise(in_path=in_path,
                                out_path=out_path,
                                nb_process=1,
-                               min_ncc_s_param=0.1, max_ncc_s_param=1, step_ncc_s_param=0.1,
-                               strategy_chaining=IMLCStrategy.IMPRECISE_BRANCHING,
+                               min_ncc_s_param=0.1, max_ncc_s_param=5.7, step_ncc_s_param=0.5,
+                               strategy_chaining=IMLCStrategy.TERNARY_IMPRECISE_TREE,
                                remove_features=["image_name"], )
