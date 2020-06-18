@@ -1,5 +1,6 @@
 from multiprocessing import Process, Queue, cpu_count, JoinableQueue, Manager
 import importlib
+from classifip.models.mlc.mlcncc import MLCNCC
 
 
 def __create_dynamic_class(clazz):
@@ -29,6 +30,12 @@ def prediction(pid, tasks, queue, results, class_model, class_model_challenger=N
             training = queue.get()
             if training is None:
                 break
+
+            MLCNCC.missing_labels_learn_data_set(learn_data_set=training["learn_data_set"],
+                                                 nb_labels=training["nb_labels"],
+                                                 missing_pct=training["missing_pct"])
+            del training["missing_pct"]
+
             model.learn(**training)
             if class_model_challenger is not None:
                 model_challenger.learn(**training)

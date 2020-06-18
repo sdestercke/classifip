@@ -154,11 +154,8 @@ class MLCNCCExact(MLCNCC):
     @timeit
     def learn(self,
               learn_data_set,
-              nb_labels,
-              seed_random_label=None):
-        super(MLCNCCExact, self).learn(learn_data_set,
-                                       nb_labels,
-                                       seed_random_label)
+              nb_labels):
+        super(MLCNCCExact, self).learn(learn_data_set, nb_labels)
 
         self.power_set = ["".join(seq) for seq in product("01", repeat=self.nb_labels)]
         self.root = BinaryMultiLabel(label=self.power_set)

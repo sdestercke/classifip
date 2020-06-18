@@ -1,4 +1,4 @@
-import abc, math, time
+import abc, math, time, random
 import numpy as np
 from classifip.utils import create_logger
 
@@ -6,6 +6,7 @@ from classifip.utils import create_logger
 class MLCNCC(metaclass=abc.ABCMeta):
     # global static variables
     LABEL_PARTIAL_VALUE = -1
+    logger_global = create_logger('MLCNCC_GLOBAL', True)
 
     """
         NCCBR implements the naive credal classification method using the IDM for
@@ -40,16 +41,13 @@ class MLCNCC(metaclass=abc.ABCMeta):
 
     def learn(self,
               learn_data_set,
-              nb_labels,
-              seed_random_label=None):
+              nb_labels):
         """learn the NCC for each label, mainly storing counts of feature/label pairs
 
         :param learn_data_set: learning instances
         :type learn_data_set: :class:`~classifip.dataset.arff.ArffFile`
         :param nb_labels: number of labels
         :type nb_labels: integer
-        :param seed_random_label: randomly mixing labels Y1, Y2, ..., Ym
-        :type seed_random_label: float
         """
         self.__init__()
         self.nb_labels = nb_labels
@@ -58,10 +56,6 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.feature_names = learn_data_set.attributes[:-self.nb_labels]
         self.label_names = np.array(learn_data_set.attributes[-self.nb_labels:])
 
-        # Generation random position for chain label
-        if seed_random_label is not None:
-            np.random.seed(seed_random_label)
-            np.random.shuffle(self.label_names)
         self.feature_values = learn_data_set.attribute_data.copy()
         # computing precise marginal P(Y) count
         self.marginal_props = [0] * self.nb_labels
@@ -106,6 +100,85 @@ class MLCNCC(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def evaluate(self, test_dataset, ncc_epsilon=0.001, ncc_s_param=2.0, precision=None):
         pass
+
+    @staticmethod
+    def __random_set_labels_index(dataset, nb_labels, seed_random_label=None):
+        """
+        :param dataset:
+        :param seed_random_label:
+        :return:
+        """
+        # Generation random position for chain label
+        if seed_random_label is None:
+            seed_random_label = random.randrange(pow(2, 20))
+
+        MLCNCC.logger_global.info("[__random_set_labels_index] seed random label (%s)", seed_random_label)
+        label_names = np.array(dataset.attributes[-nb_labels:])
+        origin_indices = dict(zip(label_names, range(nb_labels)))
+        np.random.seed(seed_random_label)
+        np.random.shuffle(label_names)
+        MLCNCC.logger_global.info("[__random_set_labels_index] origin index (%s)", origin_indices)
+        MLCNCC.logger_global.info("[__random_set_labels_index] shuffle labels (%s)", label_names)
+        return origin_indices, label_names
+
+    @staticmethod
+    def shuffle_labels(dataset, nb_labels, seed_random_label=None):
+        """
+        :param dataset: (mutable)
+        :type  classifip.dataset.arff.ArffFile
+            with string values for columns (after discretization data)
+            (warning: does not work with mixed value (float,string))
+        :param nb_labels:
+        :param seed_random_label: randomly mixing labels Y1, Y2, ..., Ym
+        :type seed_random_label: float
+        :return: <void> modify structure of dataset parameter
+        """
+        nb_cols = len(dataset.attributes)
+        origin_indices, label_names = MLCNCC.__random_set_labels_index(dataset,
+                                                                       nb_labels,
+                                                                       seed_random_label)
+        np_data = np.array(dataset.data)
+        new_data_labels = np.empty((len(dataset.data), nb_labels), dtype='<U1')
+        for index, label in enumerate(label_names):
+            orig_idx = origin_indices[label]
+            new_data_labels[:, index] = np.array(np_data[:, nb_cols - nb_labels + orig_idx])
+            dataset.attributes[nb_cols - nb_labels + index] = label
+        np_data[:, -nb_labels:] = new_data_labels
+        dataset.data = np_data.tolist()
+
+    @staticmethod
+    def shuffle_labels_train_testing(train_dataset, testing_dataset, nb_labels, seed_random_label=None):
+        """
+        :param train_dataset: (mutable)
+        :type  classifip.dataset.arff.ArffFile
+        :param testing_dataset: (mutable)
+        :type  classifip.dataset.arff.ArffFile
+        :param nb_labels:
+        :param seed_random_label:
+        :return:
+        """
+        nb_cols = len(train_dataset.attributes)
+        origin_indices, label_names = MLCNCC.__random_set_labels_index(train_dataset,
+                                                                       nb_labels,
+                                                                       seed_random_label)
+
+        np_data_train = np.array(train_dataset.data)
+        np_data_test = np.array(testing_dataset.data)
+        new_ltrain = np.empty((len(train_dataset.data), nb_labels), dtype='<U1')
+        new_ltest= np.empty((len(testing_dataset.data), nb_labels), dtype='<U1')
+        for index, label in enumerate(label_names):
+            orig_idx = origin_indices[label]
+            # exchange columns training dataset
+            new_ltrain[:, index] = np.array(np_data_train[:, nb_cols - nb_labels + orig_idx])
+            train_dataset.attributes[nb_cols - nb_labels + index] = label
+            # exchange columns testing dataset
+            new_ltest[:, index] = np.array(np_data_test[:, nb_cols - nb_labels + orig_idx])
+            train_dataset.attributes[nb_cols - nb_labels + index] = label
+
+        np_data_train[:, -nb_labels:] = new_ltrain
+        np_data_test[:, -nb_labels:] = new_ltest
+        train_dataset.data = np_data_train.tolist()
+        testing_dataset.data = np_data_test.tolist()
 
     @staticmethod
     def missing_labels_learn_data_set(learn_data_set,

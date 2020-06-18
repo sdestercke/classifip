@@ -20,7 +20,6 @@ class NDABR(MLCNCC):
     def learn(self,
               learn_data_set,
               nb_labels,
-              seed_random_label=None,
               n_splits=5,
               learn_data_disc=None):
         self.__init__()

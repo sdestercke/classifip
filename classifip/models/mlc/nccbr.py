@@ -14,8 +14,7 @@ class NCCBR(MLCNCC):
 
     def learn(self,
               learn_data_set,
-              nb_labels,
-              seed_random_label=None):
+              nb_labels):
         self.__init__()
 
         self.nb_labels = nb_labels

@@ -8,22 +8,6 @@ import math, os, random, sys, csv, numpy as np
 from mlc_common import distance_cardinal_set_inferences
 
 
-def get_nb_labels_class(dataArff, type_class='nominal'):
-    nominal_class = [item for item in dataArff.attribute_types.values() if item == type_class]
-    return len(nominal_class)
-
-
-def distance_cardinal_exact_inference(inference_exact, inference_exact_improved):
-    """
-        This method aims to check if the improved exact inference (3^m-1 comparisons)
-        has same number of solutions than the exact inference (all comparisons)
-    :param inference_exact:
-    :param inference_exact_improved:
-    :return:
-    """
-    return abs(len(inference_exact) - len(inference_exact_improved))
-
-
 def prediction_dist(pid, tasks, queue, results, class_model):
     try:
         model_br = nccbr.NCCBR()
@@ -40,14 +24,20 @@ def prediction_dist(pid, tasks, queue, results, class_model):
                 if task is None:
                     break
                 nb_labels = len(task['y_test'])
-                set_prob_marginal = model_br.evaluate(**task['kwargs'])
-                inference_outer = set_prob_marginal[0].multilab_dom()
-                inference_exact = model_exact.evaluate(**task['kwargs'])[0]
+                # set_prob_marginal = model_br.evaluate(**task['kwargs'])
+                # inference_outer = set_prob_marginal[0].multilab_dom()
+                # inference_exact = model_exact.evaluate(,[0]
                 # inference_exact_all = model_exact.evaluate_exact(**task['kwargs'])[0]
-                distance_cardinal = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
+                # distance_cardinal = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
+                # if distance_cardinal < 0:
+                #     model_exact.root.printProba(task['kwargs']['test_dataset'][0], task['kwargs']['ncc_s_param'],
+                #                                 task['kwargs']['ncc_epsilon'])
+                # dist_measure += distance_cardinal
+                distance_cardinal = abs(len(inference_exact) - len(inference_exact_all))
                 dist_measure += distance_cardinal
-                print("(pid, exact, outer, ground-truth, distance) ", pid, inference_exact, inference_outer,
-                      task['y_test'], distance_cardinal, flush=True)
+                if distance_cardinal > 0:
+                    print("(pid, exact, outer, ground-truth, distance) ", pid, inference_exact, inference_exact_all,
+                          task['y_test'], distance_cardinal, flush=True)
             results.append(dict({'dist_measure': dist_measure}))
             queue.task_done()
     except Exception as e:
@@ -91,8 +81,8 @@ def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, n
 
     logger = create_logger("computing_outer_vs_exact_inference", True)
     logger.info('Training dataset (%s, %s)', in_path, out_path)
+    seed = 80578705144870557
 
-    # Seeding a random value for k-fold top learning-testing data
     if seed is not None:
         random.seed(seed)
     seed = [random.randrange(sys.maxsize) for _ in range(nb_kFold)]
@@ -140,9 +130,9 @@ def computing_outer_vs_exact_inference(in_path=None, out_path=None, seed=None, n
     logger.debug("Results Final: %s", diff_inferences)
 
 
-_name = "labels2"
+_name = "labels5"
 sys_in_path = _name + ".arff"
-sys_out_path = "results_" + _name + ".csv"
+sys_out_path = "results_labels2.csv"
 # QPBB_PATH_SERVER = []  # executed in host
 computing_outer_vs_exact_inference(in_path=sys_in_path, out_path=sys_out_path,
                                    intvl_ncc_s_param=[1, 5], step_ncc_s=0.5, nb_process=1)

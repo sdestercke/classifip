@@ -3,7 +3,6 @@ import numpy as np
 from .mlcncc import MLCNCC
 from enum import Enum
 from classifip.utils import create_logger
-from classifip.representations.voting import Scores
 
 
 class IMLCStrategy(Enum):
@@ -179,7 +178,6 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                  ncc_epsilon=0.001,
                  ncc_s_param=2,
                  type_strategy=IMLCStrategy.IMPRECISE_BRANCHING,
-                 precision=16,
                  has_set_probabilities=False):
         interval_prob_answers, predict_chain_answers = [], []
 
@@ -196,7 +194,8 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                 raise Exception("Not STRATEGY implemented yet")
             else:
                 raise Exception("Not STRATEGY implemented yet")
-            interval_prob_answers.append(Scores(rs_score, precision=precision))
+
+            interval_prob_answers.append(rs_score)
             predict_chain_answers.append(list(map(int, prediction)))
 
         if has_set_probabilities:

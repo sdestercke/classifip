@@ -25,7 +25,6 @@ class KNN_NCC_BR(MLCNCC):
     def learn(self,
               learn_data_set,
               nb_labels,
-              seed_random_label=None,
               learn_disc_set=None):
         """
             Warning: it should be normalized since it do an Euclidean distance
