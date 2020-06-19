@@ -268,6 +268,18 @@ class MLCNCC(metaclass=abc.ABCMeta):
                 raise Exception('Configuration noise label is not implemented yet.')
 
     def lower_upper_probability(self, feature, feature_value, ncc_s_param, feature_class_name, ncc_epsilon):
+        """
+         ... note:
+            zero float division can happen if too many input features
+            To avoid probability zero, we use the Laplace Smoothing
+                https://en.wikipedia.org/wiki/Additive_smoothing
+        :param feature:
+        :param feature_value:
+        :param ncc_s_param:
+        :param feature_class_name:
+        :param ncc_epsilon:
+        :return:
+        """
 
         def __restricting_idm(probability, ncc_epsilon_ip, len_features):
             return (1 - ncc_epsilon_ip) * probability + ncc_epsilon_ip / len_features
@@ -275,11 +287,17 @@ class MLCNCC(metaclass=abc.ABCMeta):
         f_val_index = self.feature_values[feature].index(feature_value)  #
         num_items = float(sum(self.feature_count[feature_class_name]))
         n_fi_c = self.feature_count[feature_class_name][f_val_index]  # n(f_i|c)
-        # n(f_i|c)/(n(c)+s), lower probability: t(f_1|c)->0, t(c)->1
-        p_lower = (n_fi_c / (num_items + ncc_s_param))
-        # (n(f_i|c)+s)/(n(c)+s), upper probability: t(f_1|c)->1, t(c)->1
-        p_upper = ((n_fi_c + ncc_s_param) / (num_items + ncc_s_param))
         len_fi = len(self.feature_count[feature_class_name])  # |F_i|
+        # n(f_i|c)/(n(c)+s), lower probability: t(f_1|c)->0, t(c)->1
+        try:
+            p_lower = (n_fi_c / (num_items + ncc_s_param))
+        except ZeroDivisionError:
+            p_lower = (n_fi_c + 1) / (num_items + ncc_s_param + len_fi)
+        # (n(f_i|c)+s)/(n(c)+s), upper probability: t(f_1|c)->1, t(c)->1
+        try:
+            p_upper = ((n_fi_c + ncc_s_param) / (num_items + ncc_s_param))
+        except ZeroDivisionError:
+            p_upper = ((n_fi_c + ncc_s_param + 1) / (num_items + ncc_s_param + len_fi))
         # some regularization with epsilon
         p_lower = __restricting_idm(p_lower, ncc_epsilon, len_fi)
         p_upper = __restricting_idm(p_upper, ncc_epsilon, len_fi)
