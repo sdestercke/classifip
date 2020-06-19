@@ -49,10 +49,15 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
             n_fi_c11 = self.feature_count[label_class_1][f_val_idx_1]  # n_{y_i=1}(y_j=1)
 
             # avoiding ZeroDivision and infinity values
-            if n_fi_c11 < 1e-16:
-                n_fi_c11 = 1e-16
-            if n_fi_c10 < 1e-16:
-                n_fi_c10 = 1e-16
+            # and uppers equals to 0.0
+            if n_fi_c11 < 1e-19:
+                n_fi_c11 = 1e-19
+            if n_fi_c10 < 1e-19:
+                n_fi_c10 = 1e-19
+            if n_fi_c00 < 1e-19:
+                n_fi_c00 = 1e-19
+            if n_fi_c01 < 1e-19:
+                n_fi_c01 = 1e-19
 
             # for computing \underline{P}(Y_j=1)
             lower_path_0 = (n_fi_c00 + ncc_s_param) / n_fi_c10
