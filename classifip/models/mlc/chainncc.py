@@ -82,8 +82,10 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                 optimal_lower_path[i] = '1'
                 lower_cum_max = lower_path_1
             else:
-                self._logger.info("IB (lower_path_0, lower_path_1) (%s, %s)", lower_path_0, lower_path_1)
-                raise Exception("Not implemented yet __compute_optimal_path")
+                self._logger.info("Random-IB (lower_path_0, lower_path_1) (%s, %s)", lower_path_0, lower_path_1)
+                optimal_lower_path[i] = np.random.choice(['0', '1'], 1)[0]
+                lower_cum_max = lower_path_1
+                # raise Exception("Not implemented yet __compute_optimal_path") @salmuz
 
             # arg_max: upper minimal path
             self._logger.debug("IB (upper_path_0, upper_path_1) (%s, %s)", upper_path_0, upper_path_1)
@@ -94,8 +96,9 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                 optimal_upper_path[i] = '1'
                 upper_cum_min = upper_path_1
             else:
-                self._logger.info("IB (upper_path_0, upper_path_1) (%s, %s)", upper_path_0, upper_path_1)
-                raise Exception("Not implemented yet __compute_optimal_path")
+                self._logger.info("Random-IB (upper_path_0, upper_path_1) (%s, %s)", upper_path_0, upper_path_1)
+                optimal_upper_path[i] = np.random.choice(['0', '1'], 1)[0]
+                upper_cum_min = upper_path_1
 
         return optimal_lower_path, optimal_upper_path
 
