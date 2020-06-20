@@ -94,7 +94,7 @@ def experiments_chaining_imprecise(in_path=None,
     logger.info('Training dataset (%s, %s)', in_path, out_path)
     logger.info("(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param) (%s, %s, %s)",
                 min_ncc_s_param, max_ncc_s_param, step_ncc_s_param)
-    logger.info("(scaling, remove_features, process) (%s, %s, %s, %s)",
+    logger.info("(scaling, remove_features, process) (%s, %s, %s)",
                 scaling, remove_features, nb_process)
     logger.info("(missing_pct, noise_label_pct, noise_label_type, noise_label_prob) (%s, %s, %s, %s)",
                 missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
@@ -111,7 +111,7 @@ def experiments_chaining_imprecise(in_path=None,
     manager.executeAsync(class_model="classifip.models.mlc.chainncc.MLChaining")
 
     ich, cph, acc, acc_trans = dict(), dict(), dict(), dict()
-    min_discretize, max_discretize = 5, 9
+    min_discretize, max_discretize = 5, 6
     for nb_disc in range(min_discretize, max_discretize):
         data_learning = arff.ArffFile()
         data_learning.load(in_path)
