@@ -130,6 +130,11 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             det^{*} is the pseudo-determinant of Sigma, and
             Sigma^{+} is the generalized inverse
 
+        version manual in python:
+            _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
+            _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
+            return _const * np.exp(_exp)
+
         :param mean: mean of
         :param cov: covariance matrix (positive semi-definite or singular)
         :param query: event of multivariate Gaussian probability
