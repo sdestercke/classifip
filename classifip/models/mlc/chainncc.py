@@ -30,6 +30,15 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                                idx_label_to_infer,
                                idx_imprecise_labels,
                                ncc_s_param):
+        """
+        ...Todo:
+            upper_path_0 == upper_path_1 and lower_path_0 == lower_path_1
+            To fix, normally it happens when ncc_s_param is so close to 0
+        :param idx_label_to_infer:
+        :param idx_imprecise_labels:
+        :param ncc_s_param:
+        :return:
+        """
 
         optimal_lower_path = ['-1'] * len(idx_imprecise_labels)
         optimal_upper_path = ['-1'] * len(idx_imprecise_labels)

@@ -30,9 +30,17 @@ def computing_training_testing_step(learn_data_set,
                                     manager,
                                     strategy_chaining,
                                     missing_pct,
+                                    noise_label_pct,
+                                    noise_label_type,
+                                    noise_label_prob,
                                     ich, cph, acc, acc_trans):
     # Send training data model to every parallel process
-    manager.addNewTraining(learn_data_set=learn_data_set, nb_labels=nb_labels, missing_pct=missing_pct)
+    manager.addNewTraining(learn_data_set=learn_data_set,
+                           nb_labels=nb_labels,
+                           missing_pct=missing_pct,
+                           noise_label_pct=noise_label_pct,
+                           noise_label_type=noise_label_type,
+                           noise_label_prob=noise_label_prob)
 
     # Send testing data to every parallel process
     for test in test_data_set.data:
@@ -52,7 +60,7 @@ def computing_training_testing_step(learn_data_set,
         y_prediction, set_probabilities = prediction['prediction']
         y_challenger, set_challenger = prediction['challenger']  # precise prediction (in this case)
         y_true = np.array(prediction['ground_truth'], dtype=np.int)
-        y_trans_precise = transform_maximin_imprecise_to_precise(y_prediction[0],  set_probabilities[0])
+        y_trans_precise = transform_maximin_imprecise_to_precise(y_prediction[0], set_probabilities[0])
         inc_ich, inc_cph = incorrectness_completeness_measure(y_true, y_prediction[0])
         acc_ich_trans, _ = incorrectness_completeness_measure(y_true, y_trans_precise)
         acc_ich, _ = incorrectness_completeness_measure(y_true, y_challenger[0])
@@ -73,6 +81,9 @@ def experiments_chaining_imprecise(in_path=None,
                                    max_ncc_s_param=6.0,
                                    step_ncc_s_param=1.0,
                                    missing_pct=0.0,
+                                   noise_label_pct=0.0,
+                                   noise_label_type=-1,
+                                   noise_label_prob=0.5,
                                    remove_features=None,
                                    scaling=False,
                                    strategy_chaining=IMLCStrategy.IMPRECISE_BRANCHING):
@@ -81,6 +92,12 @@ def experiments_chaining_imprecise(in_path=None,
 
     logger = create_logger("computing_best_imprecise_mean", True)
     logger.info('Training dataset (%s, %s)', in_path, out_path)
+    logger.info("(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param) (%s, %s, %s)",
+                min_ncc_s_param, max_ncc_s_param, step_ncc_s_param)
+    logger.info("(scaling, remove_features, process) (%s, %s, %s, %s)",
+                scaling, remove_features, nb_process)
+    logger.info("(missing_pct, noise_label_pct, noise_label_type, noise_label_prob) (%s, %s, %s, %s)",
+                missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
 
     # Seeding a random value for k-fold top learning-testing data
     if seed is None:
@@ -142,6 +159,9 @@ def experiments_chaining_imprecise(in_path=None,
                                                           manager,
                                                           strategy_chaining,
                                                           missing_pct,
+                                                          noise_label_pct,
+                                                          noise_label_type,
+                                                          noise_label_prob,
                                                           ich[disc][ks_ncc],
                                                           cph[disc][ks_ncc],
                                                           acc[disc][ks_ncc],
@@ -167,14 +187,15 @@ def experiments_chaining_imprecise(in_path=None,
 
 
 # np.set_printoptions(suppress=True)
-in_path = "/Users/salmuz/Downloads/datasets_mlc/emotions.arff"
-out_path = "/Users/salmuz/Downloads/emotions_missing40.csv"
+in_path = ".../emotions.arff"
+out_path = ".../emotions.csv"
 # QPBB_PATH_SERVER = []  # executed in host
 experiments_chaining_imprecise(in_path=in_path,
                                out_path=out_path,
                                scaling=False,
                                nb_process=2,
-                               min_ncc_s_param=0.01, max_ncc_s_param=2, step_ncc_s_param=0.02,
-                               missing_pct=0.4, #0.8
+                               min_ncc_s_param=0.5, max_ncc_s_param=5.1, step_ncc_s_param=0.5,
+                               missing_pct=0.0,
+                               noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.8,
                                strategy_chaining=IMLCStrategy.IMPRECISE_BRANCHING,
                                remove_features=["image_name"], )
