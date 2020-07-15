@@ -362,9 +362,12 @@ def experiments_binr_vs_imprecise(in_path=None,
                 ks_ncc = str(s_ncc)
                 ich_skep[disc][ks_ncc], cph_skep[disc][ks_ncc], jacc_skep[disc][ks_ncc] = 0, 0, 0
                 ich_out[disc][ks_ncc], cph_out[disc][ks_ncc], acc_prec[disc][ks_ncc] = 0, 0, 0
-                ich_reject[disc][ks_ncc] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
-                cph_reject[disc][ks_ncc] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
-                jacc_reject[disc][ks_ncc] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
+                if epsilon_rejects is not None:
+                    ich_reject[disc][ks_ncc] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
+                    cph_reject[disc][ks_ncc] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
+                    jacc_reject[disc][ks_ncc] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
+                else:
+                    ich_reject[disc][ks_ncc], cph_reject[disc][ks_ncc], jacc_reject[disc][ks_ncc] = 0, 0, 0
                 for idx_fold, (training, testing) in enumerate(splits_s):
                     logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
                     logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
@@ -407,10 +410,13 @@ def experiments_binr_vs_imprecise(in_path=None,
                                    cph_out[disc][ks_ncc],
                                    acc_prec[disc][ks_ncc],
                                    jacc_skep[disc][ks_ncc]]
-                _reject_ich = [e / nb_kFold for e in ich_reject[disc][ks_ncc].values()]
-                _reject_cph = [e / nb_kFold for e in cph_reject[disc][ks_ncc].values()]
-                _reject_jacc = [e / nb_kFold for e in jacc_reject[disc][ks_ncc].values()]
-                _partial_saving = _partial_saving + _reject_ich + _reject_cph + _reject_jacc
+                if epsilon_rejects is not None:
+                    _reject_ich = [e / nb_kFold for e in ich_reject[disc][ks_ncc].values()]
+                    _reject_cph = [e / nb_kFold for e in cph_reject[disc][ks_ncc].values()]
+                    _reject_jacc = [e / nb_kFold for e in jacc_reject[disc][ks_ncc].values()]
+                    _partial_saving = _partial_saving + _reject_ich + _reject_cph + _reject_jacc
+                else:
+                    _reject_ich, _reject_cph, _reject_jacc = [], [], []
                 logger.debug("Partial-s-k_step reject values (%s)", ich_reject[disc][ks_ncc])
                 writer.writerow(_partial_saving)
                 file_csv.flush()
@@ -424,9 +430,7 @@ def experiments_binr_vs_imprecise(in_path=None,
                              cph_out[disc][ks_ncc] / nb_kFold,
                              acc_prec[disc][ks_ncc] / nb_kFold,
                              jacc_skep[disc][ks_ncc] / nb_kFold,
-                             _reject_ich,
-                             _reject_cph,
-                             _reject_jacc)
+                             _reject_ich, _reject_cph, _reject_jacc)
     manager.poisonPillTraining()
     file_csv.close()
     logger.debug("Results Final: %s, %s, %s, %s, %s, %s",

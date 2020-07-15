@@ -145,7 +145,7 @@ class BinaryMultiLabel(bt.BinaryTree):
 class MLCNCCExact(MLCNCC):
 
     def __init__(self, DEBUG=False):
-        super(MLCNCCExact, self).__init__()
+        super(MLCNCCExact, self).__init__(DEBUG)
         self.power_set = []
         self.root = None
         self.DEBUG = DEBUG

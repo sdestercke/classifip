@@ -7,9 +7,9 @@ from math import exp
 
 class NCCBR(MLCNCC):
 
-    def __init__(self):
+    def __init__(self, DEBUG=False):
         """Build an empty NCCBR structure """
-        super(NCCBR, self).__init__()
+        super(NCCBR, self).__init__(DEBUG)
         self.marginal_props = None  # precise distribution Y
 
     def learn(self,
