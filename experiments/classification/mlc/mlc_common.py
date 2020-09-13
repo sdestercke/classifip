@@ -51,6 +51,20 @@ def incorrectness_completeness_measure(y_true, y_prediction):
         return 0, 0
 
 
+def setaccuracy_completeness_measure(y_true, y_prediction):
+    Q, m, is_set_accuracy = [], len(y_true), True
+    for i, y in enumerate(y_true):
+        if y_prediction[i] != CONST_PARTIAL_VALUE:
+            Q.append(y_prediction[i])
+            if y_prediction[i] != y:
+                is_set_accuracy = False
+    lenQ = len(Q)
+    if lenQ != 0:
+        return 1 if is_set_accuracy else 0, lenQ / m
+    else:
+        return 1, 0
+
+
 def compute_jaccard_similarity_score(x, y):
     """
     x, y two set of set-valued predictions

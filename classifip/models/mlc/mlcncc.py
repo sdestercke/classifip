@@ -165,7 +165,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
         np_data_train = np.array(train_dataset.data)
         np_data_test = np.array(testing_dataset.data)
         new_ltrain = np.empty((len(train_dataset.data), nb_labels), dtype='<U1')
-        new_ltest= np.empty((len(testing_dataset.data), nb_labels), dtype='<U1')
+        new_ltest = np.empty((len(testing_dataset.data), nb_labels), dtype='<U1')
         for index, label in enumerate(label_names):
             orig_idx = origin_indices[label]
             # exchange columns training dataset
@@ -346,8 +346,8 @@ class MLCNCC(metaclass=abc.ABCMeta):
         else:
             dependant_labels = zip(idx_chain_predict_labels, self.label_names[idx_chain_predict_labels])
 
-        self._logger.debug("[Bound-Labels] (label_to_infer, augmented_labels) (%s, %s)",
-                           self.label_names[idx_label_to_infer], augmented_labels)
+        self._logger.debug("[Bound-Labels] (label_to_infer, augmented_labels, idx_chain_predict_labels ) (%s, %s, %s)",
+                           self.label_names[idx_label_to_infer], augmented_labels, idx_chain_predict_labels)
 
         for l_index, label in dependant_labels:
             label_predicted_value = str(augmented_labels[l_index])

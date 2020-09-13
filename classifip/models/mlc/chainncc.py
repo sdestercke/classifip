@@ -111,7 +111,7 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
 
         return optimal_lower_path, optimal_upper_path
 
-    def __strategy_imprecise_branching(self, new_instance, ncc_s_param, ncc_epsilon):
+    def __strategy_imprecise_branching(self, new_instance, ncc_s_param, ncc_epsilon, is_dynamic_context):
 
         resulting_score = np.zeros((self.nb_labels, 2))
         chain_predicted_labels = []
@@ -169,12 +169,25 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                 idx_imprecise_labels.append(idx_current_label)
         return resulting_score, chain_predicted_labels
 
-    def __strategy_ternary_tree(self, new_instance, ncc_s_param, ncc_epsilon):
+    def __strategy_ternary_tree(self, new_instance, ncc_s_param, ncc_epsilon, is_dynamic_context):
         resulting_score = np.zeros((self.nb_labels, 2))
-        chain_predicted_labels = []
+        chain_predicted_labels = [None] * self.nb_labels
         idx_imprecise_labels = []
+        idx_predicted_labels = []
         for idx_current_label in range(self.nb_labels):
-            idx_precise_inferred_labels = list(set(range(idx_current_label)) - set(idx_imprecise_labels))
+
+            # dynamic selection of context-dependence label
+            if is_dynamic_context:
+                idx_current_label = self.__dynamic_context_dependence_label(chain_predicted_labels,
+                                                                            idx_predicted_labels,
+                                                                            idx_imprecise_labels,
+                                                                            new_instance,
+                                                                            ncc_s_param,
+                                                                            ncc_epsilon)
+                idx_precise_inferred_labels = list(idx_predicted_labels)
+            else:
+                idx_precise_inferred_labels = list(set(range(idx_current_label)) - set(idx_imprecise_labels))
+
             u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
                 super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
                                                                      new_instance,
@@ -186,17 +199,91 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
             resulting_score[idx_current_label, 0] = l_numerator_1 / (l_numerator_1 + u_denominator_0)
             resulting_score[idx_current_label, 1] = u_numerator_1 / (u_numerator_1 + l_denominator_0)
             inferred_label = MLChaining.__maximality_decision(resulting_score[idx_current_label, :])
-            chain_predicted_labels.append(inferred_label)
+            self._logger.debug("TE (chain_predicted_labels, idx_current_label, inferred_label) (%s, %s, %s)",
+                               chain_predicted_labels, idx_current_label, inferred_label)
+            chain_predicted_labels[idx_current_label] = inferred_label
             if inferred_label == '-1':
                 idx_imprecise_labels.append(idx_current_label)
+            else:
+                idx_predicted_labels.append(idx_current_label)
 
         return resulting_score, chain_predicted_labels
+
+    def __dynamic_context_dependence_label(self,
+                                           chain_predicted_labels,
+                                           idx_predicted_labels,
+                                           idx_imprecise_labels,
+                                           new_instance,
+                                           ncc_s_param,
+                                           ncc_epsilon):
+        this_object = self
+
+        def __varphi(lower_prob, upper_prob):
+            return upper_prob - lower_prob
+
+        def __get_set_probabilities(idx_predicted_labels,
+                                    chain_predicted_labels,
+                                    ncc_s_param,
+                                    ncc_epsilon,
+                                    new_instance,
+                                    set_idx_remaining_labels):
+            resulting_score = np.zeros((len(set_idx_remaining_labels), 2))
+            for idx, idx_current_label in enumerate(set_idx_remaining_labels):
+                u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
+                    super(MLChaining, this_object).lower_upper_cond_probability(idx_current_label,
+                                                                                new_instance,
+                                                                                chain_predicted_labels,
+                                                                                ncc_s_param,
+                                                                                ncc_epsilon,
+                                                                                idx_predicted_labels)
+                # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
+                resulting_score[idx, 1] = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+                resulting_score[idx, 0] = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+            return resulting_score
+
+        set_idx_remaining_labels = list(set(range(self.nb_labels)) -
+                                        set(idx_predicted_labels) -
+                                        set(idx_imprecise_labels))
+        r_score = __get_set_probabilities(idx_predicted_labels,
+                                          chain_predicted_labels,
+                                          ncc_s_param,
+                                          ncc_epsilon,
+                                          new_instance,
+                                          set_idx_remaining_labels)
+
+        idx_uncertainty_labels = np.where((r_score[:, 0] < 0.5) & (0.5 < r_score[:, 1]))[0]
+        # verify that non all interval contains 0.5
+        if len(idx_uncertainty_labels) == len(set_idx_remaining_labels):
+            length_intvl = r_score[:, 1] - r_score[:, 0]
+            idx_label_tightly = np.argmin(length_intvl)
+            idx_dynamic_selected = set_idx_remaining_labels[idx_label_tightly]
+        else:
+            idx_precises = list(set(range(len(r_score))) - set(idx_uncertainty_labels))
+            self._logger.debug("CDL (idx_uncertainty_labels, idx_precises) (%s, %s, %s)",
+                               idx_uncertainty_labels, idx_precises, len(set_idx_remaining_labels))
+            lower_prob_j = np.argmax(r_score[idx_precises, 0])
+            upper_prob_j = np.argmin(r_score[idx_precises, 1])
+            phi_lw_j = __varphi(r_score[lower_prob_j, 0], r_score[lower_prob_j, 1])
+            phi_up_j = __varphi(r_score[upper_prob_j, 0], r_score[upper_prob_j, 1])
+
+            self._logger.debug("CDL (r_score[lower_j], r_score[upper_j]) (%s, %s)",
+                               r_score[lower_prob_j, :], r_score[upper_prob_j, :])
+            self._logger.debug("CDL (lower_j, upper_j) (%s, %s)", lower_prob_j, upper_prob_j)
+            self._logger.debug("CDL (phi_lw_j, phi_up_j) (%s, %s)", phi_lw_j, phi_up_j)
+            # select lower uncertainty label
+            if phi_up_j > phi_lw_j:
+                idx_dynamic_selected = set_idx_remaining_labels[lower_prob_j]
+            else:
+                idx_dynamic_selected = set_idx_remaining_labels[upper_prob_j]
+
+        return idx_dynamic_selected
 
     def evaluate(self,
                  test_dataset,
                  ncc_epsilon=0.001,
                  ncc_s_param=2,
                  type_strategy=IMLCStrategy.IMPRECISE_BRANCHING,
+                 is_dynamic_context=False,
                  has_set_probabilities=False):
         interval_prob_answers, predict_chain_answers = [], []
 
@@ -204,13 +291,13 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
             if IMLCStrategy.IMPRECISE_BRANCHING == type_strategy:
                 rs_score, prediction = self.__strategy_imprecise_branching(item,
                                                                            ncc_s_param,
-                                                                           ncc_epsilon)
+                                                                           ncc_epsilon,
+                                                                           is_dynamic_context)
             elif IMLCStrategy.TERNARY_IMPRECISE_TREE == type_strategy:
                 rs_score, prediction = self.__strategy_ternary_tree(item,
                                                                     ncc_s_param,
-                                                                    ncc_epsilon)
-            elif IMLCStrategy.SAFETY_IMPRECISE_CHAINING == type_strategy:
-                raise Exception("Not STRATEGY implemented yet")
+                                                                    ncc_epsilon,
+                                                                    is_dynamic_context)
             else:
                 raise Exception("Not STRATEGY implemented yet")
 
@@ -221,125 +308,3 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
             return predict_chain_answers, interval_prob_answers
         else:
             return predict_chain_answers
-
-    #
-    # def transform_partial_vector(self, chain_prediction):
-    #     partial_vector = []
-    #     for idx in range(self.nb_labels):
-    #         if len(chain_prediction[idx]) > 1:
-    #             partial_vector.append(-1)
-    #         else:
-    #             partial_vector.append(chain_prediction[idx][0])
-    #     return partial_vector
-    #
-    # @staticmethod
-    # def outer_maximality_decision(interval_probability):
-    #     if interval_probability[0] > 0.5:
-    #         return [1]
-    #     elif interval_probability[1] < 0.5:
-    #         return [0]
-    #     else:
-    #         return [0, 1]
-    #
-    # def naive_chaining(self,
-    #                    label_prior,
-    #                    ncc_s_param,
-    #                    ncc_epsilon,
-    #                    new_instance):
-    #     resulting_score = np.zeros((self.nb_labels, 2))
-    #     chain_predict_labels = []
-    #     for idx_current_label in range(self.nb_labels):
-    #         # computes lower/upper prob for a chain predict labels
-    #         u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
-    #             super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
-    #                                                                  label_prior,
-    #                                                                  new_instance,
-    #                                                                  chain_predict_labels,
-    #                                                                  ncc_s_param,
-    #                                                                  ncc_epsilon)
-    #
-    #         # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
-    #         resulting_score[j, 1] = u_numerator_1 / (u_numerator_1 + l_denominator_0)
-    #         resulting_score[j, 0] = l_numerator_1 / (l_numerator_1 + u_denominator_0)
-    #
-    #         if resulting_score[j, 0] > 0.5:
-    #             chain_predict_labels.append([1])
-    #         elif resulting_score[j, 1] < 0.5:
-    #             chain_predict_labels.append([0])
-    #         else:
-    #             chain_predict_labels.append([0, 1])
-    #
-    #     return Scores(resulting_score), self.transform_partial_vector(chain_predict_labels)
-    #
-    # def interval_tight_chain(self,
-    #                          label_prior,
-    #                          ncc_s_param,
-    #                          ncc_epsilon,
-    #                          new_instance):
-    #     resulting_score = np.zeros((self.nb_labels, 2))
-    #     idx_chain_predicted_labels = []
-    #     chain_predicted_labels = []
-    #     prediction = np.ones(self.nb_labels, dtype=np.int)
-    #     for j in range(self.nb_labels):
-    #         # initializing scores
-    #         r_score = self.get_set_probabilities_chain(idx_chain_predicted_labels,
-    #                                                    chain_predicted_labels,
-    #                                                    label_prior,
-    #                                                    ncc_s_param, ncc_epsilon,
-    #                                                    new_instance)
-    #         len_intvl = r_score[:, 1] - r_score[:, 0]
-    #         idx_tightly, label_value = None, None
-    #         imprecise_labels = dict()
-    #         is_found = True
-    #         # len_intvl = np.around(len_intvl, 16)
-    #         print("--->", np.around(r_score, 100), len_intvl)
-    #         for _ in range(self.nb_labels - j):
-    #             idx_tightly = np.argmin(len_intvl)
-    #             print("--->", idx_tightly)
-    #             if r_score[idx_tightly, 0] < 0.5 < r_score[idx_tightly, 1]:
-    #                 print("---->", r_score[idx_tightly, 1])
-    #                 label_value = [np.random.binomial(1, r_score[idx_tightly, 1])]
-    #                 resulting_score[idx_tightly, :] = r_score[idx_tightly, :]
-    #                 imprecise_labels[idx_tightly] = dict({
-    #                     "index": idx_tightly,
-    #                     "value": label_value
-    #                 })
-    #                 len_intvl[idx_tightly] = 1e16
-    #             else:
-    #                 label_value = MLChaining.outer_maximality_decision(r_score[idx_tightly, :])
-    #                 resulting_score[idx_tightly, :] = r_score[idx_tightly, :]
-    #                 is_found = True
-    #                 break
-    #         print("----->", idx_tightly, label_value, idx_chain_predicted_labels,
-    #               chain_predicted_labels)
-    #
-    #         if not is_found:
-    #             raise Exception("Il faut improve the strategy")
-    #
-    #         idx_chain_predicted_labels.append(idx_tightly)
-    #         chain_predicted_labels.append(label_value)
-    #         prediction[idx_tightly] = -1 if len(label_value) > 1 else label_value[0]
-    #
-    #     return resulting_score, prediction
-
-    # def get_set_probabilities_chain(self,
-    #                                 idx_chain_predicted_labels,
-    #                                 chain_predict_labels,
-    #                                 ncc_s_param,
-    #                                 ncc_epsilon,
-    #                                 new_instance):
-    #     resulting_score = np.zeros((self.nb_labels, 2))
-    #     resulting_score[idx_chain_predicted_labels, 0] = 0
-    #     resulting_score[idx_chain_predicted_labels, 1] = 1e16
-    #     for idx_current_label in set(range(self.nb_labels)) - set(idx_chain_predicted_labels):
-    #         u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
-    #             super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
-    #                                                                  new_instance,
-    #                                                                  chain_predict_labels,
-    #                                                                  ncc_s_param,
-    #                                                                  ncc_epsilon,
-    #                                                                  idx_chain_predicted_labels)
-    #         # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
-    #         resulting_score[idx_current_label, 1] = u_numerator_1 / (u_numerator_1 + l_denominator_0)
-    #         resulting_score[idx_current_label, 0] = l_numerator_1 / (l_numerator_1 + u_denominator_0)
-    #     return resulting_score
