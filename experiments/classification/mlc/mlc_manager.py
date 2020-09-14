@@ -59,6 +59,8 @@ def prediction(pid, tasks, queue, results, class_model, class_model_challenger=N
                 # prediction challenger
                 prediction_challenger = None
                 if class_model_challenger is not None:
+                    if 'is_dynamic_context' in task['kwargs']:
+                        task['kwargs']['is_dynamic_context'] = False
                     task['kwargs']['ncc_s_param'] = 0.0 if is_compared_with_precise \
                         else task['kwargs']['ncc_s_param']
                     prediction_challenger = model.evaluate(**task['kwargs'])

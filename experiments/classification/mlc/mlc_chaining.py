@@ -3,7 +3,7 @@ from classifip.evaluation.measures import u65, u80
 from classifip.utils import create_logger
 from classifip.dataset import arff
 from mlc_manager import ManagerWorkers
-from mlc_common import incorrectness_completeness_measure, get_nb_labels_class, normalize, CONST_PARTIAL_VALUE
+from mlc_common import setaccuracy_completeness_measure, get_nb_labels_class, normalize, CONST_PARTIAL_VALUE
 import sys, os, random, csv, numpy as np
 from classifip.models.mlc.chainncc import IMLCStrategy
 from classifip.models.mlc.mlcncc import MLCNCC
@@ -29,11 +29,13 @@ def computing_training_testing_step(learn_data_set,
                                     ncc_imprecise,
                                     manager,
                                     strategy_chaining,
+                                    safety_chaining,
                                     missing_pct,
                                     noise_label_pct,
                                     noise_label_type,
                                     noise_label_prob,
-                                    ich, cph, acc, acc_trans):
+                                    ich, cph, acc, acc_trans,
+                                    avg_solutions):
     # Send training data model to every parallel process
     manager.addNewTraining(learn_data_set=learn_data_set,
                            nb_labels=nb_labels,
@@ -49,7 +51,8 @@ def computing_training_testing_step(learn_data_set,
                         'ncc_epsilon': 0.001,
                         'ncc_s_param': ncc_imprecise,
                         'type_strategy': strategy_chaining,
-                        'has_set_probabilities': True},
+                        'has_set_probabilities': True,
+                        'is_dynamic_context': safety_chaining},
              'y_test': test[-nb_labels:]})
     manager.poisonPillWorkers()
     manager.joinTraining()  # wait all process for computing results
@@ -61,15 +64,17 @@ def computing_training_testing_step(learn_data_set,
         y_challenger, set_challenger = prediction['challenger']  # precise prediction (in this case)
         y_true = np.array(prediction['ground_truth'], dtype=np.int)
         y_trans_precise = transform_maximin_imprecise_to_precise(y_prediction[0], set_probabilities[0])
-        inc_ich, inc_cph = incorrectness_completeness_measure(y_true, y_prediction[0])
-        acc_ich_trans, _ = incorrectness_completeness_measure(y_true, y_trans_precise)
-        acc_ich, _ = incorrectness_completeness_measure(y_true, y_challenger[0])
+        nb_set_valued_solutions = 2 ** y_prediction[0].count(-1)
+        inc_ich, inc_cph = setaccuracy_completeness_measure(y_true, y_prediction[0])
+        acc_ich_trans, _ = setaccuracy_completeness_measure(y_true, y_trans_precise)
+        acc_ich, _ = setaccuracy_completeness_measure(y_true, y_challenger[0])
         ich += inc_ich / nb_tests
         cph += inc_cph / nb_tests
         acc += acc_ich / nb_tests
         acc_trans += acc_ich_trans / nb_tests
+        avg_solutions += (nb_set_valued_solutions / (2 ** nb_labels)) / nb_tests
     manager.restartResults()
-    return ich, cph, acc, acc_trans
+    return ich, cph, acc, acc_trans, avg_solutions
 
 
 def experiments_chaining_imprecise(in_path=None,
@@ -86,7 +91,8 @@ def experiments_chaining_imprecise(in_path=None,
                                    noise_label_prob=0.5,
                                    remove_features=None,
                                    scaling=False,
-                                   strategy_chaining=IMLCStrategy.IMPRECISE_BRANCHING):
+                                   strategy_chaining=IMLCStrategy.IMPRECISE_BRANCHING,
+                                   safety_chaining=False):
     assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
@@ -98,6 +104,8 @@ def experiments_chaining_imprecise(in_path=None,
                 scaling, remove_features, nb_process)
     logger.info("(missing_pct, noise_label_pct, noise_label_type, noise_label_prob) (%s, %s, %s, %s)",
                 missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
+    logger.info("(strategy_chaining, safety_chaining) (%s, %s)",
+                strategy_chaining, safety_chaining)
 
     # Seeding a random value for k-fold top learning-testing data
     if seed is None:
@@ -110,7 +118,7 @@ def experiments_chaining_imprecise(in_path=None,
     manager = ManagerWorkers(nb_process=nb_process)
     manager.executeAsync(class_model="classifip.models.mlc.chainncc.MLChaining")
 
-    ich, cph, acc, acc_trans = dict(), dict(), dict(), dict()
+    ich, cph, acc, acc_trans, avg_sols = dict(), dict(), dict(), dict(), dict()
     min_discretize, max_discretize = 5, 6
     for nb_disc in range(min_discretize, max_discretize):
         data_learning = arff.ArffFile()
@@ -147,10 +155,12 @@ def experiments_chaining_imprecise(in_path=None,
             disc = str(nb_disc) + "-" + str(time)
             ich[disc], cph[disc] = dict(), dict()
             acc_trans[disc], acc[disc] = dict(), dict()
+            avg_sols[disc] = dict()
             for s_ncc in np.arange(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param):
                 ks_ncc = str(s_ncc)
                 ich[disc][ks_ncc], cph[disc][ks_ncc] = 0, 0
                 acc[disc][ks_ncc], acc_trans[disc][ks_ncc] = 0, 0
+                avg_sols[disc][ks_ncc] = 0
                 for idx_fold, (training, testing) in enumerate(splits_s):
                     res = computing_training_testing_step(training,
                                                           testing,
@@ -158,6 +168,7 @@ def experiments_chaining_imprecise(in_path=None,
                                                           s_ncc,
                                                           manager,
                                                           strategy_chaining,
+                                                          safety_chaining,
                                                           missing_pct,
                                                           noise_label_pct,
                                                           noise_label_type,
@@ -165,16 +176,22 @@ def experiments_chaining_imprecise(in_path=None,
                                                           ich[disc][ks_ncc],
                                                           cph[disc][ks_ncc],
                                                           acc[disc][ks_ncc],
-                                                          acc_trans[disc][ks_ncc])
+                                                          acc_trans[disc][ks_ncc],
+                                                          avg_sols[disc][ks_ncc])
                     ich[disc][ks_ncc], cph[disc][ks_ncc] = res[0], res[1]
                     acc[disc][ks_ncc], acc_trans[disc][ks_ncc] = res[2], res[3]
-                    logger.debug("Partial-step-cumulative (acc, ich, acc_trans) (%s, %s, %s)",
-                                 acc[disc][ks_ncc], ich[disc][ks_ncc], acc_trans[disc][ks_ncc])
+                    avg_sols[disc][ks_ncc] = res[4]
+                    logger.debug("Partial-step-cumulative (acc, ich, acc_trans, avg_sols) (%s, %s, %s, %s)",
+                                 acc[disc][ks_ncc],
+                                 ich[disc][ks_ncc],
+                                 acc_trans[disc][ks_ncc],
+                                 avg_sols[disc][ks_ncc])
                 writer.writerow([str(nb_disc), s_ncc, time,
                                  ich[disc][ks_ncc] / nb_kFold,
                                  cph[disc][ks_ncc] / nb_kFold,
                                  acc[disc][ks_ncc] / nb_kFold,
-                                 acc_trans[disc][ks_ncc] / nb_kFold])
+                                 acc_trans[disc][ks_ncc] / nb_kFold,
+                                 avg_sols[disc][ks_ncc] / nb_kFold])
                 file_csv.flush()
                 logger.debug("Partial-s-k_step (%s, %s, %s, %s, %s, %s)",
                              disc, s_ncc, time,
@@ -188,14 +205,14 @@ def experiments_chaining_imprecise(in_path=None,
 
 # np.set_printoptions(suppress=True)
 in_path = ".../emotions.arff"
-out_path = ".../emotions.csv"
-# QPBB_PATH_SERVER = []  # executed in host
+out_path = ".../results_iris.csv"
 experiments_chaining_imprecise(in_path=in_path,
                                out_path=out_path,
                                scaling=False,
-                               nb_process=2,
-                               min_ncc_s_param=0.5, max_ncc_s_param=5.1, step_ncc_s_param=0.5,
+                               nb_process=1,
+                               min_ncc_s_param=0.5, max_ncc_s_param=5.6, step_ncc_s_param=1,
                                missing_pct=0.0,
                                noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.8,
                                strategy_chaining=IMLCStrategy.IMPRECISE_BRANCHING,
-                               remove_features=["image_name"], )
+                               safety_chaining=True,
+                               remove_features=["image_name"])

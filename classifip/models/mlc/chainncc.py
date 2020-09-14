@@ -26,10 +26,10 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
         else:
             return str(MLCNCC.LABEL_PARTIAL_VALUE)
 
-    def __compute_optimal_path(self,
-                               idx_label_to_infer,
-                               idx_imprecise_labels,
-                               ncc_s_param):
+    def __compute_opt_path_branching(self,
+                                     idx_label_to_infer,
+                                     idx_imprecise_labels,
+                                     ncc_s_param):
         """
         ...Todo:
             upper_path_0 == upper_path_1 and lower_path_0 == lower_path_1
@@ -94,7 +94,7 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                 self._logger.info("Random-IB (lower_path_0, lower_path_1) (%s, %s)", lower_path_0, lower_path_1)
                 optimal_lower_path[i] = np.random.choice(['0', '1'], 1)[0]
                 lower_cum_max = lower_path_1
-                # raise Exception("Not implemented yet __compute_optimal_path") @salmuz
+                # raise Exception("Not implemented yet __compute_opt_path_branching") @salmuz
 
             # arg_max: upper minimal path
             self._logger.debug("IB (upper_path_0, upper_path_1) (%s, %s)", upper_path_0, upper_path_1)
@@ -111,63 +111,129 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
 
         return optimal_lower_path, optimal_upper_path
 
+    def __get_set_probabilities_branching(self,
+                                          idx_current_label,
+                                          new_instance,
+                                          idx_predicted_labels,
+                                          idx_imprecise_labels,
+                                          chain_predicted_labels,
+                                          ncc_s_param,
+                                          ncc_epsilon):
+        self._logger.debug("BR (idx_imprecise_labels, idx_predicted_labels) (%s,%s)",
+                           idx_imprecise_labels, idx_predicted_labels)
+
+        optimal_lower_path, optimal_upper_path = None, None
+        if len(idx_imprecise_labels) > 0:
+            optimal_lower_path, optimal_upper_path = self.__compute_opt_path_branching(idx_current_label,
+                                                                                       idx_imprecise_labels,
+                                                                                       ncc_s_param)
+        partial_opt_predicted_labels = np.array(chain_predicted_labels)
+        self._logger.debug("IB (chaining, lower_path, upper_path) (%s, %s, %s)",
+                           partial_opt_predicted_labels, optimal_lower_path, optimal_upper_path)
+        if len(idx_imprecise_labels) == 0:
+            u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
+                super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
+                                                                     new_instance,
+                                                                     partial_opt_predicted_labels,
+                                                                     ncc_s_param,
+                                                                     ncc_epsilon,
+                                                                     idx_predicted_labels)
+            # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
+            lower_cond_prob_1 = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+            upper_cond_prob_1 = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+        else:
+            self._logger.debug("IB (idx_label, chaining, lower_path, upper_path) (%s, %s, %s, %s)",
+                               idx_current_label, chain_predicted_labels, optimal_lower_path, optimal_upper_path)
+            # computing lower probability: \underline P(Y_j=1)
+            partial_opt_predicted_labels[idx_imprecise_labels] = optimal_lower_path
+            _, l_numerator_1, u_denominator_0, _ = \
+                super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
+                                                                     new_instance,
+                                                                     partial_opt_predicted_labels,
+                                                                     ncc_s_param,
+                                                                     ncc_epsilon,
+                                                                     idx_predicted_labels)
+
+            lower_cond_prob_1 = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+            self._logger.debug("IB (idx_label, opt_upper_path (%s, %s)",
+                               idx_current_label, partial_opt_predicted_labels)
+
+            # computing upper probability: \overline P(Y_j=1)
+            partial_opt_predicted_labels[idx_imprecise_labels] = optimal_upper_path
+            u_numerator_1, _, _, l_denominator_0 = \
+                super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
+                                                                     new_instance,
+                                                                     partial_opt_predicted_labels,
+                                                                     ncc_s_param,
+                                                                     ncc_epsilon,
+                                                                     idx_predicted_labels)
+            upper_cond_prob_1 = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+            self._logger.debug("IB (idx_label, opt_lower_path (%s, %s)",
+                               idx_current_label, partial_opt_predicted_labels)
+            self._logger.debug("IB (idx_label, resulting_score (%s, %s)",
+                               idx_current_label, [lower_cond_prob_1, upper_cond_prob_1])
+        return lower_cond_prob_1, upper_cond_prob_1
+
     def __strategy_imprecise_branching(self, new_instance, ncc_s_param, ncc_epsilon, is_dynamic_context):
-
         resulting_score = np.zeros((self.nb_labels, 2))
-        chain_predicted_labels = []
+        chain_predicted_labels = [None] * self.nb_labels
         idx_imprecise_labels = []
+        idx_predicted_labels = []
         for idx_current_label in range(self.nb_labels):
-            optimal_lower_path, optimal_upper_path = None, None
-            if len(idx_imprecise_labels) > 0:
-                optimal_lower_path, optimal_upper_path = self.__compute_optimal_path(idx_current_label,
-                                                                                     idx_imprecise_labels,
-                                                                                     ncc_s_param)
 
-            partial_opt_predicted_labels = np.array(chain_predicted_labels)
-            if len(idx_imprecise_labels) == 0:
-                u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
-                    super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
-                                                                         new_instance,
-                                                                         partial_opt_predicted_labels,
-                                                                         ncc_s_param,
-                                                                         ncc_epsilon)
-                # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
-                resulting_score[idx_current_label, 0] = l_numerator_1 / (l_numerator_1 + u_denominator_0)
-                resulting_score[idx_current_label, 1] = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+            # dynamic selection of context-dependence label
+            if is_dynamic_context:
+                idx_current_label = self.__dynamic_context_dependence_label(chain_predicted_labels,
+                                                                            idx_predicted_labels,
+                                                                            idx_imprecise_labels,
+                                                                            new_instance,
+                                                                            ncc_s_param,
+                                                                            ncc_epsilon,
+                                                                            self.__get_set_probabilities_branching)
+                idx_precise_inferred_labels = list(idx_predicted_labels)
             else:
-                self._logger.debug("IB (idx_label, chaining, lower_path, upper_path) (%s, %s, %s, %s)",
-                                   idx_current_label, chain_predicted_labels, optimal_lower_path, optimal_upper_path)
-                # computing lower probability: \underline P(Y_j=1)
-                partial_opt_predicted_labels[idx_imprecise_labels] = optimal_lower_path
-                _, l_numerator_1, u_denominator_0, _ = \
-                    super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
-                                                                         new_instance,
-                                                                         partial_opt_predicted_labels,
-                                                                         ncc_s_param,
-                                                                         ncc_epsilon)
-                resulting_score[idx_current_label, 0] = l_numerator_1 / (l_numerator_1 + u_denominator_0)
-                self._logger.debug("IB (idx_label, opt_upper_path (%s, %s)",
-                                   idx_current_label, partial_opt_predicted_labels)
+                idx_precise_inferred_labels = list(set(range(idx_current_label)) - set(idx_imprecise_labels))
 
-                # computing upper probability: \overline P(Y_j=1)
-                partial_opt_predicted_labels[idx_imprecise_labels] = optimal_upper_path
-                u_numerator_1, _, _, l_denominator_0 = \
-                    super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
-                                                                         new_instance,
-                                                                         partial_opt_predicted_labels,
-                                                                         ncc_s_param,
-                                                                         ncc_epsilon)
-                resulting_score[idx_current_label, 1] = u_numerator_1 / (u_numerator_1 + l_denominator_0)
-                self._logger.debug("IB (idx_label, opt_lower_path (%s, %s)",
-                                   idx_current_label, partial_opt_predicted_labels)
-                self._logger.debug("IB (idx_label, resulting_score (%s, %s)",
-                                   idx_current_label, resulting_score[idx_current_label, :])
+            lw_cond_prob_1, up_cond_prob_1 = self.__get_set_probabilities_branching(idx_current_label,
+                                                                                    new_instance,
+                                                                                    idx_precise_inferred_labels,
+                                                                                    idx_imprecise_labels,
+                                                                                    chain_predicted_labels,
+                                                                                    ncc_s_param,
+                                                                                    ncc_epsilon)
 
+            resulting_score[idx_current_label, 0] = lw_cond_prob_1
+            resulting_score[idx_current_label, 1] = up_cond_prob_1
             inferred_label = MLChaining.__maximality_decision(resulting_score[idx_current_label, :])
-            chain_predicted_labels.append(inferred_label)
+            self._logger.debug("BR (chain_predicted_labels, idx_current_label, inferred_label) (%s, %s, %s)",
+                               chain_predicted_labels, idx_current_label, inferred_label)
+            chain_predicted_labels[idx_current_label] = inferred_label
             if inferred_label == '-1':
                 idx_imprecise_labels.append(idx_current_label)
+            else:
+                idx_predicted_labels.append(idx_current_label)
         return resulting_score, chain_predicted_labels
+
+    def __get_set_probabilities_ternary_tree(self, idx_current_label,
+                                             new_instance,
+                                             idx_predicted_labels,
+                                             idx_imprecise_labels,
+                                             chain_predicted_labels,
+                                             ncc_s_param,
+                                             ncc_epsilon):
+        self._logger.debug("TE (idx_imprecise_labels, idx_predicted_labels) (%s,%s)",
+                           idx_imprecise_labels, idx_predicted_labels)
+        u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
+            super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
+                                                                 new_instance,
+                                                                 chain_predicted_labels,
+                                                                 ncc_s_param,
+                                                                 ncc_epsilon,
+                                                                 idx_predicted_labels)
+        # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
+        upper_cond_prob_1 = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+        lower_cond_prob_1 = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+        return lower_cond_prob_1, upper_cond_prob_1
 
     def __strategy_ternary_tree(self, new_instance, ncc_s_param, ncc_epsilon, is_dynamic_context):
         resulting_score = np.zeros((self.nb_labels, 2))
@@ -183,21 +249,22 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                                                                             idx_imprecise_labels,
                                                                             new_instance,
                                                                             ncc_s_param,
-                                                                            ncc_epsilon)
+                                                                            ncc_epsilon,
+                                                                            self.__get_set_probabilities_ternary_tree)
                 idx_precise_inferred_labels = list(idx_predicted_labels)
             else:
                 idx_precise_inferred_labels = list(set(range(idx_current_label)) - set(idx_imprecise_labels))
 
-            u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
-                super(MLChaining, self).lower_upper_cond_probability(idx_current_label,
-                                                                     new_instance,
-                                                                     chain_predicted_labels,
-                                                                     ncc_s_param,
-                                                                     ncc_epsilon,
-                                                                     idx_precise_inferred_labels)
             # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
-            resulting_score[idx_current_label, 0] = l_numerator_1 / (l_numerator_1 + u_denominator_0)
-            resulting_score[idx_current_label, 1] = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+            lw_cond_prob_1, up_cond_prob_1 = self.__get_set_probabilities_ternary_tree(idx_current_label,
+                                                                                       new_instance,
+                                                                                       idx_precise_inferred_labels,
+                                                                                       idx_imprecise_labels,
+                                                                                       chain_predicted_labels,
+                                                                                       ncc_s_param,
+                                                                                       ncc_epsilon)
+            resulting_score[idx_current_label, 1] = up_cond_prob_1
+            resulting_score[idx_current_label, 0] = lw_cond_prob_1
             inferred_label = MLChaining.__maximality_decision(resulting_score[idx_current_label, :])
             self._logger.debug("TE (chain_predicted_labels, idx_current_label, inferred_label) (%s, %s, %s)",
                                chain_predicted_labels, idx_current_label, inferred_label)
@@ -215,9 +282,8 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                                            idx_imprecise_labels,
                                            new_instance,
                                            ncc_s_param,
-                                           ncc_epsilon):
-        this_object = self
-
+                                           ncc_epsilon,
+                                           compute_set_probabilities):
         def __varphi(lower_prob, upper_prob):
             return upper_prob - lower_prob
 
@@ -229,16 +295,16 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                                     set_idx_remaining_labels):
             resulting_score = np.zeros((len(set_idx_remaining_labels), 2))
             for idx, idx_current_label in enumerate(set_idx_remaining_labels):
-                u_numerator_1, l_numerator_1, u_denominator_0, l_denominator_0 = \
-                    super(MLChaining, this_object).lower_upper_cond_probability(idx_current_label,
-                                                                                new_instance,
-                                                                                chain_predicted_labels,
-                                                                                ncc_s_param,
-                                                                                ncc_epsilon,
-                                                                                idx_predicted_labels)
                 # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
-                resulting_score[idx, 1] = u_numerator_1 / (u_numerator_1 + l_denominator_0)
-                resulting_score[idx, 0] = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+                lw_cond_prob_1, up_cond_prob_1 = compute_set_probabilities(idx_current_label,
+                                                                           new_instance,
+                                                                           idx_predicted_labels,
+                                                                           idx_imprecise_labels,
+                                                                           chain_predicted_labels,
+                                                                           ncc_s_param,
+                                                                           ncc_epsilon)
+                resulting_score[idx, 1] = up_cond_prob_1
+                resulting_score[idx, 0] = lw_cond_prob_1
             return resulting_score
 
         set_idx_remaining_labels = list(set(range(self.nb_labels)) -
@@ -252,6 +318,7 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                                           set_idx_remaining_labels)
 
         idx_uncertainty_labels = np.where((r_score[:, 0] < 0.5) & (0.5 < r_score[:, 1]))[0]
+        self._logger.debug("CDL (r_score, idx_uncertainty_labels) (%s, %s)", r_score, idx_uncertainty_labels)
         # verify that non all interval contains 0.5
         if len(idx_uncertainty_labels) == len(set_idx_remaining_labels):
             length_intvl = r_score[:, 1] - r_score[:, 0]
@@ -261,8 +328,8 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
             idx_precises = list(set(range(len(r_score))) - set(idx_uncertainty_labels))
             self._logger.debug("CDL (idx_uncertainty_labels, idx_precises) (%s, %s, %s)",
                                idx_uncertainty_labels, idx_precises, len(set_idx_remaining_labels))
-            lower_prob_j = np.argmax(r_score[idx_precises, 0])
-            upper_prob_j = np.argmin(r_score[idx_precises, 1])
+            lower_prob_j = r_score[:, 0].tolist().index(np.max(r_score[idx_precises, 0]))
+            upper_prob_j = r_score[:, 1].tolist().index(np.min(r_score[idx_precises, 1]))
             phi_lw_j = __varphi(r_score[lower_prob_j, 0], r_score[lower_prob_j, 1])
             phi_up_j = __varphi(r_score[upper_prob_j, 0], r_score[upper_prob_j, 1])
 
