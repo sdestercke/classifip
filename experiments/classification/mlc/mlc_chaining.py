@@ -119,7 +119,7 @@ def experiments_chaining_imprecise(in_path=None,
     manager.executeAsync(class_model="classifip.models.mlc.chainncc.MLChaining")
 
     ich, cph, acc, acc_trans, avg_sols = dict(), dict(), dict(), dict(), dict()
-    min_discretize, max_discretize = 5, 6
+    min_discretize, max_discretize = 5, 7
     for nb_disc in range(min_discretize, max_discretize):
         data_learning = arff.ArffFile()
         data_learning.load(in_path)
@@ -210,9 +210,9 @@ experiments_chaining_imprecise(in_path=in_path,
                                out_path=out_path,
                                scaling=False,
                                nb_process=1,
-                               min_ncc_s_param=0.5, max_ncc_s_param=5.6, step_ncc_s_param=1,
+                               min_ncc_s_param=0.5, max_ncc_s_param=5.6, step_ncc_s_param=0.5,
                                missing_pct=0.0,
                                noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.8,
                                strategy_chaining=IMLCStrategy.IMPRECISE_BRANCHING,
-                               safety_chaining=True,
+                               safety_chaining=False,
                                remove_features=["image_name"])

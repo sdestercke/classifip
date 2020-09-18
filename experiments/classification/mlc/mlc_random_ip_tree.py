@@ -176,7 +176,7 @@ def inference_exact_inference(root, nb_labels):
         new_partial_vector = list()
         new_net_partial_vector = list()
         for label in binary_vector:
-            if label == 3:
+            if label == PARTIAL_VALUE:
                 new_partial_vector.append([1, 0])
                 new_net_partial_vector.append([1, 0])
             else:
