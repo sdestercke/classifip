@@ -127,11 +127,12 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
                              criterion="maximality", savefig=False):
     markers = list(['+', '*', 'v', 'o', '-', '.', ',']) if markers is None else markers
     X, y = __check_data_available(model.get_data())
-    _clazz = model.get_clazz()
+    _clazz = sorted(model.get_clazz())
     _nb_clazz = len(_clazz)
     _, n_col = X.shape
 
-    if n_col > 2: raise Exception("Not implemented for n-dimension yet.")
+    if n_col > 2:
+        raise Exception("Not implemented for n-dimension yet.")
 
     x_min, x_max = X[:, 0].min() - .5, X[:, 0].max() + .5
     y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
@@ -144,13 +145,12 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
         print("[Query] # current query:", idx)
         z = np.append(z, prediction(model, newClazz, clazz_by_index, query, criterion))
 
-    y_colors = [clazz_by_index[clazz] for clazz in y]
     z = np.array(z)
     z = z.reshape(xx.shape)
     cmap_color = plt.cm.viridis if cmap_color is None else plt.cm.get_cmap(cmap_color, _nb_clazz + len(newClazz))
     plt.contourf(xx, yy, z, alpha=0.8, cmap=cmap_color)
     for row in range(0, len(y)):
-        plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker=markers[clazz_by_index[y[row]]], edgecolor='k')
+        plt.scatter(X[row, 0], X[row, 1], c='black', s=40, marker=markers[clazz_by_index[y[row]]], edgecolor='k')
     if savefig:
         plt.savefig('model_plot.pdf', format='pdf', bbox_inches='tight')
     plt.show()
@@ -159,10 +159,11 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
 def plot2D_decision_boundary_det(X, y, h=.01, markers=None):
     markers = list(['+', '*', 'v', 'o', '-', '.', ',']) if markers is None else markers
     _, n_col = X.shape
-    _clazz = list(set(y))
+    _clazz = sorted(list(set(y)))
     _nb_clazz = len(_clazz)
 
-    if n_col > 2: raise Exception("Not implemented for n-dimension yet.")
+    if n_col > 2:
+        raise Exception("Not implemented for n-dimension yet.")
 
     import matplotlib.pyplot as plt
 
@@ -172,16 +173,16 @@ def plot2D_decision_boundary_det(X, y, h=.01, markers=None):
 
     z = np.array([])
     clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(_clazz, 1))
-    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDAD
-    lda = LDAD(solver="svd", store_covariance=True)
+    # from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as classifierLDA
+    from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as classifierQDA
+    # lda = classifierLDA(solver="svd", store_covariance=True)
+    lda = classifierQDA(store_covariance=True)
     lda.fit(X, y)
     for query in np.c_[xx.ravel(), yy.ravel()]:
         evaluate = lda.predict([query])
         z = np.append(z, clazz_by_index[evaluate[0]])
-    y_colors = [clazz_by_index[clazz] for clazz in y]
-    markers = dict((_clazz[idx], markers[idx]) for idx in range(0, _nb_clazz))
     z = z.reshape(xx.shape)
     plt.contourf(xx, yy, z, alpha=0.4)
     for row in range(0, len(y)):
-        plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker=markers[y[row]], edgecolor='k')
+        plt.scatter(X[row, 0], X[row, 1], c='black', s=40, marker=markers[clazz_by_index[y[row]]], edgecolor='k')
     plt.show()
