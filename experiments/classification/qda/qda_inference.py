@@ -46,7 +46,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
             sum_u65, sum_u80 = 0, 0
             n_test = len(idx_test)
             for i, test in enumerate(X_cv_test):
-                evaluate, _ = model.evaluate(test)
+                evaluate = model.evaluate(test)
                 logger.debug("(testing, ell_current, prediction, ground-truth) (%s, %s, %s, %s)",
                              i, ell_current, evaluate, y_cv_test[i])
                 if y_cv_test[i] in evaluate:

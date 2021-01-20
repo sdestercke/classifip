@@ -79,7 +79,8 @@ def plot2D_classification(model, query=None, colors=None, markers=None):
         if query is not None:
             ml_mean, ml_prob = model.fit_max_likelihood(query)
             plt.plot([query[0]], [query[1]], marker='h', markersize=5, color="black")
-            _, _bounds = model.evaluate(query)
+            model.evaluate(query)
+            _bounds = model.get_bound_cond_probability()
             for clazz in _clazz:
                 plt.plot([ml_mean[clazz][0]], [ml_mean[clazz][1]], marker='o', markersize=5, color=colors[clazz])
                 _, est_mean_lower = _bounds[clazz]['inf']
@@ -95,7 +96,7 @@ def plot2D_classification(model, query=None, colors=None, markers=None):
 
     elif n_col > 2:
         if query is not None:
-            inference, _ = model.evaluate(query)
+            inference = model.evaluate(query)
             X = np.vstack([X, query])
             y = np.append(y, inference[0])
 
@@ -115,7 +116,7 @@ def plot2D_classification(model, query=None, colors=None, markers=None):
 
 
 def prediction(model, newClazz, clazz_by_index, query, criterion):
-    answer, _ = model.evaluate(query, criterion=criterion)
+    answer = model.evaluate(query, criterion=criterion)
     if len(answer) > 1 or len(answer) == 0:
         iClass = "-".join(str(clazz) for clazz in sorted(answer))
         return newClazz[iClass]

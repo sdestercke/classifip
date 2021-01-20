@@ -63,7 +63,7 @@ class NDABR(MLCNCC):
                     nda_model.learn(X=X_cv_train, y=y_cv_train, ell=ell_current)
                     n_cv_test = len(y_cv_test)
                     for i, x_test in enumerate(X_cv_test):
-                        evaluate, _ = nda_model.evaluate(x_test)
+                        evaluate = nda_model.evaluate(x_test)
                         if y_cv_test[i] in evaluate:
                             ell_u65[ell_current] += u65(evaluate) / n_cv_test
                             ell_u80[ell_current] += u80(evaluate) / n_cv_test

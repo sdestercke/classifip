@@ -3,18 +3,21 @@ Created on 18 may 2018
 
 @author: Yonatan-Carlos Carranza-Alarcon
 
-Imprecise Gaussian Discriminant
+Imprecise Gaussian Discriminant.
 
-multi-classes classification
+Binary classification
 '''
 
 from classifip.models.qda import LinearDiscriminant
 from classifip.dataset.uci_data_set import export_data_set
 
 # We start by creating an instance of the base classifier we want to use
-print("Example of Imprecise Linear Discriminant Analyse for multi-classes - Data set IRIS \n")
-model = LinearDiscriminant(init_matlab=True)
+print("Example of Imprecise Linear Discriminant Analyse for binary classification - Data set IRIS \n")
+model = LinearDiscriminant(init_matlab=False)
 data = export_data_set('iris.data')
+
+# recovery only two classes
+data = data.loc[data['4'].isin(['Iris-setosa', 'Iris-virginica'])]
 
 # Learning
 X = data.iloc[:, :-1].values
@@ -36,5 +39,3 @@ test = model.evaluate(query=X[2], method="nonlinear")
 print("\nPrediction using interval dominance criterion with 0/1 costs + nonlinear method\n")
 print(test)
 print(model.get_bound_cond_probability())
-
-

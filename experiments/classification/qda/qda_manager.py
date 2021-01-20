@@ -62,7 +62,7 @@ def prediction(pid, tasks, queue, results, model_type, lib_path_server, criterio
             task = tasks.get()
             if task is None:
                 break
-            evaluate, _ = model.evaluate(task['X_test'], criterion=criterion)
+            evaluate = model.evaluate(task['X_test'], criterion=criterion)
             print("(pid, prediction, ground-truth) (", pid, evaluate, task["y_test"], ")", flush=True)
             if task['y_test'] in evaluate:
                 sum65 += u65(evaluate)

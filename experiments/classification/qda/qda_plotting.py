@@ -87,5 +87,5 @@ def output_paper_zone_im_precise(is_imprecise=True,
 # output_paper_result()
 cmap_light = ListedColormap(['#A7CDD0', '#B3E4C7', '#F2F1A7', '#E59C81', '#D2645D', '#D6DEF1', '#FBBDA6'])
 # output_paper_zone_im_precise(model_type='inda', hgrid=0.05, ell=5, criterion="maximality", cmap_color=cmap_light)
-output_paper_zone_im_precise(is_imprecise=False, hgrid=0.05, cmap_color=cmap_light)
+output_paper_zone_im_precise(is_imprecise=True, hgrid=0.05, cmap_color=cmap_light)
 # output_paper_result()

@@ -63,6 +63,9 @@ def inference_maximal_criterion(lower, upper, clazz):
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
+    """
+        The binary classification does not need the matlab software
+    """
     def __init__(self, init_matlab=False, add_path_matlab=None):
         """
         :param init_matlab: init engine matlab
@@ -88,6 +91,8 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         self._mean_lower, self._mean_upper = None, None
         self.__nb_rebuild_opt = 0
         self._logger = None
+        # save the last computed conditional probabilities X|Y on instance x*
+        self._bound_cond_probabilities = None
 
     def get_data(self):
         return self._data
@@ -209,17 +214,23 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         :param criterion: interval_dominance if criterion decision performs with Interval dominance,
                 otherwise maximality criterion
         :param log_probability: calculate the maximality decision with log probability
-        :return: tuple composed of set-valued categories and (lower,upper) bound probabilities.
+        :return: tuple composed from
+                     (1) set-valued predictions  and
+                     (2) (lower,upper) bound conditional probabilities  X|Y
+
+        Notations:
+                - inf: infimum   and   sup: supremum
         """
-        bounds = dict((clazz, dict()) for clazz in self._clazz)
-        precise_probas = dict()
+        self._bound_cond_probabilities = dict((clazz, dict()) for clazz in self._clazz)
+        estimated_bounds = dict((clazz, dict()) for clazz in self._clazz)
+        precise_probs = dict()
         eng_session = self._eng
 
         def __get_bounds(clazz, bound="inf"):
-            return bounds[clazz][bound] if bound in bounds[clazz] else None
+            return estimated_bounds[clazz][bound] if bound in estimated_bounds[clazz] else None
 
         def __put_bounds(probability, estimator, clazz, bound="inf"):
-            bounds[clazz][bound] = (probability, estimator)
+            estimated_bounds[clazz][bound] = (probability, estimator)
 
         def __probability(_self, query, clazz, inv, cov, mean_lower, mean_upper, bound="inf", log_p=False):
 
@@ -237,74 +248,118 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 __put_bounds(prob, estimator, clazz, bound)
             return __get_bounds(clazz, bound)
 
-        if criterion == "maximality":
-            for clazz in self._clazz:
-                mean_lower = self._mean_lower[clazz]
-                mean_upper = self._mean_upper[clazz]
-                cov, inv = self.get_cov_by_clazz(clazz)
-                p_sub, estimator = __probability(self, query, clazz, inv, cov,
-                                                 mean_lower, mean_upper,
-                                                 bound='sup', log_p=log_probability)
-                __put_bounds(p_sub, estimator, clazz, "sup")
-                precise_probas[clazz] = self.probability_density_gaussian(self._gp_mean[clazz],
-                                                                          cov, query,
-                                                                          log_p=log_probability)
+        if self._nb_clazz > 2:  # it is classification multi-classes
+            if criterion == "maximality":
+                for clazz in self._clazz:
+                    mean_lower = self._mean_lower[clazz]
+                    mean_upper = self._mean_upper[clazz]
+                    cov, inv = self.get_cov_by_clazz(clazz)
+                    __probability(self, query, clazz, inv, cov,
+                                  mean_lower=mean_lower,
+                                  mean_upper=mean_upper,
+                                  bound='sup',
+                                  log_p=log_probability)
+                    precise_probs[clazz] = self.probability_density_gaussian(self._gp_mean[clazz],
+                                                                             cov, query,
+                                                                             log_p=log_probability)
 
-            C = set(self._clazz)
-            Z = set([])
-            while len(C - Z) > 0:
-                max_clazz = max(precise_probas, key=precise_probas.get)
-                mean_lower = self._mean_lower[max_clazz]
-                mean_upper = self._mean_upper[max_clazz]
-                cov, inv = self.get_cov_by_clazz(max_clazz)
-                p_inf, _ = __probability(self, query, max_clazz, inv, cov,
-                                         mean_lower, mean_upper,
-                                         bound='inf', log_p=log_probability)
-                nopt_clazz = set([])
-                for clazz in C - {max_clazz}:
-                    p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
+                C = set(self._clazz)
+                Z = set([])
+                while len(C - Z) > 0:
+                    max_clazz = max(precise_probs, key=precise_probs.get)
+                    mean_lower = self._mean_lower[max_clazz]
+                    mean_upper = self._mean_upper[max_clazz]
+                    cov, inv = self.get_cov_by_clazz(max_clazz)
+                    p_inf, _ = __probability(self, query, max_clazz, inv, cov,
+                                             mean_lower=mean_lower,
+                                             mean_upper=mean_upper,
+                                             bound='inf',
+                                             log_p=log_probability)
+                    nopt_clazz = set([])
+                    for clazz in C - {max_clazz}:
+                        p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
 
-                    # if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0: # precise 10e-18 instead 0
-                    maximality = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
-                    if log_probability:
-                        maximality = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
+                        # if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0: # precise 10e-18 instead 0
+                        maximality = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
+                        if log_probability:
+                            maximality = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
 
-                    self._logger.debug(
-                        "Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
-                        max_clazz, clazz, maximality)
-                    # (maximality:true) labels indifferent to maximal-label-choice for assessment maximality
-                    if maximality:
-                        nopt_clazz.add(clazz)
-                    else:
-                        precise_probas.pop(clazz, None)
-                del precise_probas[max_clazz]
-                Z.add(max_clazz)
-                nopt_clazz.add(max_clazz)
-                C = nopt_clazz.copy()
+                        self._logger.debug(
+                            "Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
+                            max_clazz, clazz, maximality)
+                        # (maximality:true) labels indifferent to maximal-label-choice for assessment maximality
+                        if maximality:
+                            nopt_clazz.add(clazz)
+                        else:
+                            precise_probs.pop(clazz, None)
+                    del precise_probs[max_clazz]
+                    Z.add(max_clazz)
+                    nopt_clazz.add(max_clazz)
+                    C = nopt_clazz.copy()
 
-            return list(C), bounds
+                self._bound_cond_probabilities = estimated_bounds
+                return list(C)
 
-        elif criterion == "interval_dominance" or criterion == "maximality_v1":
-            if log_probability:
-                raise Exception("Criterion decision does not support with log-probability!!")
+            elif criterion == "interval_dominance" or criterion == "maximality_v1":
+                if log_probability:
+                    raise Exception("Criterion decision does not support with log-probability!!")
 
-            lower, upper = [], []
-            for clazz in self._clazz:
-                mean_lower = self._mean_lower[clazz]
-                mean_upper = self._mean_upper[clazz]
-                cov, inv = self.get_cov_by_clazz(clazz)
-                p_inf, _ = __probability(self, query, clazz, inv, cov, mean_lower, mean_upper, bound='inf')
-                p_up, _ = __probability(self, query, clazz, inv, cov, mean_lower, mean_upper, bound='sup')
-                lower.append(p_inf * self._prior[clazz])
-                upper.append(p_up * self._prior[clazz])
+                lower, upper = [], []
+                for clazz in self._clazz:
+                    mean_lower = self._mean_lower[clazz]
+                    mean_upper = self._mean_upper[clazz]
+                    cov, inv = self.get_cov_by_clazz(clazz)
+                    p_inf, _ = __probability(self, query, clazz, inv, cov,
+                                             mean_lower=mean_lower,
+                                             mean_upper=mean_upper,
+                                             bound='inf',
+                                             log_p=log_probability)
+                    p_sup, _ = __probability(self, query, clazz, inv, cov,
+                                             mean_lower=mean_lower,
+                                             mean_upper=mean_upper,
+                                             bound='sup',
+                                             log_p=log_probability)
+                    lower.append(p_inf * self._prior[clazz])
+                    upper.append(p_sup * self._prior[clazz])
 
-            if criterion == "interval_dominance":
-                score = Scores(np.c_[lower, upper])
-                return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
+                self._bound_cond_probabilities = estimated_bounds
+                if criterion == "interval_dominance":
+                    score = Scores(np.c_[lower, upper])
+                    return self._clazz[(score.nc_intervaldom_decision() > 0)]
+                else:
+                    return inference_maximal_criterion(lower, upper, self._clazz)
             else:
-                return inference_maximal_criterion(lower, upper, self._clazz), bounds
+                raise Exception("Decision criterion not implemented yet or another bug!!")
         else:
-            raise Exception("Decision criterion not implemented yet or another bug!!")
+            # For a binary imprecise classification: Interval Dominance = Maximality
+            # Computing interval probabilities is more easy (does not need matlab)
+            lower, upper = [0] * 2, []
+            for clazz in self._clazz:
+                mean_lower = self._mean_lower[clazz]
+                mean_upper = self._mean_upper[clazz]
+                cov, inv = self.get_cov_by_clazz(clazz)
+                p_sup, _ = __probability(self, query, clazz, inv, cov,
+                                         mean_lower=mean_lower,
+                                         mean_upper=mean_upper,
+                                         bound='sup',
+                                         log_p=log_probability)
+                upper.append(p_sup * self._prior[clazz])
+
+            p0_sup, _ = __get_bounds(self._clazz[0], "sup")
+            lower[1] = 1 - p0_sup
+            p1_sup, _ = __get_bounds(self._clazz[1], "sup")
+            lower[0] = 1 - p1_sup
+            self._bound_cond_probabilities = estimated_bounds
+
+            # decision step with imprecise probabilities
+            score = Scores(np.c_[lower, upper])
+            return self._clazz[(score.nc_intervaldom_decision() > 0)]
+
+    def get_bound_cond_probability(self):
+        return self._bound_cond_probabilities
+
+    def get_marginal_probabilities(self):
+        return self._prior
 
     def get_bound_means(self, clazz):
         return self._mean_lower[clazz], self._mean_upper[clazz]
@@ -407,7 +462,8 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 max  1/2*x'*(-H)*x - f'*x
                 s.t.  ....(same)
         """
-        if eng_session is None: raise Exception("Environment matlab hadn't been initialized.")
+        if eng_session is None:
+            raise Exception("Environment matlab hadn't been initialized.")
         _debug = is_level_debug(self._logger)
         __out = None if _debug else io.StringIO()
         __err = io.StringIO()

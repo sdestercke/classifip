@@ -43,7 +43,7 @@ def performance_accuracy_hold_out(in_path=None, model_type="ilda", ell_optimal=0
         sum_u65, sum_u80 = 0, 0
         n_test, _ = X_test.shape
         for i, test in enumerate(X_test):
-            evaluate, _ = lqa.evaluate(test)
+            evaluate = lqa.evaluate(test)
             logger.debug("(testing, ell_current, prediction, ground-truth) (%s, %s, %s, %s)",
                          i, ell_optimal, evaluate, y_test[i])
             if y_test[i] in evaluate:
