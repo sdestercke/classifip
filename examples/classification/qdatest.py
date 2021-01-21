@@ -13,7 +13,7 @@ from classifip.dataset.uci_data_set import export_data_set
 
 # We start by creating an instance of the base classifier we want to use
 print("Example of Imprecise Linear Discriminant Analyse for multi-classes - Data set IRIS \n")
-model = LinearDiscriminant(init_matlab=True)
+model = LinearDiscriminant(solver_matlab=False, DEBUG=False)
 data = export_data_set('iris.data')
 
 # Learning

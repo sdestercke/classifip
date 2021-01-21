@@ -6,10 +6,14 @@ from numpy import linalg
 from scipy.stats import multivariate_normal
 from ..utils import create_logger, is_level_debug
 from classifip.representations.voting import Scores
+from qcqp import QCQP, RANDOM, COORD_DESCENT
+import cvxpy as cvx
 
+MATLAB_AVAILABLE = True
 try:
     import matlab.engine
 except Exception as e:
+    MATLAB_AVAILABLE = False
     print("MATLAB not installed in host.")
 
 
@@ -66,16 +70,23 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
     """
         The binary classification does not need the matlab software
     """
-    def __init__(self, init_matlab=False, add_path_matlab=None):
+
+    def __init__(self, solver_matlab=False, add_path_matlab=None):
         """
-        :param init_matlab: init engine matlab
+        :param solver_matlab: init engine matlab
         :param DEBUG: logger debug log for computation
         """
         # Starting matlab environment
-        if init_matlab:
-            self._eng = matlab.engine.start_matlab()
-            self._add_path_matlab = [] if add_path_matlab is None else add_path_matlab
-            for _in_path in self._add_path_matlab: self._eng.addpath(_in_path)
+        self.__solver_matlab = solver_matlab
+        if self.__solver_matlab:
+            if MATLAB_AVAILABLE:
+                self._eng = matlab.engine.start_matlab()
+                self._add_path_matlab = [] if add_path_matlab is None else add_path_matlab
+                for _in_path in self._add_path_matlab:
+                    self._eng.addpath(_in_path)
+            else:
+                print("MATLAB is not available!, it could use QCQP package !", flush=True)
+                self.__solver_matlab = False
         else:
             self._eng = None
         self._N, self._p = None, None
@@ -235,7 +246,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         def __probability(_self, query, clazz, inv, cov, mean_lower, mean_upper, bound="inf", log_p=False):
 
             if __get_bounds(clazz, bound) is None:
-                q = -1 * (query.T @ inv)
+                q = -1 * (query.T @ inv)  # because of transforming supremum to min quadratic program
                 _self._logger.debug("[BOUND_ESTIMATION:%s] Q matrix: %s", bound, inv)
                 _self._logger.debug("[BOUND_ESTIMATION:%s] q vector: %s", bound, q)
                 _self._logger.debug("[BOUND_ESTIMATION:%s] Lower Bound: %s", bound, mean_lower)
@@ -248,112 +259,87 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 __put_bounds(prob, estimator, clazz, bound)
             return __get_bounds(clazz, bound)
 
-        if self._nb_clazz > 2:  # it is classification multi-classes
-            if criterion == "maximality":
-                for clazz in self._clazz:
-                    mean_lower = self._mean_lower[clazz]
-                    mean_upper = self._mean_upper[clazz]
-                    cov, inv = self.get_cov_by_clazz(clazz)
-                    __probability(self, query, clazz, inv, cov,
-                                  mean_lower=mean_lower,
-                                  mean_upper=mean_upper,
-                                  bound='sup',
-                                  log_p=log_probability)
-                    precise_probs[clazz] = self.probability_density_gaussian(self._gp_mean[clazz],
-                                                                             cov, query,
-                                                                             log_p=log_probability)
-
-                C = set(self._clazz)
-                Z = set([])
-                while len(C - Z) > 0:
-                    max_clazz = max(precise_probs, key=precise_probs.get)
-                    mean_lower = self._mean_lower[max_clazz]
-                    mean_upper = self._mean_upper[max_clazz]
-                    cov, inv = self.get_cov_by_clazz(max_clazz)
-                    p_inf, _ = __probability(self, query, max_clazz, inv, cov,
-                                             mean_lower=mean_lower,
-                                             mean_upper=mean_upper,
-                                             bound='inf',
-                                             log_p=log_probability)
-                    nopt_clazz = set([])
-                    for clazz in C - {max_clazz}:
-                        p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
-
-                        # if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0: # precise 10e-18 instead 0
-                        maximality = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
-                        if log_probability:
-                            maximality = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
-
-                        self._logger.debug(
-                            "Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
-                            max_clazz, clazz, maximality)
-                        # (maximality:true) labels indifferent to maximal-label-choice for assessment maximality
-                        if maximality:
-                            nopt_clazz.add(clazz)
-                        else:
-                            precise_probs.pop(clazz, None)
-                    del precise_probs[max_clazz]
-                    Z.add(max_clazz)
-                    nopt_clazz.add(max_clazz)
-                    C = nopt_clazz.copy()
-
-                self._bound_cond_probabilities = estimated_bounds
-                return list(C)
-
-            elif criterion == "interval_dominance" or criterion == "maximality_v1":
-                if log_probability:
-                    raise Exception("Criterion decision does not support with log-probability!!")
-
-                lower, upper = [], []
-                for clazz in self._clazz:
-                    mean_lower = self._mean_lower[clazz]
-                    mean_upper = self._mean_upper[clazz]
-                    cov, inv = self.get_cov_by_clazz(clazz)
-                    p_inf, _ = __probability(self, query, clazz, inv, cov,
-                                             mean_lower=mean_lower,
-                                             mean_upper=mean_upper,
-                                             bound='inf',
-                                             log_p=log_probability)
-                    p_sup, _ = __probability(self, query, clazz, inv, cov,
-                                             mean_lower=mean_lower,
-                                             mean_upper=mean_upper,
-                                             bound='sup',
-                                             log_p=log_probability)
-                    lower.append(p_inf * self._prior[clazz])
-                    upper.append(p_sup * self._prior[clazz])
-
-                self._bound_cond_probabilities = estimated_bounds
-                if criterion == "interval_dominance":
-                    score = Scores(np.c_[lower, upper])
-                    return self._clazz[(score.nc_intervaldom_decision() > 0)]
-                else:
-                    return inference_maximal_criterion(lower, upper, self._clazz)
-            else:
-                raise Exception("Decision criterion not implemented yet or another bug!!")
-        else:
-            # For a binary imprecise classification: Interval Dominance = Maximality
-            # Computing interval probabilities is more easy (does not need matlab)
-            lower, upper = [0] * 2, []
+        if criterion == "maximality":
             for clazz in self._clazz:
                 mean_lower = self._mean_lower[clazz]
                 mean_upper = self._mean_upper[clazz]
                 cov, inv = self.get_cov_by_clazz(clazz)
+                __probability(self, query, clazz, inv, cov,
+                              mean_lower=mean_lower,
+                              mean_upper=mean_upper,
+                              bound='sup',
+                              log_p=log_probability)
+                precise_probs[clazz] = self.probability_density_gaussian(self._gp_mean[clazz],
+                                                                         cov, query,
+                                                                         log_p=log_probability)
+
+            C = set(self._clazz)
+            Z = set([])
+            while len(C - Z) > 0:
+                max_clazz = max(precise_probs, key=precise_probs.get)
+                mean_lower = self._mean_lower[max_clazz]
+                mean_upper = self._mean_upper[max_clazz]
+                cov, inv = self.get_cov_by_clazz(max_clazz)
+                p_inf, _ = __probability(self, query, max_clazz, inv, cov,
+                                         mean_lower=mean_lower,
+                                         mean_upper=mean_upper,
+                                         bound='inf',
+                                         log_p=log_probability)
+                nopt_clazz = set([])
+                for clazz in C - {max_clazz}:
+                    p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
+
+                    # if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0: # precise 10e-18 instead 0
+                    maximality = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
+                    if log_probability:
+                        maximality = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
+
+                    self._logger.debug(
+                        "Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
+                        max_clazz, clazz, maximality)
+                    # (maximality:true) labels indifferent to maximal-label-choice for assessment maximality
+                    if maximality:
+                        nopt_clazz.add(clazz)
+                    else:
+                        precise_probs.pop(clazz, None)
+                del precise_probs[max_clazz]
+                Z.add(max_clazz)
+                nopt_clazz.add(max_clazz)
+                C = nopt_clazz.copy()
+
+            self._bound_cond_probabilities = estimated_bounds
+            return list(C)
+
+        elif criterion == "interval_dominance" or criterion == "maximality_v1":
+            if log_probability:
+                raise Exception("Criterion decision does not support with log-probability!!")
+
+            lower, upper = [], []
+            for clazz in self._clazz:
+                mean_lower = self._mean_lower[clazz]
+                mean_upper = self._mean_upper[clazz]
+                cov, inv = self.get_cov_by_clazz(clazz)
+                p_inf, _ = __probability(self, query, clazz, inv, cov,
+                                         mean_lower=mean_lower,
+                                         mean_upper=mean_upper,
+                                         bound='inf',
+                                         log_p=log_probability)
                 p_sup, _ = __probability(self, query, clazz, inv, cov,
                                          mean_lower=mean_lower,
                                          mean_upper=mean_upper,
                                          bound='sup',
                                          log_p=log_probability)
+                lower.append(p_inf * self._prior[clazz])
                 upper.append(p_sup * self._prior[clazz])
 
-            p0_sup, _ = __get_bounds(self._clazz[0], "sup")
-            lower[1] = 1 - p0_sup
-            p1_sup, _ = __get_bounds(self._clazz[1], "sup")
-            lower[0] = 1 - p1_sup
             self._bound_cond_probabilities = estimated_bounds
-
-            # decision step with imprecise probabilities
-            score = Scores(np.c_[lower, upper])
-            return self._clazz[(score.nc_intervaldom_decision() > 0)]
+            if criterion == "interval_dominance":
+                score = Scores(np.c_[lower, upper])
+                return self._clazz[(score.nc_intervaldom_decision() > 0)]
+            else:
+                return inference_maximal_criterion(lower, upper, self._clazz)
+        else:
+            raise Exception("Decision criterion not implemented yet or another bug!!")
 
     def get_bound_cond_probability(self):
         return self._bound_cond_probabilities
@@ -420,7 +406,8 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 b = matrix(q)
 
                 def cOptFx(x=None, z=None):
-                    if x is None: return 0, matrix(0.0, (d, 1))
+                    if x is None:
+                        return 0, matrix(0.0, (d, 1))
                     f = (0.5 * (x.T * i_cov * x) + b.T * x)
                     Df = (i_cov * x + b)
                     if z is None: return f, Df.T
@@ -501,7 +488,25 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         return np.asarray(x).reshape((1, self._p))[0]
 
     def infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
-        return self.quadprogbb((-1 * Q), (-1 * q), mean_lower, mean_upper, eng_session, clazz)
+        if self.__solver_matlab:
+            return self.quadprogbb((-1 * Q), (-1 * q), mean_lower, mean_upper, eng_session, clazz)
+        else:
+            return self.nonconvex_qcqp((-1 * Q), (-1 * q), mean_lower, mean_upper)
+
+    def nonconvex_qcqp(self, Q, q, mean_lower, mean_upper):
+        x = cvx.Variable(self._p)
+        prob = cvx.Problem(
+            cvx.Minimize(
+                cvx.quad_form(x, 0.5 * Q) + q * x
+            ),
+            [x >= mean_lower, x <= mean_upper]
+        )
+        qcqp_solver = QCQP(prob)
+        qcqp_solver.suggest(RANDOM)
+        f_cd, v_cd = qcqp_solver.improve(COORD_DESCENT)
+        self._logger.debug("Coordinate descent: objective %s, violation %s", f_cd, v_cd)
+        self._logger.debug("Optimal value solution %s", x.value)
+        return np.asarray(x.value).reshape((1, self._p))[0]
 
 
 class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
@@ -510,8 +515,8 @@ class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         imprecise gaussian distribution and conjugate exponential family.
     """
 
-    def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
-        super(EuclideanDiscriminant, self).__init__(init_matlab=False,
+    def __init__(self, solver_matlab=False, add_path_matlab=None, DEBUG=False):
+        super(EuclideanDiscriminant, self).__init__(solver_matlab=False,
                                                     add_path_matlab=add_path_matlab)
         self._logger = create_logger("IEDA", DEBUG)
 
@@ -552,12 +557,13 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
        conjugate exponential family.
     """
 
-    def __init__(self, init_matlab=True, add_path_matlab=None, DEBUG=False):
-        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab,
+    def __init__(self, solver_matlab=True, add_path_matlab=None, DEBUG=False):
+        super(LinearDiscriminant, self).__init__(solver_matlab=solver_matlab,
                                                  add_path_matlab=add_path_matlab)
         self._is_compute_total_cov = False
         self._logger = create_logger("ILDA", DEBUG)
-        if DEBUG: solvers.options['show_progress'] = True
+        if DEBUG:
+            solvers.options['show_progress'] = True
 
     def learn(self, learn_data_set=None, ell=None, X=None, y=None):
         self._is_compute_total_cov = False
@@ -602,11 +608,12 @@ class QuadraticDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
        conjugate exponential family.
     """
 
-    def __init__(self, init_matlab=True, add_path_matlab=None, DEBUG=False):
-        super(QuadraticDiscriminant, self).__init__(init_matlab=init_matlab,
+    def __init__(self, solver_matlab=True, add_path_matlab=None, DEBUG=False):
+        super(QuadraticDiscriminant, self).__init__(solver_matlab=solver_matlab,
                                                     add_path_matlab=add_path_matlab)
         self._logger = create_logger("IQDA", DEBUG)
-        if DEBUG: solvers.options['show_progress'] = True
+        if DEBUG:
+            solvers.options['show_progress'] = True
 
 
 class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
@@ -615,8 +622,8 @@ class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
         imprecise gaussian distribution and conjugate exponential family.
     """
 
-    def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
-        super(NaiveDiscriminant, self).__init__(init_matlab=False, add_path_matlab=add_path_matlab)
+    def __init__(self, solver_matlab=False, add_path_matlab=None, DEBUG=False):
+        super(NaiveDiscriminant, self).__init__(solver_matlab=False, add_path_matlab=add_path_matlab)
         self._logger = create_logger("INDA", DEBUG)
 
     def get_cov_by_clazz(self, clazz):

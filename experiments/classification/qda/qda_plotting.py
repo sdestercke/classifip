@@ -70,7 +70,7 @@ def output_paper_zone_im_precise(is_imprecise=True,
                                  cmap_color=None):
     data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
     features = list([0, 1]) if features is None else features
-    model = __factory_model(model_type, DEBUG=True) if is_imprecise else None
+    model = __factory_model(model_type, DEBUG=True, solver_matlab=False) if is_imprecise else None
     __test_imprecise_model(model, data,
                            features=features, hgrid=hgrid, ell=ell,
                            query=None,
@@ -87,5 +87,5 @@ def output_paper_zone_im_precise(is_imprecise=True,
 # output_paper_result()
 cmap_light = ListedColormap(['#A7CDD0', '#B3E4C7', '#F2F1A7', '#E59C81', '#D2645D', '#D6DEF1', '#FBBDA6'])
 # output_paper_zone_im_precise(model_type='inda', hgrid=0.05, ell=5, criterion="maximality", cmap_color=cmap_light)
-output_paper_zone_im_precise(is_imprecise=True, hgrid=0.05, cmap_color=cmap_light)
+output_paper_zone_im_precise(model_type="ilda", is_imprecise=True, hgrid=0.05, cmap_color=cmap_light)
 # output_paper_result()

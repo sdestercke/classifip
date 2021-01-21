@@ -30,6 +30,6 @@ setup(
     long_description=open('README.rst').read(),
     classifiers = classifiers.split('\n'),
     install_requires=['numpy', 'cvxopt', 'scikit-learn', 'matplotlib', 'pandas',
-                      'Orange3', 'python-constraint', 'feather-format', 'xxhash'],
+                      'Orange3', 'python-constraint', 'feather-format', 'xxhash', 'qcqp', 'cvxpy', 'scipy'],
     data_files= datafiles
 )
