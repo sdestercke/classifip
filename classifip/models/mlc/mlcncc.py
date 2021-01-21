@@ -11,10 +11,9 @@ class MLCNCC(metaclass=abc.ABCMeta):
     """
         NCCBR implements the naive credal classification method using the IDM for
             multilabel classification with binary relevance.
-
-        If data are all precise, it returns
-        :class:`~classifip.representations.voting.Scores`. The base classifier method
-        is based on [#zaffalon2002]_ and on the improvement proposed by [#corani2010]_
+            
+        Base classifier NCC based on [#zaffalon2002]_ and on the improvement 
+        proposed by [#corani2010]_
 
         :param feature_count: store counts of couples label/feature
         :type feature_count: dictionnary with keys label/feature
@@ -23,11 +22,11 @@ class MLCNCC(metaclass=abc.ABCMeta):
         :param feature_names: store the names of features
         :type feature_names: list
         :param feature_values: store modalities of features
-        :type feature_values: dictionnary associating each feature name to a list
+        :type feature_values: dictionary associating each feature name to a list
 
     """
 
-    def __init__(self, DEBUG):
+    def __init__(self, DEBUG=False):
         self.feature_names = []
         self.label_names = []
         self.feature_values = dict()
@@ -37,6 +36,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
         self.training_size = 0
         self.marginal_props = None
         self.DEBUG = DEBUG
+        self.has_imprecise_marginal = False
         self._logger = create_logger("MLCNCC", DEBUG)
 
     def learn(self,
@@ -58,20 +58,24 @@ class MLCNCC(metaclass=abc.ABCMeta):
 
         self.feature_values = learn_data_set.attribute_data.copy()
         # computing precise marginal P(Y) count
-        self.marginal_props = [0] * self.nb_labels
+        self.marginal_props = dict({i: dict() for i in range(self.nb_labels)})
 
         for label_index, label_value in enumerate(self.label_names):
             # recovery count of class 1 and 0
             label_set_one = learn_data_set.select_col_vals(label_value, ['1'])
             label_set_zero = learn_data_set.select_col_vals(label_value, ['0'])
             nb_count_one, nb_count_zero = len(label_set_one.data), len(label_set_zero.data)
-            # if we works with missing label, the marginal changes
-            # if the data set has values -1 as labels, but if it does not have, it work anyway
-            # Computing label proportions
+            # if we works with missing label (label=-1: missing), the marginal values changes
+            # (1) Computing label proportions
             try:
-                self.marginal_props[label_index] = nb_count_one / float(nb_count_zero + nb_count_one)
+                self.marginal_props[label_index][0] = nb_count_zero
+                self.marginal_props[label_index][1] = nb_count_one
+                self.marginal_props[label_index]['all'] = nb_count_one + nb_count_zero
             except ZeroDivisionError:
-                self.marginal_props[label_index] = 0
+                self.marginal_props[label_index][0] = 0
+                self.marginal_props[label_index][1] = 0
+                self.marginal_props[label_index]['all'] = 0
+            # (2) Computing counting label|attributes
             for feature in self.feature_names:
                 count_vector_one, count_vector_zero = [], []
                 feature_index = learn_data_set.attributes.index(feature)
@@ -82,7 +86,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
                     count_vector_zero.append(nb_items_zero)
                 self.feature_count[label_value + '|in|' + feature] = count_vector_one
                 self.feature_count[label_value + '|out|' + feature] = count_vector_zero
-
+            # (3) Computing counting label|other_labels
             for label_feature in self.label_names:
                 if label_feature != label_value:
                     label_feature_index = learn_data_set.attributes.index(label_feature)
@@ -98,7 +102,11 @@ class MLCNCC(metaclass=abc.ABCMeta):
                     self.feature_count[label_value + '|out|' + label_feature] = count_vector_zero
 
     @abc.abstractmethod
-    def evaluate(self, test_dataset, ncc_epsilon=0.001, ncc_s_param=2.0, precision=None):
+    def evaluate(self, test_dataset,
+                 ncc_epsilon=0.001,
+                 ncc_s_param=2.0,
+                 with_imprecise_marginal=False,
+                 precision=None):
         pass
 
     @staticmethod
@@ -303,12 +311,29 @@ class MLCNCC(metaclass=abc.ABCMeta):
         p_upper = __restricting_idm(p_upper, ncc_epsilon, len_fi)
         return p_lower, p_upper
 
+    def lower_upper_marginal_Y(self, idx_label_to_infer, value_label_to_infer, ncc_s_param):
+        # @salmuz missing apply Laplace Smoothing when n_label_data=0
+        count_label = self.marginal_props[idx_label_to_infer][value_label_to_infer]
+        n_label_data = self.marginal_props[idx_label_to_infer]["all"]
+        p_lower = count_label / (n_label_data + ncc_s_param)
+        p_upper = (count_label + ncc_s_param) / (n_label_data + ncc_s_param)
+        self._logger.debug("[Bound-Marginal] (idx_label_to_infer, p_lower, p_upper ) (%s, %s, %s)",
+                           idx_label_to_infer, p_lower, p_upper)
+        return p_lower, p_upper
+
     def lower_upper_probability_feature(self, idx_label_to_infer, item, ncc_s_param, ncc_epsilon):
         # (n(c)+st(c))/(N+s), with s=0 (i.e. prior probabilities precise, P(Y))
-        u_denominator_0 = 1 - self.marginal_props[idx_label_to_infer]  # \overline P(Yj=0)
-        l_denominator_0 = 1 - self.marginal_props[idx_label_to_infer]  # \underline P(Yj=0)
-        u_numerator_1 = self.marginal_props[idx_label_to_infer]  # \overline P(Yj=1)
-        l_numerator_1 = self.marginal_props[idx_label_to_infer]  # \underline P(Yj=1)
+        if self.has_imprecise_marginal:
+            l_denominator_0, u_denominator_0 = self.lower_upper_marginal_Y(idx_label_to_infer, 0, ncc_s_param)
+            l_numerator_1, u_numerator_1 = self.lower_upper_marginal_Y(idx_label_to_infer, 1, ncc_s_param)
+        else:
+            all_bits_label = self.marginal_props[idx_label_to_infer]["all"]
+            prop_marginal_label_1 = self.marginal_props[idx_label_to_infer][1] / all_bits_label
+            u_denominator_0 = 1 - prop_marginal_label_1  # \overline P(Yj=0)
+            l_denominator_0 = 1 - prop_marginal_label_1  # \underline P(Yj=0)
+            u_numerator_1 = prop_marginal_label_1  # \overline P(Yj=1)
+            l_numerator_1 = prop_marginal_label_1  # \underline P(Yj=1)
+
         for f_index, feature in enumerate(self.feature_names):
             # computation of denominator (label=1)
             feature_class_name = self.label_names[idx_label_to_infer] + '|in|' + feature  # (f_i, c=1)

@@ -72,9 +72,9 @@ class BinaryMultiLabel(bt.BinaryTree):
             This solution recursively walk the binary tree just one time and it builds a Python function
             in string to accelarate quickly the calculation.
 
-            This procedure works very well for little binary tree with deepness <20
+            This procedure works very well for little binary tree with deepness < 20
             and with a precision numeric decimal of
-                |getlowerexpectationGeneration - getlowerexpectation| > 1e-16
+                |getlowerexpectationGeneration - getlowerexpectation| < 1e-16
 
         :param item:
         :param ncc_s_param:

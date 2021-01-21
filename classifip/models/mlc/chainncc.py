@@ -349,9 +349,12 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                  test_dataset,
                  ncc_epsilon=0.001,
                  ncc_s_param=2,
+                 with_imprecise_marginal=False,
                  type_strategy=IMLCStrategy.IMPRECISE_BRANCHING,
                  is_dynamic_context=False,
                  has_set_probabilities=False):
+        # setting the global class-scope variable
+        self.has_imprecise_marginal = with_imprecise_marginal
         interval_prob_answers, predict_chain_answers = [], []
 
         for item in test_dataset:
@@ -371,6 +374,7 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
             interval_prob_answers.append(rs_score)
             predict_chain_answers.append(list(map(int, prediction)))
 
+        self.has_imprecise_marginal = False  # reboot the global class-scope variable
         if has_set_probabilities:
             return predict_chain_answers, interval_prob_answers
         else:

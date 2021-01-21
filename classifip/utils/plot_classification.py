@@ -70,9 +70,9 @@ def plot2D_classification(model, query=None, colors=None, markers=None):
     if n_col == 2:
         for clazz in _clazz:
             mean = model.get_mean_by_clazz(clazz)
-            prior_mean_lower = mean - model.get_ell()
-            prior_mean_upper = mean + model.get_ell()
-            plot_constraints(prior_mean_lower, prior_mean_upper, line_style="dashed")
+            # prior_mean_lower = mean - model.get_ell()
+            # prior_mean_upper = mean + model.get_ell()
+            # plot_constraints(prior_mean_lower, prior_mean_upper, line_style="dashed")
             post_mean_lower, post_mean_upper = model.get_bound_means(clazz)
             plot_constraints(post_mean_lower, post_mean_upper)
 
