@@ -33,7 +33,7 @@ def computing_best_imprecise_mean(in_path=None, out_path=None, cv_nfold=10, mode
     file_csv = open(out_path, 'a')
     writer = csv.writer(file_csv)
 
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
+    model = __factory_model(model_type, solver_matlab=True, add_path_matlab=lib_path_server, DEBUG=True)
     for ell_current in np.arange(from_ell, to_ell, by_ell):
         ell_u65[ell_current], ell_u80[ell_current] = 0, 0
         logger.info("ELL_CURRENT %s", ell_current)

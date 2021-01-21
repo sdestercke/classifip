@@ -36,7 +36,7 @@ def performance_accuracy_hold_out(in_path=None, model_type="ilda", ell_optimal=0
     logger.info('Seeds used for accuracy %s', seeds)
     n_time = len(seeds)
     mean_u65, mean_u80 = 0, 0
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=DEBUG)
+    model = __factory_model(model_type, solver_matlab=True, add_path_matlab=lib_path_server, DEBUG=DEBUG)
     for k in range(0, n_time):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=seeds[k])
         model.learn(X=X_cv_train, y=y_cv_train, ell=ell_optimal)

@@ -6,8 +6,8 @@ from numpy import linalg
 from scipy.stats import multivariate_normal
 from ..utils import create_logger, is_level_debug
 from classifip.representations.voting import Scores
-from qcqp import QCQP, RANDOM, COORD_DESCENT
 import cvxpy as cvx
+from qcqp import QCQP, RANDOM, COORD_DESCENT
 
 MATLAB_AVAILABLE = True
 try:
@@ -19,7 +19,8 @@ except Exception as e:
 
 def is_sdp_symmetric(x):
     def is_pos_def(x):
-        return np.all(np.linalg.eigvals(x) > 0)
+        # Numeric problem with -0.22e-25 ~ 0.0 (zero), and not negative value
+        return np.all(np.round(np.linalg.eigvals(x), decimals=16) >= 0)
 
     def check_symmetric(x, tol=1e-8):
         return np.allclose(x, x.T, atol=tol)
@@ -435,7 +436,12 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
             return [v for v in solution['x']]
         else:
-            return self.quadprogbb(Q, q, mean_lower, mean_upper, self._eng, clazz)
+            self._logger.info("Eigenvalues of inverse covariance matrix %s",
+                         np.round(np.linalg.eigvals(Q), decimals=16))
+            if self.__solver_matlab:
+                return self.quadprogbb(Q, q, mean_lower, mean_upper, self._eng, clazz)
+            else:
+                return self.nonconvex_qcqp(Q, q, mean_lower, mean_upper)
 
     def quadprogbb(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
         """ This method use a solver implemented in https://github.com/sburer/QuadProgBB
@@ -495,18 +501,19 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
     def nonconvex_qcqp(self, Q, q, mean_lower, mean_upper):
         x = cvx.Variable(self._p)
-        prob = cvx.Problem(
+        problem = cvx.Problem(
             cvx.Minimize(
                 cvx.quad_form(x, 0.5 * Q) + q * x
             ),
             [x >= mean_lower, x <= mean_upper]
         )
-        qcqp_solver = QCQP(prob)
+        qcqp_solver = QCQP(problem)
         qcqp_solver.suggest(RANDOM)
-        f_cd, v_cd = qcqp_solver.improve(COORD_DESCENT)
+        f_cd, v_cd = qcqp_solver.improve(COORD_DESCENT, num_iters=500)
         self._logger.debug("Coordinate descent: objective %s, violation %s", f_cd, v_cd)
-        self._logger.debug("Optimal value solution %s", x.value)
-        return np.asarray(x.value).reshape((1, self._p))[0]
+        solution = np.asarray(x.value).reshape((1, self._p))[0]
+        self._logger.debug("Optimal value solution %s", solution)
+        return solution
 
 
 class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):

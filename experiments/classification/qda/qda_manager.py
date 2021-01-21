@@ -52,7 +52,7 @@ class ManagerWorkers:
 
 
 def prediction(pid, tasks, queue, results, model_type, lib_path_server, criterion):
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
+    model = __factory_model(model_type, solver_matlab=False, add_path_matlab=lib_path_server, DEBUG=True)
     while True:
         training = queue.get()
         if training is None: break
