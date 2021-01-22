@@ -1,7 +1,65 @@
 import math
 import numpy as np
+from classifip.dataset import arff
 
 CONST_PARTIAL_VALUE = -1
+
+
+def init_scores(param_imprecision, ich_skep, cph_skep, acc_prec, ich_reject, cph_reject, epsilon_rejects):
+    ich_skep[param_imprecision], cph_skep[param_imprecision], acc_prec[param_imprecision] = 0, 0, 0
+    if epsilon_rejects is not None:
+        ich_reject[param_imprecision] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
+        cph_reject[param_imprecision] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
+    else:
+        ich_reject[param_imprecision], cph_reject[param_imprecision] = 0, 0
+
+
+def init_dataset(in_path, remove_features, scaling):
+    data_learning = arff.ArffFile()
+    data_learning.load(in_path)
+    if remove_features is not None:
+        for r_feature in remove_features:
+            try:
+                data_learning.remove_col(r_feature)
+            except Exception as err:
+                print("Remove feature error: {0}".format(err))
+    nb_labels = get_nb_labels_class(data_learning)
+    if scaling:
+        normalize(data_learning, n_labels=nb_labels)
+    return data_learning, nb_labels
+
+
+def expansion_partial_to_full_set_binary_vector(partial_binary_vector):
+    new_set_binary_vector = list()
+    for label in partial_binary_vector:
+        if label == CONST_PARTIAL_VALUE:
+            new_set_binary_vector.append([1, 0])
+        else:
+            new_set_binary_vector.append([label])
+
+    set_binary_vector = list(product(*new_set_binary_vector))
+    return set_binary_vector
+
+
+def transform_semi_partial_vector(full_binary_vector):
+    """
+    Semi-partial binary vector is like:
+            Y = [(0, 1, 1, 0, 0, 0), (0, 1, 1, 0, 1, 0), (0, 1, 1, 1, 1, 0)]
+    Partial binary vector is like:
+            Y = [(0, 1, 1, 0, 1, 0), (0, 1, 1, 1, 1, 0)] = [(0, 1, 1, *, 1, 0)]
+    :param full_binary_vector:
+    :return:
+    """
+    _full_binary_vector = np.array(full_binary_vector)
+    _, nb_labels = full_binary_vector.shape
+    result = np.zeros(nb_labels, dtype=np.int)
+    for idx_label in range(nb_labels):
+        label_value = np.unique(_full_binary_vector[:, idx_label])
+        if len(label_value) > 1:
+            result[idx_label] = CONST_PARTIAL_VALUE
+        else:
+            result[idx_label] = label_value[0]
+    return result
 
 
 def distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels):

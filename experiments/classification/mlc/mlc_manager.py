@@ -3,14 +3,14 @@ import importlib
 from classifip.models.mlc.mlcncc import MLCNCC
 
 
-def __create_dynamic_class(clazz):
+def __create_dynamic_class(clazz, **kwargs):
     try:
         st = clazz.split(".")
         module_name = ".".join(st[:-1])
         class_name = st[-1]
         module = importlib.import_module(module_name)
         class_ = getattr(module, class_name)
-        return class_()
+        return class_(**kwargs)
     except Exception as e:
         raise Exception(e, "Creation dynamic class does not complete.")
 

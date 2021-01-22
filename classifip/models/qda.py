@@ -69,7 +69,11 @@ def inference_maximal_criterion(lower, upper, clazz):
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
     """
-        The binary classification does not need the matlab software
+        Classification multi-classes using a set of Gaussian distributions
+
+        TODO:
+            - Verify the supremum problem is really a convex problem
+            It is not enough to verify symmetric and eigenvalues (is_sdp_symmetric)
     """
 
     def __init__(self, solver_matlab=False, add_path_matlab=None):
@@ -222,7 +226,8 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         This method is ..
 
         :param query: new unlabeled instance
-        :param method: optimization method for computing optimal upper bound mean.
+        :param method: optimization method for computing the upper conditional probability
+                    either quadratic or nonlinear
         :param criterion: interval_dominance if criterion decision performs with Interval dominance,
                 otherwise maximality criterion
         :param log_probability: calculate the maximality decision with log probability
@@ -356,13 +361,13 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         return len(self._data[self._data.y == clazz])
 
     def __mean_by_clazz(self, clazz):
-        return self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
+        return self._data[self._data.y == clazz].iloc[:, :-1].mean().values  # old call: .as_matrix()
 
     def _cov_by_clazz(self, clazz):
         _sub_data = self._data[self._data.y == clazz].iloc[:, :-1]
         _n, _p = _sub_data.shape
         if _n > 1:
-            return _sub_data.cov().as_matrix()
+            return _sub_data.cov().values  # old call: .as_matrix()
         else:
             # Bug: Impossible to compute covariance of just ONE instance
             # assuming an identity covariance matrix
@@ -437,7 +442,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             return [v for v in solution['x']]
         else:
             self._logger.info("Eigenvalues of inverse covariance matrix %s",
-                         np.round(np.linalg.eigvals(Q), decimals=16))
+                              np.round(np.linalg.eigvals(Q), decimals=16))
             if self.__solver_matlab:
                 return self.quadprogbb(Q, q, mean_lower, mean_upper, self._eng, clazz)
             else:
@@ -630,7 +635,8 @@ class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
     """
 
     def __init__(self, solver_matlab=False, add_path_matlab=None, DEBUG=False):
-        super(NaiveDiscriminant, self).__init__(solver_matlab=False, add_path_matlab=add_path_matlab)
+        super(NaiveDiscriminant, self).__init__(solver_matlab=False,
+                                                add_path_matlab=add_path_matlab)
         self._logger = create_logger("INDA", DEBUG)
 
     def get_cov_by_clazz(self, clazz):

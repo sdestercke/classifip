@@ -27,9 +27,10 @@ class BaseEstimator:
         predict_clazz = list()
         probabilities_query = list()
         for query in queries:
-            pbs = np.array(
-                [self.pdf(query, self._means[clazz], self._icov[clazz],
-                          self._dcov[clazz]) * self._prior[clazz] for clazz in self._clazz])
+            pbs = np.array([
+                self.pdf(query, self._means[clazz], self._icov[clazz], self._dcov[clazz]) *
+                self._prior[clazz] for clazz in self._clazz
+            ])
             predict_clazz.append(self._clazz[pbs.argmax()])
             probabilities_query.append({clazz: pbs[i] for i, clazz in enumerate(self._clazz)})
         if with_posterior:
