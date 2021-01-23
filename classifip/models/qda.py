@@ -650,3 +650,14 @@ class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
             self._gp_cov[clazz] = cov_clazz
             self._gp_icov[clazz] = linalg.inv(cov_clazz)
         return self._gp_cov[clazz], self._gp_icov[clazz]
+
+
+__MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant,
+                 'iqda': QuadraticDiscriminant, 'inda': NaiveDiscriminant}
+
+
+def __factory_igda_model(model_type, **kwargs):
+    try:
+        return __MODEL_TYPES[model_type.lower()](**kwargs)
+    except Exception as _:
+        raise Exception("Selected model does not exist")

@@ -12,8 +12,17 @@ from mlc_common import *
 
 
 def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_challenger=None):
+    # export LD_PRELOAD=/usr/local/MATLAB/R2018b/sys/os/glnxa64/libstdc++.so.6.0.22
+    # QPBB_PATH_SERVER = ['/home/lab/ycarranz/QuadProgBB', '/opt/cplex128/cplex/matlab/x86-64_linux']
+    # QPBB_PATH_SERVER = ['/volper/users/ycarranz/QuadProgBB', '/volper/users/ycarranz/cplex128/cplex/matlab/x86-64_linux']
+    QPBB_PATH_SERVER = []  # executed in host
+
     try:
-        model_skeptic = __create_dynamic_class(class_model)
+        model_skeptic = __create_dynamic_class(class_model,
+                                               solver_matlab=False,
+                                               gda_method="nda",
+                                               add_path_matlab=QPBB_PATH_SERVER,
+                                               DEBUG=False)
         while True:
             training = queue.get()
             if training is None:
@@ -201,7 +210,7 @@ def experiments_binr_vs_imprecise(in_path=None,
 
     # instance class classifier
     manager = ManagerWorkers(nb_process=nb_process, fun_prediction=skeptical_prediction)
-    manager.executeAsync(class_model="classifip.models.mlc.ndabr.NDABR")
+    manager.executeAsync(class_model="classifip.models.mlc.igdabr.IGDA_BR")
 
     ich_skep, cph_skep, acc_prec = dict(), dict(), dict()
     ich_reject, cph_reject = dict(), dict()
@@ -282,6 +291,6 @@ experiments_binr_vs_imprecise(in_path=in_path,
                               scaling=True,
                               missing_pct=0.0,
                               noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.2,
-                              min_ell_param=0.5, max_ell_param=10, step_ell_param=1,
+                              min_ell_param=0.05, max_ell_param=0.06, step_ell_param=0.05,
                               epsilon_rejects=[0.05, 0.15, 0.25, 0.35, 0.45],
                               remove_features=["image_name"])

@@ -2,8 +2,8 @@ from setuptools import setup, find_packages
 import os
 
 resources_dir = os.path.join('resources')
-datafiles = [(d, [os.path.join(d,f) for f in files])
-    for d, folders, files in os.walk(resources_dir)]
+datafiles = [(d, [os.path.join(d, f) for f in files])
+             for d, folders, files in os.walk(resources_dir)]
 
 classifiers = """\
 Development Status :: 2 - Pre-Alpha
@@ -25,11 +25,22 @@ setup(
     packages=find_packages(),
     url='http://pypi.python.org/pypi/classifip/',
     license="GNU General Public License (GPL)",
-    platforms = "any",
+    platforms="any",
     description='Classification with Imprecise Probability methods.',
     long_description=open('README.rst').read(),
-    classifiers = classifiers.split('\n'),
-    install_requires=['numpy', 'cvxopt', 'scikit-learn', 'matplotlib', 'pandas',
-                      'Orange3', 'python-constraint', 'feather-format', 'xxhash', 'qcqp', 'cvxpy', 'scipy'],
-    data_files= datafiles
+    classifiers=classifiers.split('\n'),
+    install_requires=['numpy',
+                      'cvxopt',
+                      'scikit-learn==0.23.2',
+                      'matplotlib==3.1.1',
+                      'pandas==0.25.1',
+                      'Orange3',  # 3.19.0
+                      'python-constraint',
+                      'CVXcanon==0.1.1',
+                      'feather-format',
+                      'xxhash',
+                      'qcqp==0.8.3',
+                      'cvxpy==0.4.11',
+                      'scipy==1.2.3'],
+    data_files=datafiles
 )

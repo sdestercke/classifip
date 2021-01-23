@@ -1,9 +1,11 @@
 import random, numpy as np, pandas as pd, sys
 from numpy import linalg
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, \
+    QuadraticDiscriminantAnalysis
 
 
 class BaseEstimator:
-    def __init__(self, store_covariance=False):
+    def __init__(self):
         self._data, self._N, self._p = None, 0, 0
         self._clazz, self._nb_clazz = None, None
         self._means, self._prior = dict(), dict()
@@ -39,6 +41,41 @@ class BaseEstimator:
             return predict_clazz
 
 
+class LinearDiscriminantPrecise(BaseEstimator):
+
+    def __init__(self, **kwargs):
+        super(LinearDiscriminantPrecise, self).__init__()
+        self.__wrapped_model = LinearDiscriminantAnalysis(**kwargs)
+
+    def learn(self, X, y):
+        self.__wrapped_model.fit(X, y)
+
+    def evaluate(self, queries, with_posterior=False):
+        predict_clazz = self.__wrapped_model.predict(queries)
+        probabilities_query = self.__wrapped_model.predict_proba(queries)
+        if with_posterior:
+            return predict_clazz, probabilities_query
+        else:
+            return predict_clazz
+
+
+class QuadraticDiscriminantPrecise(BaseEstimator):
+    def __init__(self, **kwargs):
+        super(QuadraticDiscriminantPrecise, self).__init__()
+        self.__wrapped_model = QuadraticDiscriminantAnalysis(**kwargs)
+
+    def learn(self, X, y):
+        self.__wrapped_model.fit(X, y)
+
+    def evaluate(self, queries, with_posterior=False):
+        predict_clazz = self.__wrapped_model.predict(queries)
+        probabilities_query = self.__wrapped_model.predict_proba(queries)
+        if with_posterior:
+            return predict_clazz, probabilities_query
+        else:
+            return predict_clazz
+
+
 class EuclideanDiscriminantPrecise(BaseEstimator):
 
     def learn(self, X, y):
@@ -52,7 +89,7 @@ class EuclideanDiscriminantPrecise(BaseEstimator):
 
 class NaiveDiscriminantPrecise(BaseEstimator):
     """
-        Similar to classifier: sklearn.naive_bayes.GaussianNB (verify)
+        Similar to classifier: sklearn.naive_bayes.GaussianNB (verified)
     """
 
     def learn(self, X, y):
@@ -69,3 +106,16 @@ class NaiveDiscriminantPrecise(BaseEstimator):
                 self._icov[clazz] = linalg.pinv(cov_clazz)
                 eig_values, _ = linalg.eig(cov_clazz)
                 self._dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
+
+
+MODEL_TYPES_PRECISE = {'lda': LinearDiscriminantPrecise, 'qda': QuadraticDiscriminantPrecise,
+                       'eda': EuclideanDiscriminantPrecise, 'nda': NaiveDiscriminantPrecise}
+
+
+def __factory_gda_precise(model_type, **kwargs):
+    try:
+        if model_type == 'lda':
+            kwargs["solver"] = "svd"
+        return MODEL_TYPES_PRECISE[model_type.lower()](**kwargs)
+    except Exception as _:
+        raise Exception("Selected model does not exist")

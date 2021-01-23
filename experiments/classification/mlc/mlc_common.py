@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from itertools import product
 from classifip.dataset import arff
 
 CONST_PARTIAL_VALUE = -1
@@ -41,7 +42,7 @@ def expansion_partial_to_full_set_binary_vector(partial_binary_vector):
     return set_binary_vector
 
 
-def transform_semi_partial_vector(full_binary_vector):
+def transform_semi_partial_vector(full_binary_vector, nb_labels):
     """
     Semi-partial binary vector is like:
             Y = [(0, 1, 1, 0, 0, 0), (0, 1, 1, 0, 1, 0), (0, 1, 1, 1, 1, 0)]
@@ -51,7 +52,6 @@ def transform_semi_partial_vector(full_binary_vector):
     :return:
     """
     _full_binary_vector = np.array(full_binary_vector)
-    _, nb_labels = full_binary_vector.shape
     result = np.zeros(nb_labels, dtype=np.int)
     for idx_label in range(nb_labels):
         label_value = np.unique(_full_binary_vector[:, idx_label])
