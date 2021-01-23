@@ -70,7 +70,13 @@ class KNN_NCC_BR(MLCNCC):
         self.skeleton_learn_knn.data = list()
         self.skeleton_learn_knn.define_attribute(name="class", atype="nominal", data=['0', '1'])
 
-    def evaluate(self, test_dataset, ncc_epsilon=0.001, ncc_s_param=2.0, k=1, type_knn=2, precision=16):
+    def evaluate(self, test_dataset,
+                 ncc_epsilon=0.001,
+                 ncc_s_param=2.0,
+                 k=1,
+                 type_knn=2,
+                 precision=16,
+                 laplace_smoothing=False):
         """
         :param test_dataset:
         :param k: k*size_avg_radius pairwise all instances to get neighbors (ball)
@@ -79,7 +85,9 @@ class KNN_NCC_BR(MLCNCC):
         :param type_knn: (1) k nearest neighbors,
                          (2) the nearest neighbors relative to ball Euclidean distance,
                              where the k*radius is equals to average on all instances
-        :param precision:
+        :param precision: number decimals to round
+        :param laplace_smoothing: laplace smoothing when there are not enough neighbors
+                in the neighbourhood.
 
         ...note::
             if row_instance[.] == '-1', thus it is a missing label,
@@ -125,11 +133,13 @@ class KNN_NCC_BR(MLCNCC):
                     model_ncc.learn(data_learn_knn)
                     ans_credal = model_ncc.evaluate(test_dataset=[disc_instance],
                                                     ncc_s_param=ncc_s_param,
-                                                    precision=precision)[0]
+                                                    precision=precision,
+                                                    laplace_smoothing=laplace_smoothing)[0]
                     ans_precise = model_ncc.evaluate(test_dataset=[disc_instance],
                                                      ncc_s_param=0,
                                                      ncc_epsilon=0,
-                                                     precision=precision)[0]
+                                                     precision=precision,
+                                                     laplace_smoothing=laplace_smoothing)[0]
                     resulting_score_ncc[label_index, :] = list(reversed(ans_credal.lproba[:, 1]))
                     resulting_score_prec[label_index, :] = ans_precise.proba[1]
             ans_credal = Scores(resulting_score_ncc, precision=precision)

@@ -12,7 +12,7 @@ import classifip
 # We start by creating an instance of the base classifier we want to use
 print("Example of NestedDichotomy learning - data set LEV \n")
 base = classifip.models.ncc.NCC()
-dataArff= classifip.dataset.arff.ArffFile()
+dataArff = classifip.dataset.arff.ArffFile()
 
 # Training / Evaluating data set
 dataArff.load('LEV_eqfreq_dis.arff')
@@ -27,8 +27,7 @@ classifier.build()
 classifier.learn(dataArff)
 
 # Evaluation : we can set the parameters native to the base classifier 
-test = classifier.evaluate([dataArff.data[2]], ncc_epsilon=0.001, ncc_s_param=2,maxi=False)
-
+test = classifier.evaluate([dataArff.data[2]], ncc_epsilon=0.001, ncc_s_param=2, maxi=False)
 
 # The output is a list of BinaryTree, we can print each instance :
 print("Binary tree of the first test instance \n")
@@ -42,5 +41,3 @@ print("Prediction using maximality \n")
 print(test[0].getmaximaldecision())
 
 classifier.printTree()
-
-

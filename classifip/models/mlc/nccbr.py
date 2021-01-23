@@ -15,6 +15,15 @@ class NCCBR(MLCNCC):
     def learn(self,
               learn_data_set,
               nb_labels):
+        """
+
+        :param learn_data_set:
+        :param nb_labels:
+        :return:
+
+        TODO:
+            Using the ncc version improved with laplace smoothing
+        """
         self.__init__()
 
         self.nb_labels = nb_labels
@@ -73,6 +82,10 @@ class NCCBR(MLCNCC):
             * zero float division can happen if too many input features
             * fixed: To avoid probability zero, we use the Laplace Smoothing
                 https://en.wikipedia.org/wiki/Additive_smoothing
+
+        .. TODO:
+
+            * Integrating the NCC classifier already implemented !!
             
         """
         answers = []
