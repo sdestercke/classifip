@@ -56,6 +56,8 @@ def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_ch
                 skeptical_inference, precise_inference, prec_prob_marginal = \
                     model_skeptic.evaluate(**task['kwargs'])[0]
 
+                # probabilities Yi =1
+                prec_prob_marginal = np.array(prec_prob_marginal)
                 # procedure to reject option
                 epsilon_rejects = task["epsilon_rejects"]
                 precise_rejects = dict()
@@ -63,7 +65,7 @@ def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_ch
                     for epsilon_reject in epsilon_rejects:
                         precise_reject = -2 * np.ones(nb_labels, dtype=int)
                         all_idx = set(range(nb_labels))
-                        probabilities_yi_eq_1 = np.array(prec_prob_marginal.copy())
+                        probabilities_yi_eq_1 = prec_prob_marginal[:, 1].copy()
                         ones = set(np.where(probabilities_yi_eq_1 >= 0.5 + epsilon_reject)[0])
                         zeros = set(np.where(probabilities_yi_eq_1 <= 0.5 - epsilon_reject)[0])
                         stars = all_idx - ones - zeros

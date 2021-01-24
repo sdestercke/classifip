@@ -34,7 +34,8 @@ class BaseEstimator:
                 self._prior[clazz] for clazz in self._clazz
             ])
             predict_clazz.append(self._clazz[pbs.argmax()])
-            probabilities_query.append({clazz: pbs[i] for i, clazz in enumerate(self._clazz)})
+            sum_pbs = np.sum(pbs)
+            probabilities_query.append([pbs[i] / sum_pbs for i in range(len(self._clazz))])
         if with_posterior:
             return predict_clazz, probabilities_query
         else:
@@ -96,7 +97,7 @@ class NaiveDiscriminantPrecise(BaseEstimator):
         super(NaiveDiscriminantPrecise, self).learn(X, y)
         # cov_total = np.diag(np.var(self._data.iloc[:, :-1])) # Naive with variance global
         for clazz in self._clazz:
-            self._means[clazz] = self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
+            self._means[clazz] = self._data[self._data.y == clazz].iloc[:, :-1].mean().values
             self._prior[clazz] = len(self._data[self._data.y == clazz]) / self._N
             cov_clazz = np.diag(np.var(self._data[self._data.y == clazz].iloc[:, :-1]))
             if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
@@ -112,7 +113,7 @@ MODEL_TYPES_PRECISE = {'lda': LinearDiscriminantPrecise, 'qda': QuadraticDiscrim
                        'eda': EuclideanDiscriminantPrecise, 'nda': NaiveDiscriminantPrecise}
 
 
-def __factory_gda_precise(model_type, **kwargs):
+def _factory_gda_precise(model_type, **kwargs):
     try:
         if model_type == 'lda':
             kwargs["solver"] = "svd"

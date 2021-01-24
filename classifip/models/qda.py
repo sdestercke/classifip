@@ -656,7 +656,7 @@ __MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant,
                  'iqda': QuadraticDiscriminant, 'inda': NaiveDiscriminant}
 
 
-def __factory_igda_model(model_type, **kwargs):
+def _factory_igda_model(model_type, **kwargs):
     try:
         return __MODEL_TYPES[model_type.lower()](**kwargs)
     except Exception as _:

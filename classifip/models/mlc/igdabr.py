@@ -2,10 +2,11 @@ from classifip.dataset.arff import ArffFile
 from classifip.representations.voting import Scores
 from classifip.models.mlc.mlcncc import MLCNCC
 from classifip.models.qda import NaiveDiscriminant, EuclideanDiscriminant, \
-    LinearDiscriminant, QuadraticDiscriminant, __factory_igda_model
+    LinearDiscriminant, QuadraticDiscriminant, _factory_igda_model
 from classifip.models.qda_precise import NaiveDiscriminantPrecise, \
     EuclideanDiscriminantPrecise, LinearDiscriminantPrecise, \
-    QuadraticDiscriminantPrecise, __factory_gda_precise
+    QuadraticDiscriminantPrecise, _factory_gda_precise
+from classifip.utils import create_logger
 import numpy as np
 from math import exp
 
@@ -32,23 +33,22 @@ class IGDA_BR(MLCNCC):
         :param DEBUG:
         """
         super(IGDA_BR, self).__init__(DEBUG)
-        self.nda_models = None
+        self.gda_models = None
         self.nb_feature = None
         self.__solver_matlab = solver_matlab
         self.__igda_name = "i" + gda_method
         self.__gda_name = gda_method
         self._logger = create_logger("IGDA_BR", DEBUG)
         if self.__solver_matlab:
-            self._nda_imprecise = __factory_igda_model(model_type=self.__igda_name,
-                                                       solver_matlab=True,
-                                                       add_path_matlab=add_path_matlab,
-                                                       DEBUG=DEBUG)
+            self._global_gda_imprecise = _factory_igda_model(model_type=self.__igda_name,
+                                                             solver_matlab=True,
+                                                             add_path_matlab=add_path_matlab,
+                                                             DEBUG=DEBUG)
 
     def learn(self,
               learn_data_set,
               nb_labels,
               ell_imprecision=0.5):
-        self.__init__()
 
         self.nb_labels = nb_labels
         self.training_size = len(learn_data_set.data)
@@ -56,7 +56,7 @@ class IGDA_BR(MLCNCC):
         self.feature_names = learn_data_set.attributes[:-self.nb_labels]
         self.nb_feature = len(self.feature_names)
         # create the naive discriminant models
-        self.nda_models = dict()
+        self.gda_models = dict()
         _np_data = np.array(learn_data_set.data)
         for label_value in self.label_names:
             label_index = learn_data_set.attributes.index(label_value)
@@ -69,20 +69,20 @@ class IGDA_BR(MLCNCC):
             y_learning = np.array(y_learning)
 
             if not self.__solver_matlab:
-                nda_imprecise = __factory_igda_model(model_type=self.__igda_name,
-                                                     solver_matlab=False,
-                                                     add_path_matlab=None,
-                                                     DEBUG=self.DEBUG)
-                nda_imprecise.learn(X=X_learning, y=y_learning, ell=ell_imprecision)
+                gda_imprecise = _factory_igda_model(model_type=self.__igda_name,
+                                                    solver_matlab=False,
+                                                    add_path_matlab=None,
+                                                    DEBUG=self.DEBUG)
+                gda_imprecise.learn(X=X_learning, y=y_learning, ell=ell_imprecision)
             else:
-                nda_imprecise = dict({'X': X_learning,
+                gda_imprecise = dict({'X': X_learning,
                                       'y': y_learning,
                                       'ell': ell_imprecision})
-            nda_precise = __factory_model_precise(model_type=self.__gda_name)
-            nda_precise.learn(X=X_learning, y=y_learning)
-            self.nda_models[label_value] = dict({
-                "imprecise": nda_imprecise,
-                "precise": nda_precise
+            gda_precise = _factory_gda_precise(model_type=self.__gda_name)
+            gda_precise.learn(X=X_learning, y=y_learning)
+            self.gda_models[label_value] = dict({
+                "imprecise": gda_imprecise,
+                "precise": gda_precise
             })
 
     def evaluate(self, test_dataset, **kwargs):
@@ -99,13 +99,13 @@ class IGDA_BR(MLCNCC):
             precise = [None] * self.nb_labels
             precise_proba = [None] * self.nb_labels
             for i, label_value in enumerate(self.label_names):
-                models = self.nda_models[label_value]
+                models = self.gda_models[label_value]
                 # imprecise classifier
                 if self.__solver_matlab:
-                    self._nda_imprecise.learn(X=models["imprecise"]["X"],
-                                              y=models["imprecise"]["y"],
-                                              ell=models["imprecise"]["ell"])
-                    i_classifier = self._nda_imprecise
+                    self._global_gda_imprecise.learn(X=models["imprecise"]["X"],
+                                                     y=models["imprecise"]["y"],
+                                                     ell=models["imprecise"]["ell"])
+                    i_classifier = self._global_gda_imprecise
                 else:
                     i_classifier = models["imprecise"]
 
@@ -117,34 +117,36 @@ class IGDA_BR(MLCNCC):
                 evaluate, probabilities = models["precise"].evaluate(queries=[instance],
                                                                      with_posterior=True)
                 precise[i] = int(evaluate[0])
-                precise_proba[i] = probabilities
+                precise_proba[i] = probabilities[0]
 
                 # Print to verify in precise probability is in credal set
                 if self.DEBUG:
-                    __print_probability_intervals(i_classifier)
+                    self.__print_probability_intervals(label_value, i_classifier, precise_proba[i])
 
             answers.append((skeptic, precise, precise_proba))
         return answers
 
-    def __print_probability_intervals(self, i_classifier):
+    def __print_probability_intervals(self, label, i_classifier, probabilities):
         bounds_X_cond_Y = i_classifier.get_bound_cond_probability()
-        lower_cond_0 = bounds_X_cond_Y['0']['inf'][0]
         upper_cond_0 = bounds_X_cond_Y['0']['sup'][0]
         upper_cond_1 = bounds_X_cond_Y['1']['sup'][0]
-        lower_cond_1 = None
+        lower_cond_1, lower_cond_0 = None, None
         if 'inf' in bounds_X_cond_Y['1']:
             lower_cond_1 = bounds_X_cond_Y['1']['inf'][0]
+        if 'inf' in bounds_X_cond_Y['0']:
+            lower_cond_0 = bounds_X_cond_Y['0']['inf'][0]
 
         self._logger.debug("Conditional probability of %s:0 "
                            "is [%s, %s] and  %s:1 is [%s, %s]",
-                           label_value, lower_cond_0, upper_cond_0,
-                           label_value, lower_cond_1, upper_cond_1)
+                           label, lower_cond_0, upper_cond_0,
+                           label, lower_cond_1, upper_cond_1)
 
         marginal_Y = i_classifier.get_marginal_probabilities()
-        lower_0 = lower_cond_0 * marginal_Y['0'] / (
-                lower_cond_0 * marginal_Y['0'] + upper_cond_1 * marginal_Y['1'])
-        upper_1 = upper_cond_1 * marginal_Y['1'] / (
-                upper_cond_1 * marginal_Y['1'] + lower_cond_0 * marginal_Y['0'])
+        upper_1, lower_0 = None, None
+        if lower_cond_0 is not None:
+            lower_0 = lower_cond_0 * marginal_Y['0'] / (
+                    lower_cond_0 * marginal_Y['0'] + upper_cond_1 * marginal_Y['1'])
+            upper_1 = 1 - lower_0
         upper_0, lower_1 = None, None
         if lower_cond_1 is not None:
             lower_1 = lower_cond_1 * marginal_Y['1'] / (
@@ -152,8 +154,8 @@ class IGDA_BR(MLCNCC):
             upper_0 = 1 - lower_1
 
         self._logger.debug("Interval probability of %s:0 is [%s, %s] ",
-                           label_value, lower_0, upper_0)
+                           label, lower_0, upper_0)
         self._logger.debug("Interval probability of %s:1 is [%s, %s] ",
-                           label_value, lower_1, upper_1)
+                           label, lower_1, upper_1)
         self._logger.debug("Precise probability of %s is [%s, %s] ",
-                           label_value, probabilities[0], probabilities[1])
+                           label, probabilities[0], probabilities[1])
