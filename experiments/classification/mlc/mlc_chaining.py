@@ -52,7 +52,8 @@ def computing_training_testing_step(learn_data_set,
                         'ncc_s_param': ncc_imprecise,
                         'type_strategy': strategy_chaining,
                         'has_set_probabilities': True,
-                        'is_dynamic_context': safety_chaining},
+                        'is_dynamic_context': safety_chaining,
+                        'with_imprecise_marginal': False},
              'y_test': test[-nb_labels:]})
     manager.poisonPillWorkers()
     manager.joinTraining()  # wait all process for computing results
@@ -204,8 +205,8 @@ def experiments_chaining_imprecise(in_path=None,
 
 
 # np.set_printoptions(suppress=True)
-in_path = ".../emotions.arff"
-out_path = ".../results_iris.csv"
+in_path = ".../datasets_mlc/emotions.arff"
+out_path = ".../results_emotions.csv"
 experiments_chaining_imprecise(in_path=in_path,
                                out_path=out_path,
                                scaling=False,

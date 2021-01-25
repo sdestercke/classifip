@@ -19,7 +19,7 @@ new_instances = [row[0:len(row) - nb_labels] for row in dataArff.data[10:11]]
 
 # We start by creating a model
 model = MLChaining()
-model.learn(dataArff, nb_labels)  # , seed_random_label=134)
+model.learn(dataArff, nb_labels)
 
 probabilities, chain = model.evaluate(new_instances, ncc_epsilon=0.001, ncc_s_param=1)
 
