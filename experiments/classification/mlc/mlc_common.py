@@ -1,18 +1,10 @@
 import math
 import numpy as np
 from itertools import product
+from operator import itemgetter, add
 from classifip.dataset import arff
 
 CONST_PARTIAL_VALUE = -1
-
-
-def init_scores(param_imprecision, ich_skep, cph_skep, acc_prec, ich_reject, cph_reject, epsilon_rejects):
-    ich_skep[param_imprecision], cph_skep[param_imprecision], acc_prec[param_imprecision] = 0, 0, 0
-    if epsilon_rejects is not None:
-        ich_reject[param_imprecision] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
-        cph_reject[param_imprecision] = dict.fromkeys(np.array(epsilon_rejects, dtype='<U'), 0)
-    else:
-        ich_reject[param_imprecision], cph_reject[param_imprecision] = 0, 0
 
 
 def init_dataset(in_path, remove_features, scaling):
@@ -96,6 +88,12 @@ def get_nb_labels_class(dataArff, type_class='nominal'):
 
 
 def incorrectness_completeness_measure(y_true, y_prediction):
+    """
+        Hamming loss when y_prediction is not partial or cautious
+    :param y_true:
+    :param y_prediction:
+    :return:
+    """
     Q, m, hamming = [], len(y_true), 0
     for i, y in enumerate(y_true):
         if y_prediction[i] != CONST_PARTIAL_VALUE:
@@ -139,3 +137,107 @@ def compute_jaccard_similarity_score(x, y):
     intersection_cardinality = len(set(x).intersection(set(y)))
     union_cardinality = len(set(x).union(set(y)))
     return intersection_cardinality / float(union_cardinality)
+
+
+def reject_partial_hamming_measure(epsilon_rejects, y_eq_1_precise_probs, nb_labels):
+    precise_rejects = dict()
+    if epsilon_rejects is not None and len(epsilon_rejects) > 0:
+        for epsilon_reject in epsilon_rejects:
+            precise_reject = -2 * np.ones(nb_labels, dtype=int)
+            all_idx = set(range(nb_labels))
+            probabilities_yi_eq_1 = y_eq_1_precise_probs.copy()
+            ones = set(np.where(probabilities_yi_eq_1 >= 0.5 + epsilon_reject)[0])
+            zeros = set(np.where(probabilities_yi_eq_1 <= 0.5 - epsilon_reject)[0])
+            stars = all_idx - ones - zeros
+            precise_reject[list(stars)] = CONST_PARTIAL_VALUE
+            precise_reject[list(zeros)] = 0
+            precise_reject[list(ones)] = 1
+            precise_rejects[str(epsilon_reject)] = precise_reject
+    return precise_rejects
+
+
+def abstention_partial_hamming_measure(y_true, y_eq_1_probabilities, c_spe, c_par):
+    """
+    :param y_true:  ground truth observed
+    :param y_eq_1_probabilities: marginal probability P(Y_i = 1)
+    :param c_par:
+    :param c_spe:
+    :return:
+    """
+
+    nb_labels = len(y_true)
+
+    def SEP(probabilities, c):
+        y_sep_prediction = list()
+        for idx_label in range(nb_labels):
+            if 1 - probabilities[idx_label] == \
+                    min(probabilities[idx_label], 1 - probabilities[idx_label], c):
+                y_sep_prediction.append(1)
+            elif probabilities[idx_label] == \
+                    min(probabilities[idx_label], 1 - probabilities[idx_label], c):
+                y_sep_prediction.append(0)
+            else:
+                y_sep_prediction.append(CONST_PARTIAL_VALUE)
+        return y_sep_prediction
+
+    def SEP_score(y_pred_abstention, c):
+        nb_abstentions = 0
+        sep_score = 0
+        for idx_label in range(nb_labels):
+            if y_pred_abstention[idx_label] == CONST_PARTIAL_VALUE:
+                nb_abstentions += 1
+            elif y_pred_abstention[idx_label] != y_true[idx_label]:
+                sep_score += 1
+        pct_nb_abstentions = nb_abstentions / nb_labels  # percentage of number of abstentions
+        sep_score = (nb_abstentions * c) / nb_labels + sep_score / nb_labels
+        return sep_score, pct_nb_abstentions
+
+    def PAR(probabilities, c):
+        score = [min(probabilities[i], 1 - probabilities[i]) for i in range(nb_labels)]
+        y_par_prediction = [CONST_PARTIAL_VALUE] * nb_labels
+        indices, score_sorted = zip(*sorted(enumerate(score), key=itemgetter(1)))
+        e_mins = [c * 0.5]
+        tempVal = 0
+        for idx_label in range(nb_labels):
+            tempVal += score_sorted[idx_label]
+            _e_add = (c * (nb_labels - idx_label - 1)) / (2 * nb_labels - idx_label - 1)
+            e_mins.append(tempVal / nb_labels + _e_add)
+        k_opt = e_mins.index(min(e_mins))
+        for lab in range(k_opt):
+            if score[indices[lab]] == probabilities[indices[lab]]:
+                y_par_prediction[indices[lab]] = 0
+            else:
+                y_par_prediction[indices[lab]] = 1
+        return y_par_prediction
+
+    def PAR_score(y_pred_abstention, c):
+        nb_abstentions = 0
+        par_score = 0
+        for idx_label in range(nb_labels):
+            if y_pred_abstention[idx_label] == CONST_PARTIAL_VALUE:
+                nb_abstentions += 1
+            elif y_pred_abstention[idx_label] != y_true[idx_label]:
+                par_score += 1
+        pct_nb_abstentions = nb_abstentions / nb_labels  # percentage of number of abstentions
+        par_score = (nb_abstentions * c) / (nb_labels + nb_abstentions) + par_score / nb_labels
+        return par_score, pct_nb_abstentions
+
+    y_sep_prediction = dict()
+    y_sep_score = dict()
+    for c in c_spe:
+        y_pred_abstention = SEP(y_eq_1_probabilities, c)
+        y_sep_prediction[str(c)] = y_pred_abstention
+        y_sep_score[str(c)] = SEP_score(y_pred_abstention, c)
+
+    y_par_prediction = dict()
+    y_par_score = dict()
+    for c in c_par:
+        y_pred_abstention = PAR(y_eq_1_probabilities, c)
+        y_par_prediction[str(c)] = y_pred_abstention
+        y_par_score[str(c)] = PAR_score(y_pred_abstention, c)
+
+    return y_sep_prediction, y_sep_score, y_par_prediction, y_par_score
+
+
+
+
