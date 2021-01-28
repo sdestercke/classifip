@@ -10,6 +10,7 @@ import sys, os, random, csv, numpy as np
 sys.path.append("..")
 np.set_printoptions(edgeitems=30, linewidth=100000, formatter=dict(float=lambda x: "%.3g" % x))
 from mlc_manager import ManagerWorkers, __create_dynamic_class
+from mlc_common import init_dataset
 from mlc_metrics_perf import MetricsPerformances
 
 
