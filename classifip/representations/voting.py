@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.sparse import dok_matrix
 
+
 class Scores(object):
     """Class containing (imprecise) scores, usually obtained by a voting procedure
 
@@ -51,29 +52,29 @@ class Scores(object):
         print("Not an IP representation, no proper properties")
         return 1
 
-    def getlowerprobability(self,subset):
+    def getlowerprobability(self, subset):
         """coherence with generic representation class
         """
         print("Not an IP representaiton, cannot compute lower prob.")
         return 0
 
-    def getupperprobability(self,subset):
+    def getupperprobability(self, subset):
         """coherence with generic representation class
         """
         print("Not an IP representaiton, cannot compute upper prob.")
         return 1
-        
+
     def isreachable(self):
         """coherence with generic representation class
-        """        
+        """
         print("Not an IP representaiton, no reachability property")
         return 1
 
     def setreachableprobability(self):
         """coherence with generic representation class
-        """   
-        print("Not an IP representaiton, cannot make reachable")        
-            
+        """
+        print("Not an IP representaiton, cannot make reachable")
+
     def nc_maximin_decision(self):
         """Return the maximin classification decision (nc: no costs)
         
@@ -81,8 +82,8 @@ class Scores(object):
         :rtype: integer
         
         """
-        return self.scores[:,0].argmax()
-        
+        return self.scores[:, 0].argmax()
+
     def nc_maximax_decision(self):
         """Return the maximax classification decision (nc: no costs)
         
@@ -90,9 +91,9 @@ class Scores(object):
         :rtype: integer
         
         """
-        return self.scores[:,1].argmax()
-        
-    def nc_hurwicz_decision(self,alpha):
+        return self.scores[:, 1].argmax()
+
+    def nc_hurwicz_decision(self, alpha):
         """Return the hurwicz classification decision (nc: no costs)
         
         :param alpha: the optimism index :math:`\\alpha` between 1 (optimistic)
@@ -101,15 +102,15 @@ class Scores(object):
         :return: the index of the hurwicz class
         :rtype: integer
         """
-        hurwicz=alpha*self.scores[:,1]+(1-alpha)*self.scores[:,0]
+        hurwicz = alpha * self.scores[:, 1] + (1 - alpha) * self.scores[:, 0]
         return hurwicz.argmax()
-        
+
     def nc_maximal_decision(self):
         """coherence with generic representation class
-        """  
+        """
         print("Not an IP representaiton, cannot compute maximality")
         return 1
-    
+
     def nc_intervaldom_decision(self):
         """Return the classification decisions that are optimal under interval dominance (nc: no costs)
         
@@ -118,13 +119,13 @@ class Scores(object):
         :rtype: :class:`~numpy.array`
         
         """
-        intervaldom_classe=np.ones(self.nbDecision)
-        maxlower=self.scores[:,0].max()
+        intervaldom_classe = np.ones(self.nbDecision)
+        maxlower = self.scores[:, 0].max()
         for i in range(self.nbDecision):
-                if self.scores[i,1] < maxlower:
-                        intervaldom_classe[i]=0
+            if self.scores[i, 1] < maxlower:
+                intervaldom_classe[i] = 0
         return intervaldom_classe
-    
+
     def rank_intervaldom(self):
         """Return a sparse matrix encoding partial ordering obtained by Int. dominance
 
@@ -133,15 +134,15 @@ class Scores(object):
         :rtype: :class:`~scipy.sparse.dok_matrix`
                 
         """
-        rank=dok_matrix((self.nbDecision,self.nbDecision))
+        rank = dok_matrix((self.nbDecision, self.nbDecision))
         for i in range(self.nbDecision):
             for j in range(self.nbDecision):
-                if self.scores[j,1] < self.scores[i,0]:
-                    rank[i,j] = 1
-                elif self.scores[i,1] < self.scores[j,0]:
-                    rank[j,i] = 1
+                if self.scores[j, 1] < self.scores[i, 0]:
+                    rank[i, j] = 1
+                elif self.scores[i, 1] < self.scores[j, 0]:
+                    rank[j, i] = 1
         return rank
-    
+
     def rank_maximin(self):
         """Return a sparse matrix encoding ordering obtained by maximin
         
@@ -150,15 +151,15 @@ class Scores(object):
         :rtype: :class:`~scipy.sparse.dok_matrix`
                
         """
-        rank=dok_matrix((self.nbDecision,self.nbDecision))
+        rank = dok_matrix((self.nbDecision, self.nbDecision))
         for i in range(self.nbDecision):
             for j in range(self.nbDecision):
-                if self.scores[j,0] < self.scores[i,0]:
-                    rank[i,j] = 1
-                elif self.scores[i,0] < self.scores[j,0]:
-                    rank[j,i] = 1
+                if self.scores[j, 0] < self.scores[i, 0]:
+                    rank[i, j] = 1
+                elif self.scores[i, 0] < self.scores[j, 0]:
+                    rank[j, i] = 1
         return rank
-    
+
     def rank_maximax(self):
         """Return a sparse matrix encoding ordering obtained by maximax
         
@@ -167,16 +168,16 @@ class Scores(object):
         :rtype: :class:`~scipy.sparse.dok_matrix`
         
         """
-        rank=dok_matrix((self.nbDecision,self.nbDecision))
+        rank = dok_matrix((self.nbDecision, self.nbDecision))
         for i in range(self.nbDecision):
             for j in range(self.nbDecision):
-                if self.scores[j,1] < self.scores[i,1]:
-                    rank[i,j] = 1
-                elif self.scores[i,1] < self.scores[j,1]:
-                    rank[j,i] = 1
+                if self.scores[j, 1] < self.scores[i, 1]:
+                    rank[i, j] = 1
+                elif self.scores[i, 1] < self.scores[j, 1]:
+                    rank[j, i] = 1
         return rank
-    
-    def rank_hurwicz(self,alpha):
+
+    def rank_hurwicz(self, alpha):
         """Return a sparse matrix encoding ordering obtained by hurwicz crit.
 
         :param alpha: the optimism index :math:`\\alpha` between 1 (optimistic)
@@ -187,16 +188,16 @@ class Scores(object):
         :rtype: :class:`~scipy.sparse.dok_matrix`
         
         """
-        rank=dok_matrix((self.nbDecision,self.nbDecision))
-        hurwicz=alpha*self.scores[:,1]+(1-alpha)*self.scores[:,0]
+        rank = dok_matrix((self.nbDecision, self.nbDecision))
+        hurwicz = alpha * self.scores[:, 1] + (1 - alpha) * self.scores[:, 0]
         for i in range(self.nbDecision):
             for j in range(self.nbDecision):
                 if hurwicz[j] < hurwicz[i]:
-                    rank[i,j] = 1
+                    rank[i, j] = 1
                 elif hurwicz[i] < hurwicz[j]:
-                    rank[j,i] = 1
+                    rank[j, i] = 1
         return rank
-    
+
     def multilab_dom(self):
         """Return an array stating if a label is in the set of labels, is not or
         if it is not known whether it belongs to the set of labels.
@@ -215,9 +216,8 @@ class Scores(object):
             else:
                 multilab_classe[i] = -1
         return multilab_classe
-        
-    
-    def multilab_hurwicz(self,alpha):
+
+    def multilab_hurwicz(self, alpha):
         """Return an array stating if a label is in the set of labels according
         to hurwicz-like criterion with optimistic index :math:`\\alpha`
         
@@ -229,35 +229,32 @@ class Scores(object):
         :rtype: :class:`~numpy.array`
         """
 
-        multilab_classe=np.ones(self.nbDecision)
-        hurwicz=alpha*self.scores[:,1]+(1-alpha)*self.scores[:,0]
+        multilab_classe = np.ones(self.nbDecision)
+        hurwicz = alpha * self.scores[:, 1] + (1 - alpha) * self.scores[:, 0]
         for i in range(self.nbDecision):
-                if hurwicz[i]  > 0.5:
-                    multilab_classe[i]=1
-                else:
-                    multilab_classe[i]=0
+            if hurwicz[i] > 0.5:
+                multilab_classe[i] = 1
+            else:
+                multilab_classe[i] = 0
         return multilab_classe
-                    
-        
 
     def __str__(self):
         """Print the current bounds 
-        """  
-        str1,str2="upper bound |","lower bound |"
-        str3="              "
-        i=0
+        """
+        str1, str2 = "upper bound |", "lower bound |"
+        str3 = "              "
+        i = 0
         for interval in range(self.nbDecision):
-            str3+="   y%d " %i
-            str1+=" %.3f" % self.scores[interval,1]
-            str2+=" %.3f" % self.scores[interval,0]
-            i+=1
-        str3+="\n"
-        str3+="           "
-        str3+="--------------------"
-        str3+="\n"
-        str3+=str1
-        str3+="\n"
-        str3+=str2
-        str3+="\n"
+            str3 += "   y%d " % i
+            str1 += " %.3f" % self.scores[interval, 1]
+            str2 += " %.3f" % self.scores[interval, 0]
+            i += 1
+        str3 += "\n"
+        str3 += "           "
+        str3 += "--------------------"
+        str3 += "\n"
+        str3 += str1
+        str3 += "\n"
+        str3 += str2
+        str3 += "\n"
         return str3
-

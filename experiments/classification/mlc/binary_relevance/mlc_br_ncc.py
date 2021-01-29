@@ -16,7 +16,7 @@ from mlc_metrics_perf import MetricsPerformances
 
 def skeptical_prediction(pid, tasks, queue, results, class_model, class_model_challenger=None):
     try:
-        model_outer = __create_dynamic_class(class_model_challenger)
+        model_outer = __create_dynamic_class(class_model_challenger, has_imprecise_marginal=True)
         model_exact = __create_dynamic_class(class_model)
         while True:
             training = queue.get()
@@ -240,6 +240,7 @@ def experiments_binr_vs_imprecise(in_path=None,
                                  metrics.score_hamming[disc][ks_ncc],
                                  metrics.ich_iid_skeptic[disc][ks_ncc])
                 _partial_saving = metrics.generate_row_line(ks_ncc, time, nb_kFold, sub_level=disc)
+                _partial_saving.insert(0, str(nb_disc))
                 writer.writerow(_partial_saving)
                 file_csv.flush()
                 logger.debug("Partial-ncc_step (disc, s, time, ich_skep, cph_skep, ich_out, "
@@ -256,8 +257,8 @@ def experiments_binr_vs_imprecise(in_path=None,
                  metrics.ich_reject, metrics.cph_reject)
 
 
-in_path = "/Users/salmuz/Downloads/datasets_mlc/emotions.arff"
-out_path = "/Users/salmuz/Downloads/results_emotions.csv"
+in_path = ".../datasets_mlc/emotions.arff"
+out_path = ".../results_emotions.csv"
 experiments_binr_vs_imprecise(in_path=in_path,
                               out_path=out_path,
                               nb_process=1,

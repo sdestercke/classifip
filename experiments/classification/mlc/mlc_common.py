@@ -168,6 +168,18 @@ def abstention_partial_hamming_measure(y_true, y_eq_1_probabilities, c_spe, c_pa
     nb_labels = len(y_true)
 
     def SEP(probabilities, c):
+        """
+            The risk minimizer for a penalized linear function (with pi = P(Y_i=0))
+
+            y = arg min \sum_{i:yi=0} pi + \sum_{i:yi=1} 1-pi + \sum_{i:yi=-1} c
+
+            where we should abstain all the index i \in [m] s.t. c < min(pi, 1-pi)
+            and return an optimal d-prediction D(y) = {i| c > min(pi, 1-pi)
+
+        :param probabilities: marginal probabilities of m-labels P(Y_i=1)
+        :param c: it is a constant of a linear function
+        :return:
+        """
         y_sep_prediction = list()
         for idx_label in range(nb_labels):
             if 1 - probabilities[idx_label] == \
@@ -181,27 +193,49 @@ def abstention_partial_hamming_measure(y_true, y_eq_1_probabilities, c_spe, c_pa
         return y_sep_prediction
 
     def SEP_score(y_pred_abstention, c):
+        """
+            Computing the lost cost for a partial prediction:
+                 L(u, û)  = l(u_d, û_d) +  f(A(û))
+                 L(u, û)  = hamming(u_d, û_d) +  c*m
+            so L(u, û)/m is computed here
+        :param y_pred_abstention:
+        :param c:
+        :return:
+        """
         nb_abstentions = 0
-        sep_score = 0
+        sep_hamming_loss = 0
         for idx_label in range(nb_labels):
             if y_pred_abstention[idx_label] == CONST_PARTIAL_VALUE:
                 nb_abstentions += 1
             elif y_pred_abstention[idx_label] != y_true[idx_label]:
-                sep_score += 1
+                sep_hamming_loss += 1
         pct_nb_abstentions = nb_abstentions / nb_labels  # percentage of number of abstentions
-        sep_score = (nb_abstentions * c) / nb_labels + sep_score / nb_labels
-        return sep_score, pct_nb_abstentions
+        sep_hamming_loss = (nb_abstentions * c) / nb_labels + sep_hamming_loss / nb_labels
+        return sep_hamming_loss, pct_nb_abstentions
 
     def PAR(probabilities, c):
+        """
+            The risk minimizer for a penalized concave function (with pi = P(Y_i=0))
+
+            y = arg min \sum_{i:yi=0} pi + \sum_{i:yi=1} 1-pi + \sum_{i:yi=-1} c⋅m(m-i)/(2m-i)
+               1 ≤ i ≤ m
+
+
+        :param probabilities: marginal probabilities of m-labels P(Y_i=1)
+        :param c: it is a constant of a linear function
+        :return:
+        """
         score = [min(probabilities[i], 1 - probabilities[i]) for i in range(nb_labels)]
         y_par_prediction = [CONST_PARTIAL_VALUE] * nb_labels
+        #  sorting descending the minimal probabilities (either P(Y_i=0) or P(Y_i=1))
         indices, score_sorted = zip(*sorted(enumerate(score), key=itemgetter(1)))
-        e_mins = [c * 0.5]
-        tempVal = 0
-        for idx_label in range(nb_labels):
-            tempVal += score_sorted[idx_label]
-            _e_add = (c * (nb_labels - idx_label - 1)) / (2 * nb_labels - idx_label - 1)
-            e_mins.append(tempVal / nb_labels + _e_add)
+        e_mins = [c * 0.5]  # i = 0 then c⋅m(m-i)/(2m-i) = c*m/2
+        cum_risk = 0  # cumulative of  minimization of empirical risk
+        m = nb_labels  # number of labels
+        for idx_label in range(m):
+            cum_risk += score_sorted[idx_label]
+            _f_penalization = (c * m * (m - idx_label - 1)) / (2 * m - idx_label - 1)
+            e_mins.append(cum_risk / m + _f_penalization / m)
         k_opt = e_mins.index(min(e_mins))
         for lab in range(k_opt):
             if score[indices[lab]] == probabilities[indices[lab]]:
@@ -211,16 +245,25 @@ def abstention_partial_hamming_measure(y_true, y_eq_1_probabilities, c_spe, c_pa
         return y_par_prediction
 
     def PAR_score(y_pred_abstention, c):
+        """
+            Computing the lost cost for a partial prediction:
+                 L(u, û)  = l(u_d, û_d) +  f(A(û))
+                 L(u, û)  = hamming(u_d, û_d) +  c*a*m/(m+a)
+            so L(u, û)/m is computed here
+        :param y_pred_abstention:
+        :param c:
+        :return:
+        """
         nb_abstentions = 0
-        par_score = 0
+        par_hamming_loss = 0
         for idx_label in range(nb_labels):
             if y_pred_abstention[idx_label] == CONST_PARTIAL_VALUE:
                 nb_abstentions += 1
             elif y_pred_abstention[idx_label] != y_true[idx_label]:
-                par_score += 1
+                par_hamming_loss += 1
         pct_nb_abstentions = nb_abstentions / nb_labels  # percentage of number of abstentions
-        par_score = (nb_abstentions * c) / (nb_labels + nb_abstentions) + par_score / nb_labels
-        return par_score, pct_nb_abstentions
+        par_hamming_loss = (nb_abstentions * c) / (nb_labels + nb_abstentions) + par_hamming_loss / nb_labels
+        return par_hamming_loss, pct_nb_abstentions
 
     y_sep_prediction = dict()
     y_sep_score = dict()
@@ -237,7 +280,3 @@ def abstention_partial_hamming_measure(y_true, y_eq_1_probabilities, c_spe, c_pa
         y_par_score[str(c)] = PAR_score(y_pred_abstention, c)
 
     return y_sep_prediction, y_sep_score, y_par_prediction, y_par_score
-
-
-
-

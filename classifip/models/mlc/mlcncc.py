@@ -312,7 +312,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
         return p_lower, p_upper
 
     def lower_upper_marginal_Y(self, idx_label_to_infer, value_label_to_infer, ncc_s_param):
-        # @salmuz missing apply Laplace Smoothing when n_label_data=0
+        # @salmuz missing apply Laplace Smoothing when n_label_data=0 and ncc_s_parm = 0
         count_label = self.marginal_props[idx_label_to_infer][value_label_to_infer]
         n_label_data = self.marginal_props[idx_label_to_infer]["all"]
         p_lower = count_label / (n_label_data + ncc_s_param)

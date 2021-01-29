@@ -210,7 +210,6 @@ class MetricsPerformances:
         all_metrics = self.recovery_sub_level(sub_level=None)
         _partial_saving = list()
         if sub_level is not None:
-            _partial_saving.append(str(sub_level))
             all_metrics = self.recovery_sub_level(sub_level, *all_metrics)
 
         (ich_exact_skeptic, cph_exact_skeptic, jacc_exact_skeptic, ich_iid_skeptic,
