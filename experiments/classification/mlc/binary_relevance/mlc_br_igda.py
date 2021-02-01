@@ -1,4 +1,4 @@
-from classifip.evaluation import train_test_split, k_fold_cross_validation
+from classifip.evaluation import k_fold_cross_validation
 from classifip.evaluation.measures import u65, u80
 from classifip.utils import create_logger
 from classifip.dataset import arff

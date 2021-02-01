@@ -23,7 +23,7 @@ def __test_imprecise_model(model, data, features=None, hgrid=0.02,
     y = np.array(data.iloc[:, -1].tolist())
     _, p = X.shape
     if is_imprecise:
-        model.learn(X=X, y=y, min_gamma=0, max_gamma=10)
+        model.learn(X=X, y=y, min_gamma=0.01, max_gamma=1)
         pc.plot2D_decision_boundary(model,
                                     h=hgrid,
                                     cmap_color=cmap_color,
@@ -46,7 +46,7 @@ def output_paper_zone_im_precise(is_imprecise=True,
     data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
     data = data[data['4'] != 'Iris-virginica']
     features = list([0, 1]) if features is None else features
-    model = BinaryILogisticLasso()
+    model = BinaryILogisticLasso(DEBUG=True)
     __test_imprecise_model(model, data,
                            features=features,
                            hgrid=hgrid,

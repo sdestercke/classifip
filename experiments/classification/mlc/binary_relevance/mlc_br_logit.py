@@ -1,4 +1,4 @@
-from classifip.evaluation import train_test_split, k_fold_cross_validation
+from classifip.evaluation import k_fold_cross_validation
 from classifip.utils import create_logger
 from classifip.dataset import arff
 from classifip.models.mlc.mlcncc import MLCNCC
@@ -228,8 +228,7 @@ def experiments_binr_vs_imprecise(in_path=None,
                  metrics.ich_reject, metrics.cph_reject)
 
 
-# in_path = "/Users/salmuz/Downloads/datasets_mlc/emotions.arff"
-in_path = "labels2.arff"
+in_path = "/Users/salmuz/Downloads/datasets_mlc/emotions.arff"
 out_path = "/Users/salmuz/Downloads/results_emotions.csv"
 experiments_binr_vs_imprecise(in_path=in_path,
                               out_path=out_path,

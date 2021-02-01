@@ -69,8 +69,8 @@ class BinaryILogisticLasso(ImpreciseLogistic):
 
     def learn(self, learn_data_set=None,
               X=None, y=None,
-              nb_lasso_models=20,
-              min_gamma=0, max_gamma=1):
+              nb_lasso_models=21,
+              min_gamma=0.01, max_gamma=1):
         super(BinaryILogisticLasso, self).learn(learn_data_set=learn_data_set, X=X, y=y)
         # validation binary classification
         assert len(np.unique(self._y)) == 2, "It is not binary classifier."
@@ -90,17 +90,17 @@ class BinaryILogisticLasso(ImpreciseLogistic):
         beta_ridge_fitted = cvglmnetCoef(cv_ridge_fit, s='lambda_1se')
         # sensibility analyse
         self._lasso_models = [None] * nb_lasso_models
-        # self._lasso_models[0] = cv_ridge_fit.copy()
-        self._gammas = np.linspace(start=0, stop=max_gamma, num=nb_lasso_models)
+        self._lasso_models[0] = cv_ridge_fit.copy()
+        self._gammas = np.linspace(start=0, stop=max_gamma, num=nb_lasso_models - 1)
         for i, gamma in enumerate(self._gammas):
             w_penalty = 1 / abs(beta_ridge_fitted) ** gamma
-            self._lasso_models[i] = cvglmnet(x=self._X,
-                                             y=clazz_numeric,
-                                             family='binomial',
-                                             ptype='class',
-                                             alpha=1.0,
-                                             keep=False,
-                                             penalty_factor=w_penalty)
+            self._lasso_models[i + 1] = cvglmnet(x=self._X,
+                                                 y=clazz_numeric,
+                                                 family='binomial',
+                                                 ptype='class',
+                                                 alpha=1.0,
+                                                 keep=False,
+                                                 penalty_factor=w_penalty)
         self._precise_logit = cv_ridge_fit
 
     def evaluate(self,
