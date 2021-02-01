@@ -27,7 +27,6 @@ class ImpreciseLogistic(metaclass=abc.ABCMeta):
         else:
             raise Exception('Not training data set setting.')
 
-        # Create data set in Panda frame structure
         self._n, self._p = X.shape
         assert self._n == len(y), "Size X and y is not equals."
         y = np.array(y) if type(y) is list else y
@@ -110,6 +109,8 @@ class BinaryILogisticLasso(ImpreciseLogistic):
                                          ptype='class')[0]
                 set_probabilities[t, 1, i] = _probability
                 set_probabilities[t, 0, i] = 1 - _probability
+            self._logger.debug("Set of probabilities of class 0: %s", set_probabilities[t, 0, :])
+            self._logger.debug("Set of probabilities of class 1: %s", set_probabilities[t, 0, :])
             # computing the lower and upper probability
             resulting_int[0, :] = [np.max(set_probabilities[t, 0, :]), np.max(set_probabilities[t, 1, :])]
             resulting_int[1, :] = [np.min(set_probabilities[t, 0, :]), np.min(set_probabilities[t, 1, :])]

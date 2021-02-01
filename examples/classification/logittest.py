@@ -31,6 +31,6 @@ print("\nInterval of probabilities of first instance\n")
 print(test[0])
 # print(model.get_bound_cond_probability())
 
-# # The output is a list of probability intervals, we can print each instance :
+# The output is a list of probability intervals, we can print each instance :
 print("\nPrediction using maximality decision vs ground-truth observed\n")
 print(model.get_maximality_from_credal(test[0]), y[2])

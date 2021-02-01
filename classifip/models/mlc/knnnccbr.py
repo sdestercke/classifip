@@ -145,4 +145,5 @@ class KNN_NCC_BR(MLCNCC):
             ans_credal = Scores(resulting_score_ncc, precision=precision)
             ans_precise = Scores(resulting_score_prec, precision=precision)
             answers.append((ans_credal, ans_precise))
+
         return answers

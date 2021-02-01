@@ -28,8 +28,6 @@ class NCCBR(MLCNCC):
         TODO:
             Using the ncc version improved with laplace smoothing
         """
-        self.__init__()
-
         self.nb_labels = nb_labels
         # Initializing the counts
         self.feature_names = learn_data_set.attributes[:-self.nb_labels]
