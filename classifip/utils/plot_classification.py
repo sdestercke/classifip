@@ -115,17 +115,11 @@ def plot2D_classification(model, query=None, colors=None, markers=None):
     plt.show()
 
 
-def prediction(model, newClazz, clazz_by_index, query, criterion):
-    answer = model.evaluate(query, criterion=criterion)
-    if len(answer) > 1 or len(answer) == 0:
-        iClass = "-".join(str(clazz) for clazz in sorted(answer))
-        return newClazz[iClass]
-    else:
-        return clazz_by_index[answer[0]]
-
-
 def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None, markers=None,
-                             criterion="maximality", savefig=False):
+                             criterion="maximality", savefig=False, fn_prediction=None):
+    if fn_prediction is None:
+        raise Exception("Not implemented prediction function!")
+
     markers = list(['+', '*', 'v', 'o', '-', '.', ',']) if markers is None else markers
     X, y = __check_data_available(model.get_data())
     _clazz = sorted(model.get_clazz())
@@ -144,7 +138,7 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
     print("[DEBUG] How many queries:", len(yy.ravel()))
     for idx, query in enumerate(np.c_[xx.ravel(), yy.ravel()]):
         print("[Query] # current query:", idx)
-        z = np.append(z, prediction(model, newClazz, clazz_by_index, query, criterion))
+        z = np.append(z, fn_prediction(model, newClazz, clazz_by_index, query, criterion))
 
     z = np.array(z)
     z = z.reshape(xx.shape)

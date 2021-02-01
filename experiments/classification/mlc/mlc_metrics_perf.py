@@ -115,7 +115,9 @@ class MetricsPerformances:
         (ich_exact_skeptic, cph_exact_skeptic, jacc_exact_skeptic, ich_iid_skeptic,
          cph_iid_skeptic, score_hamming, ich_spe_partial, cph_spe_partial,
          spe_partial_score, ich_par_partial, cph_par_partial, par_partial_score,
-         ich_reject, cph_reject, jacc_reject) = self.recovery_sub_level(sub_level, *all_metrics)
+         ich_reject, cph_reject, jacc_reject) = \
+            self.recovery_sub_level(sub_level, *all_metrics) if sub_level is not None \
+            else all_metrics
 
         self.init_classical_scores(param_imprecision,
                                    ich_exact_skeptic,
@@ -140,13 +142,16 @@ class MetricsPerformances:
                                     y_eq_1_precise_probs, nb_tests,
                                     param_imprecision, sub_level=None):
         nb_labels = len(y_true)
+        # root-level metrics
         all_metrics = self.recovery_sub_level(sub_level=None)
-        all_metrics = self.recovery_sub_level(sub_level, *all_metrics)
 
+        # sub-level metrics
         (ich_exact_skeptic, cph_exact_skeptic, jacc_exact_skeptic, ich_iid_skeptic,
          cph_iid_skeptic, score_hamming, ich_spe_partial, cph_spe_partial,
          spe_partial_score, ich_par_partial, cph_par_partial, par_partial_score, ich_reject,
-         cph_reject, jacc_reject) = all_metrics
+         cph_reject, jacc_reject) = \
+            self.recovery_sub_level(sub_level, *all_metrics) if sub_level is not None \
+            else all_metrics
 
         # decompose the partial to full prediction
         y_br_skeptical_full_set = expansion_partial_to_full_set_binary_vector(y_br_skeptical)
@@ -179,6 +184,8 @@ class MetricsPerformances:
                                                 self.list_constants_par)
         y_sep_prediction, y_sep_score = rs[0], rs[1]
         y_par_prediction, y_par_score = rs[2], rs[3]
+        print("[PRED-ABSTENTION PARTIAL HAMMING] SPE - PAR", y_sep_prediction, y_par_prediction, flush=True)
+        print("[SCORE-ABSTENTION PARTIAL HAMMING] SPE - PAR", y_sep_score, y_par_score, flush=True)
         for c_spe, c_par in zip(self.list_constants_spe, self.list_constants_par):
             rs = incorrectness_completeness_measure(y_true, y_sep_prediction[str(c_spe)])
             ich_spe_partial[param_imprecision][str(c_spe)] += rs[0] / nb_tests
