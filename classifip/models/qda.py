@@ -540,17 +540,17 @@ class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
         optimal = np.zeros(self._p)
-        x = (-1 * q)  # return true query value
-        inside_hypercube = True
+        cov, _ = self.get_cov_by_clazz(clazz)
+        x = (-1) * (q.T @ cov)  # return true query value
         for i in range(self._p):
-            if inside_hypercube and (x[i] < mean_lower[i] or x[i] > mean_upper[i]):
-                inside_hypercube = False
-            if pow(x[i] - mean_lower[i], 2) < pow(x[i] - mean_upper[i], 2):
+            if mean_lower[i] <= x[i] <= mean_upper[i]:
+                optimal[i] = x[i]
+            elif pow(x[i] - mean_lower[i], 2) < pow(x[i] - mean_upper[i], 2):
                 optimal[i] = mean_lower[i]
             else:
                 optimal[i] = mean_upper[i]
 
-        return x if inside_hypercube else optimal
+        return optimal
 
     def infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
         optimal = np.zeros(self._p)

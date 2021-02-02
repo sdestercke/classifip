@@ -42,5 +42,5 @@ def create_dataset_by_percentage(in_path, out_path, pct_test, nb_samplings):
 
 in_path = "/Users/salmuz/Downloads/datasets_mlc/emotions.arff"
 out_path = "/Users/salmuz/Downloads/"
-for pct in np.arange(0.1, 0.2, 0.1):
-    create_dataset_by_percentage(in_path, out_path, 0.1, 25)
+for pct in np.arange(0.1, 1, 0.1):
+    create_dataset_by_percentage(in_path, out_path, pct, 50)

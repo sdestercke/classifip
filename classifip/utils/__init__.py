@@ -23,7 +23,7 @@ def create_logger(name="default", DEBUG=False):
         #     if isinstance(handler, logging.FileHandler):
         #         root.removeHandler(handler)
         while root.hasHandlers():
-            root.removeHandler(handler)
+            root.removeHandler(root.handlers[0])
         # if len(root.handlers) == 0:
         #     handler = logging.StreamHandler(sys.stdout)
         #     handler.flush = sys.stdout.flush
