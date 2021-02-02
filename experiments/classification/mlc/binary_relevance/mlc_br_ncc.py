@@ -1,11 +1,11 @@
 from classifip.evaluation import k_fold_cross_validation
 from classifip.evaluation.measures import u65, u80
 from classifip.utils import create_logger
-from classifip.dataset import arff
+from classifip.dataset.arff import ArffFile
 from classifip.models.mlc import nccbr
 from classifip.models.mlc import knnnccbr
 from classifip.models.mlc.mlcncc import MLCNCC
-import sys, os, random, csv, numpy as np
+import sys, os, random, csv, numpy as np, copy
 
 sys.path.append("..")
 np.set_printoptions(edgeitems=30, linewidth=100000, formatter=dict(float=lambda x: "%.3g" % x))
@@ -124,6 +124,120 @@ def computing_training_testing_step(learn_data_set,
     manager.restartResults()
 
 
+def cv10fold_br_vs_ibr(splits, s_ncc, disc_time, manager, metrics, logger, nb_labels, do_inference_exact,
+                       missing_pct, noise_label_pct, noise_label_type, noise_label_prob):
+    for idx_fold, (training, testing) in enumerate(splits):
+        logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
+        logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
+        computing_training_testing_step(training,
+                                        testing,
+                                        missing_pct,
+                                        noise_label_pct,
+                                        noise_label_type,
+                                        noise_label_prob,
+                                        nb_labels,
+                                        do_inference_exact,
+                                        ncc_imprecise=s_ncc,
+                                        disc_key_level=disc_time,
+                                        manager=manager,
+                                        metrics=metrics)
+        logger.debug("Partial-fold_step (acc, ich_out) (%s, %s)",
+                     metrics.score_hamming[disc_time][str(s_ncc)],
+                     metrics.ich_iid_skeptic[disc_time][str(s_ncc)])
+
+
+def cv10x10fold_br_vs_ibr(in_path, remove_features, scaling,
+                          logger, nb_kFold, discretization, do_inference_exact,
+                          manager, metrics, writer, seed, file_csv, missing_pct,
+                          noise_label_pct, noise_label_type, noise_label_prob,
+                          min_ncc_s_param, max_ncc_s_param, step_ncc_s_param):
+    data_learning, nb_labels = init_dataset(in_path, remove_features, scaling)
+    data_learning.discretize(discmet="eqfreq", numint=discretization)
+
+    for time in range(nb_kFold):  # 10-10 times cross-validation
+        logger.info("Number interval for discreteness and labels (%1d, %1d)." % (discretization, nb_labels))
+        cv_kfold = k_fold_cross_validation(data_learning, nb_kFold, randomise=True, random_seed=seed[time])
+
+        splits_s = list([])
+        for training, testing in cv_kfold:
+            # making a clone because it send the same address memory
+            splits_s.append((training.make_clone(), testing.make_clone()))
+            logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
+            logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
+
+        disc_time = str(discretization) + "-" + str(time)
+        metrics.init_sub_level(disc_time)
+        for s_ncc in np.arange(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param):
+            str_s_ncc = str(s_ncc)
+            metrics.init_level_imprecision(str_s_ncc, disc_time)
+            cv10fold_br_vs_ibr(splits_s, s_ncc, disc_time, manager, metrics, logger, nb_labels, do_inference_exact,
+                               missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
+
+            _partial_saving = metrics.generate_row_line(str_s_ncc, time, nb_kFold, sub_level=disc_time)
+            _partial_saving.insert(0, str(discretization))
+            writer.writerow(_partial_saving)
+            file_csv.flush()
+            logger.debug("Partial-ncc_step (disc, s, time, ich_skep, cph_skep, ich_out, "
+                         "cph_out, acc, jacc, ich_reject, cph_reject, jacc_reject) (%s, %s, %s, %s)",
+                         disc_time, s_ncc, time, metrics)
+
+
+def re_sampling_with_pct_train(in_path, logger, nb_resampling, discretization, do_inference_exact,
+                               manager, metrics, writer, file_csv, missing_pct,
+                               noise_label_pct, noise_label_type, noise_label_prob,
+                               min_ncc_s_param, max_ncc_s_param, step_ncc_s_param):
+    logger.info("Number interval for discreteness (%1d)." % discretization)
+    for pct_training in np.arange(10, 100, 10):
+        logger.info("Percentage of training set: %s.", pct_training)
+
+        for resampling in range(nb_resampling):
+            # Loading data set
+            in_path_train = in_path % ("train", resampling + 1, int(pct_training))
+            in_path_test = in_path % ("test", resampling + 1, int(pct_training))
+            logger.info("Evaluate training/test data set: (%s, %s).", in_path_train, in_path_test)
+            data_training, nb_labels = init_dataset(in_path_train, None, False)
+            data_test, _ = init_dataset(in_path_test, None, False)
+            # discretization global data set
+            data_training.data = [row + ["T"] for row in data_training.data]
+            data_test.data = [row + ["V"] for row in data_test.data]
+            data_global = ArffFile()
+            data_global.attribute_data = data_training.attribute_data.copy()
+            data_global.attribute_types = data_training.attribute_types.copy()
+            data_global.data = copy.deepcopy(data_training.data + data_test.data)
+            data_global.attributes = copy.copy(data_training.attributes)
+            data_global.discretize(discmet="eqfreq", numint=discretization)
+            # recopy the training discretized data set
+            data_training.attribute_data = data_global.attribute_data.copy()
+            data_training.attribute_types = data_global.attribute_types.copy()
+            data_training.attributes = copy.copy(data_global.attributes)
+            data_training.data = [row[:-1] for row in data_global.data if row[-1] == "T"]
+            # recopy the test discretized data set
+            data_test.attribute_data = data_global.attribute_data.copy()
+            data_test.attribute_types = data_global.attribute_types.copy()
+            data_test.attributes = copy.copy(data_global.attributes)
+            data_test.data = [row[:-1] for row in data_global.data if row[-1] == "V"]
+
+            # putting in 1 split training and test data set
+            splits_s = [(data_training, data_test)]
+            disc_re_pct = str(discretization) + "-" + str(resampling) + "-" + str(pct_training)
+            metrics.init_sub_level(disc_re_pct)
+            for s_ncc in np.arange(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param):
+                metrics.init_level_imprecision(str(s_ncc), disc_re_pct)
+                # training and test a partition of sampling
+                cv10fold_br_vs_ibr(splits_s, s_ncc, disc_re_pct, manager, metrics, logger,
+                                   nb_labels, do_inference_exact,
+                                   missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
+
+                _partial_saving = metrics.generate_row_line(str(s_ncc), resampling, 1, sub_level=disc_re_pct)
+                _partial_saving.insert(0, str(discretization))
+                _partial_saving.insert(0, str(pct_training))
+                writer.writerow(_partial_saving)
+                file_csv.flush()
+                logger.debug("Partial-ncc_step (disc, s, time, ich_skep, cph_skep, ich_out, "
+                             "cph_out, acc, jacc, ich_reject, cph_reject, jacc_reject) (%s, %s, %s, %s)",
+                             disc_re_pct, s_ncc, resampling, metrics)
+
+
 def experiments_binr_vs_imprecise(in_path=None,
                                   out_path=None,
                                   seed=None,
@@ -139,7 +253,8 @@ def experiments_binr_vs_imprecise(in_path=None,
                                   max_ncc_s_param=6.0,
                                   step_ncc_s_param=1.0,
                                   remove_features=None,
-                                  do_inference_exact=False):
+                                  do_inference_exact=False,
+                                  is_resampling=False):
     """
     Experiments with binary relevant imprecise and missing/noise data.
 
@@ -159,12 +274,14 @@ def experiments_binr_vs_imprecise(in_path=None,
     :param step_ncc_s_param: discretization step of parameter s
     :param remove_features: features not to take into account
     :param do_inference_exact: exact inferences (exploring the probabilistic tree)
+    :param is_resampling: if re-sampling of test and training data sets generated beforehand
 
     ...note::
         TODO: Bug when the missing percentage is higher (90%) to fix.
 
     """
-    assert os.path.exists(in_path), "Without training data, not testing"
+    if not is_resampling:
+        assert os.path.exists(in_path), "Without training data, not testing"
     assert os.path.exists(out_path), "File for putting results does not exist"
 
     logger = create_logger("computing_best_imprecise_mean", True)
@@ -202,50 +319,18 @@ def experiments_binr_vs_imprecise(in_path=None,
 
     min_discretize, max_discretize = 5, 7
     for nb_disc in range(min_discretize, max_discretize):
-        data_learning, nb_labels = init_dataset(in_path, remove_features, scaling)
-        data_learning.discretize(discmet="eqfreq", numint=nb_disc)
+        if not is_resampling:  # it is cross-validation
+            cv10x10fold_br_vs_ibr(in_path, remove_features, scaling,
+                                  logger, nb_kFold, nb_disc, do_inference_exact,
+                                  manager, metrics, writer, seed, file_csv, missing_pct,
+                                  noise_label_pct, noise_label_type, noise_label_prob,
+                                  min_ncc_s_param, max_ncc_s_param, step_ncc_s_param)
+        else:
+            re_sampling_with_pct_train(in_path, logger, nb_kFold, nb_disc, do_inference_exact,
+                                       manager, metrics, writer, file_csv, missing_pct,
+                                       noise_label_pct, noise_label_type, noise_label_prob,
+                                       min_ncc_s_param, max_ncc_s_param, step_ncc_s_param)
 
-        for time in range(nb_kFold):  # 10-10 times cross-validation
-            logger.info("Number interval for discreteness and labels (%1d, %1d)." % (nb_disc, nb_labels))
-            cv_kfold = k_fold_cross_validation(data_learning, nb_kFold, randomise=True, random_seed=seed[time])
-
-            splits_s = list([])
-            for training, testing in cv_kfold:
-                # making a clone because it send the same address memory
-                splits_s.append((training.make_clone(), testing.make_clone()))
-                logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
-                logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
-
-            disc = str(nb_disc) + "-" + str(time)
-            metrics.init_sub_level(disc)
-            for s_ncc in np.arange(min_ncc_s_param, max_ncc_s_param, step_ncc_s_param):
-                ks_ncc = str(s_ncc)
-                metrics.init_level_imprecision(ks_ncc, disc)
-                for idx_fold, (training, testing) in enumerate(splits_s):
-                    logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
-                    logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
-                    computing_training_testing_step(training,
-                                                    testing,
-                                                    missing_pct,
-                                                    noise_label_pct,
-                                                    noise_label_type,
-                                                    noise_label_prob,
-                                                    nb_labels,
-                                                    do_inference_exact,
-                                                    ncc_imprecise=s_ncc,
-                                                    disc_key_level=disc,
-                                                    manager=manager,
-                                                    metrics=metrics)
-                    logger.debug("Partial-fold_step (acc, ich_out) (%s, %s)",
-                                 metrics.score_hamming[disc][ks_ncc],
-                                 metrics.ich_iid_skeptic[disc][ks_ncc])
-                _partial_saving = metrics.generate_row_line(ks_ncc, time, nb_kFold, sub_level=disc)
-                _partial_saving.insert(0, str(nb_disc))
-                writer.writerow(_partial_saving)
-                file_csv.flush()
-                logger.debug("Partial-ncc_step (disc, s, time, ich_skep, cph_skep, ich_out, "
-                             "cph_out, acc, jacc, ich_reject, cph_reject, jacc_reject) (%s, %s, %s, %s)",
-                             disc, s_ncc, time, metrics)
     manager.poisonPillTraining()
     file_csv.close()
     logger.debug("Results Final: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
@@ -257,14 +342,17 @@ def experiments_binr_vs_imprecise(in_path=None,
                  metrics.ich_reject, metrics.cph_reject)
 
 
-in_path = ".../datasets_mlc/emotions.arff"
-out_path = ".../results_emotions.csv"
+# in_path = ".../Downloads/datasets_mlc/emotions.arff"
+in_path = ".../Downloads/emotions_%s_%i_%i.arff"
+out_path = ".../Downloads/results_emotions.csv"
 experiments_binr_vs_imprecise(in_path=in_path,
                               out_path=out_path,
                               nb_process=1,
-                              missing_pct=0.0,
+                              missing_pct=0.4,
                               noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.2,
                               min_ncc_s_param=0.5, max_ncc_s_param=6, step_ncc_s_param=1,
                               epsilon_rejects=[0.05, 0.15, 0.25, 0.35, 0.45],
                               do_inference_exact=False,
-                              remove_features=["image_name"])
+                              remove_features=["image_name"],
+                              is_resampling=True,
+                              nb_kFold=100)
