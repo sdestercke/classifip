@@ -310,8 +310,8 @@ experiments_binr_vs_imprecise(in_path=in_path,
                               scaling=False,  # if sampling thus it already scaled
                               missing_pct=0.0,
                               noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.2,
-                              min_ell_param=1.0, max_ell_param=9.0, step_ell_param=1.0,
+                              min_ell_param=0.01, max_ell_param=1.02, step_ell_param=0.20,
                               epsilon_rejects=[0.05, 0.15, 0.25, 0.35, 0.45],
                               remove_features=["image_name"],
                               is_resampling=True,
-                              nb_kFold=100)
+                              nb_kFold=50)
