@@ -1,5 +1,7 @@
 import random, numpy as np, pandas as pd, sys
 from numpy import linalg
+from .qda import NaiveDiscriminant
+from scipy.stats import multivariate_normal
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, \
     QuadraticDiscriminantAnalysis
 
@@ -9,7 +11,7 @@ class BaseEstimator:
         self._data, self._N, self._p = None, 0, 0
         self._clazz, self._nb_clazz = None, None
         self._means, self._prior = dict(), dict()
-        self._icov, self._dcov = dict(), dict()
+        self._icov, self._cov = dict(), dict()
 
     def learn(self, X, y):
         self._N, self._p = X.shape
@@ -30,8 +32,9 @@ class BaseEstimator:
         probabilities_query = list()
         for query in queries:
             pbs = np.array([
-                self.pdf(query, self._means[clazz], self._icov[clazz], self._dcov[clazz]) *
-                self._prior[clazz] for clazz in self._clazz
+                multivariate_normal.pdf(query, mean=self._means[clazz], cov=self._cov[clazz],
+                                        allow_singular=True) * self._prior[clazz]
+                for clazz in self._clazz
             ])
             predict_clazz.append(self._clazz[pbs.argmax()])
             sum_pbs = np.sum(pbs)
@@ -85,7 +88,7 @@ class EuclideanDiscriminantPrecise(BaseEstimator):
             self._means[clazz] = self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
             self._prior[clazz] = len(self._data[self._data.y == clazz]) / self._N
             self._icov[clazz] = np.identity(self._p)
-            self._dcov[clazz] = 1
+            self._cov[clazz] = np.identity(self._p)
 
 
 class NaiveDiscriminantPrecise(BaseEstimator):
@@ -99,14 +102,8 @@ class NaiveDiscriminantPrecise(BaseEstimator):
         for clazz in self._clazz:
             self._means[clazz] = self._data[self._data.y == clazz].iloc[:, :-1].mean().values
             self._prior[clazz] = len(self._data[self._data.y == clazz]) / self._N
-            cov_clazz = np.diag(np.var(self._data[self._data.y == clazz].iloc[:, :-1]))
-            if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
-                self._icov[clazz] = linalg.inv(cov_clazz)
-                self._dcov[clazz] = linalg.det(cov_clazz)
-            else:  # computing pseudo inverse/determinant to a singular covariance matrix
-                self._icov[clazz] = linalg.pinv(cov_clazz)
-                eig_values, _ = linalg.eig(cov_clazz)
-                self._dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
+            cov_clazz = np.cov(self._data[self._data.y == clazz].iloc[:, :-1], rowvar=False)
+            self._cov[clazz], self._icov[clazz] = NaiveDiscriminant.compute_diagonal_cov_and_inv(cov_clazz)
 
 
 MODEL_TYPES_PRECISE = {'lda': LinearDiscriminantPrecise, 'qda': QuadraticDiscriminantPrecise,

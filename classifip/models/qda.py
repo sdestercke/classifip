@@ -642,14 +642,24 @@ class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
     def get_cov_by_clazz(self, clazz):
         if clazz not in self._gp_cov:
             cov_clazz = self._cov_by_clazz(clazz)
-            diagonal = np.einsum('ii->i', cov_clazz)
-            save = diagonal.copy()
-            save[save == 0] = pow(10, -6)
-            cov_clazz[...] = 0
-            diagonal[...] = save
-            self._gp_cov[clazz] = cov_clazz
-            self._gp_icov[clazz] = linalg.inv(cov_clazz)
+            self._gp_cov[clazz], self._gp_icov[clazz] = \
+                NaiveDiscriminant.compute_diagonal_cov_and_inv(cov_clazz)
         return self._gp_cov[clazz], self._gp_icov[clazz]
+
+    @staticmethod
+    def compute_diagonal_cov_and_inv(cov_clazz):
+        diagonal = np.einsum('ii->i', cov_clazz)
+        save = diagonal.copy()
+        cov_clazz[...] = 0
+        diagonal[...] = save
+        if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
+            inverse_cov = linalg.inv(cov_clazz)
+            # self._dcov[clazz] = linalg.det(cov_clazz)
+        else:  # computing pseudo inverse to a singular covariance matrix
+            inverse_cov = linalg.pinv(cov_clazz)
+            # eig_values, _ = linalg.eig(cov_clazz)
+            # self._dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
+        return cov_clazz.copy(), inverse_cov.copy()
 
 
 __MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant,
