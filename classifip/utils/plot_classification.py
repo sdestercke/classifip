@@ -168,6 +168,7 @@ def plot2D_decision_boundary_det(X, y, h=.01, markers=None):
 
     z = np.array([])
     clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(_clazz, 1))
+    # @salmuz ToDo: modify this use base abstract classifier or precise version qda_precise.py
     # from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as classifierLDA
     from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as classifierQDA
     # lda = classifierLDA(solver="svd", store_covariance=True)

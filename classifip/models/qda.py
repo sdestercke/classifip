@@ -441,8 +441,8 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
             return [v for v in solution['x']]
         else:
-            self._logger.info("Eigenvalues of inverse covariance matrix %s",
-                              np.round(np.linalg.eigvals(Q), decimals=16))
+            self._logger.debug("Eigenvalues of inverse covariance matrix %s",
+                               np.round(np.linalg.eigvals(Q), decimals=16))
             if self.__solver_matlab:
                 return self.quadprogbb(Q, q, mean_lower, mean_upper, self._eng, clazz)
             else:
