@@ -117,7 +117,7 @@ class IGDA_BR(MLCNCC):
                 evaluate, probabilities = models["precise"].evaluate(queries=[instance],
                                                                      with_posterior=True)
                 precise[i] = int(evaluate[0])
-                precise_proba[i] = probabilities[0]
+                precise_proba[i] = np.nan_to_num(probabilities[0], nan=1e-18).tolist()
 
                 # Print to verify in precise probability is in credal set
                 if self.DEBUG:
