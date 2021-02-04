@@ -1,5 +1,6 @@
 import abc, math, time, random, numpy as np, scipy, pandas as pd
 from glmnet_python import *
+import glmnet_python.glmnetCoef as coefgl
 from classifip.utils import create_logger
 from ..representations.intervalsProbability import IntervalsProbability
 
@@ -88,12 +89,21 @@ class BinaryILogisticLasso(ImpreciseLogistic):
                                 ptype='class',
                                 alpha=0.0)  # ridge penalty
         beta_ridge_fitted = cvglmnetCoef(cv_ridge_fit, s='lambda_1se')
+        # logistic non-regularized
+        # cv_ridge_fit = cvglmnet(x=self._X,
+        #                         y=clazz_numeric,
+        #                         ptype='class',
+        #                         family='binomial',
+        #                         alpha=0.0,
+        #                         lambdau=scipy.array([0.0, 0.1]))
+        # beta_ridge_fitted = cvglmnetCoef(cv_ridge_fit, s=scipy.float64([0.0]))
         # sensibility analyse
         self._lasso_models = [None] * nb_lasso_models
         self._lasso_models[0] = cv_ridge_fit.copy()
-        self._gammas = np.linspace(start=0, stop=max_gamma, num=nb_lasso_models - 1)
+        self._gammas = np.linspace(start=min_gamma, stop=max_gamma, num=nb_lasso_models - 1)
         for i, gamma in enumerate(self._gammas):
             w_penalty = 1 / abs(beta_ridge_fitted) ** gamma
+            w_penalty = np.nan_to_num(w_penalty, posinf=1e+18, neginf=1e-18, nan=1e-18)
             self._lasso_models[i + 1] = cvglmnet(x=self._X,
                                                  y=clazz_numeric,
                                                  family='binomial',
