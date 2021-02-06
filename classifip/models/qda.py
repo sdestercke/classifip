@@ -17,15 +17,19 @@ except Exception as e:
     print("MATLAB not installed in host.")
 
 
-def is_sdp_symmetric(x):
-    def is_pos_def(x):
-        # Numeric problem with -0.22e-25 ~ 0.0 (zero), and not negative value
-        return np.all(np.round(np.linalg.eigvals(x), decimals=16) >= 0)
+def is_sdp_symmetric(X):
+    if X.shape[0] != X.shape[1]:
+        return False
+    # ToDo: If it is not symmetric, use in whole file: X'=0.5*(X+X.T)
+    if not np.allclose(X, X.T, atol=1e-8):
+        print("[is_sdp_symmetric] MATRIX IS NOT SYMMETRIC", flush=True)
+        return False
 
-    def check_symmetric(x, tol=1e-8):
-        return np.allclose(x, x.T, atol=tol)
-
-    return is_pos_def(x) and check_symmetric(x)
+    _eigen_values = np.linalg.eigvalsh(X)
+    _is_sdp = np.all(_eigen_values > -1e-8)
+    if not _is_sdp:
+        print("[is_sdp_symmetric] Eigenvalues negatives:", _eigen_values, flush=True)
+    return _is_sdp
 
 
 # First version maximality criterion
