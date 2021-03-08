@@ -15,15 +15,16 @@ def create_logger(name="default", DEBUG=False):
 
     # verify if root logging is turned on
     # @salmuz-bug: generate duplicate line each time
-    # if: redirect current logging to sys.stout
     root = logging.getLogger()
     if root.hasHandlers():
-        # missing to verify type logging: File/...
-        # for handler in root.handlers:
-        #     if isinstance(handler, logging.FileHandler):
-        #         root.removeHandler(handler)
-        while root.hasHandlers():
-            root.removeHandler(root.handlers[0])
+        # if: stopping logging handlers
+        for handler in root.handlers:
+            if isinstance(handler, logging.FileHandler):
+                handler.propagate = False
+        # if: remove root handlers
+        # while root.hasHandlers():
+        #    root.removeHandler(root.handlers[0])
+        # if: redirect current logging to sys.stout
         # if len(root.handlers) == 0:
         #     handler = logging.StreamHandler(sys.stdout)
         #     handler.flush = sys.stdout.flush

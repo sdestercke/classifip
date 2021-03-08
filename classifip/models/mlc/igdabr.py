@@ -68,6 +68,9 @@ class IGDA_BR(MLCNCC):
             X_learning = np.array(X_learning, dtype=np.float)
             y_learning = np.array(y_learning)
 
+            if len(np.unique(y_learning)) != 2:
+                raise Exception("Not binary data set with two class.")
+
             if not self.__solver_matlab:
                 gda_imprecise = _factory_igda_model(model_type=self.__igda_name,
                                                     solver_matlab=False,
