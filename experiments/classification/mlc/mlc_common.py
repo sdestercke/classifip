@@ -73,18 +73,36 @@ def distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels
 
 def normalize(dataArff, n_labels, method='minimax'):
     from classifip.utils import normalize_minmax
-    np_data = np.array(dataArff.data, dtype=float)
-    np_data = np_data[..., :-n_labels]
+    np_data_all = np.array(dataArff.data)
+    idx_numeric_attrs = list()
+    for attribute, type_label in dataArff.attribute_types.items():
+        if type_label == 'numeric':
+            idx_numeric_attrs.append(dataArff.attributes.index(attribute))
+    idx_numeric_attrs = np.array(idx_numeric_attrs)
+    np_data = np_data_all[..., :-n_labels].astype(float)
+    np_data = np_data[..., idx_numeric_attrs]
     if method == "minimax":
         np_data = normalize_minmax(np_data)
-        dataArff.data = [np_data[i].tolist() + dataArff.data[i][-n_labels:] for i in range(len(np_data))]
+        new_data = list()
+        for i in range(len(np_data)):
+            new_line_predictors = np_data_all[i, :-n_labels]
+            new_line_predictors[idx_numeric_attrs] = np_data[i]
+            new_data.append(new_line_predictors.tolist() + dataArff.data[i][-n_labels:])
+        dataArff.data = new_data
     else:
         raise Exception("Not found method implemented yet.")
 
 
-def get_nb_labels_class(dataArff, type_class='nominal'):
-    nominal_class = [item for item in dataArff.attribute_types.values() if item == type_class]
-    return len(nominal_class)
+def get_nb_labels_class(dataArff, type_class='nominal', two_values=['0', '1']):
+    nominal_binary_class = []
+    # @salmuz fixed verify if they are last or first attributes (sequential)
+    for label, type_label in dataArff.attribute_types.items():
+        if type_label == type_class:
+            values_type = dataArff.attribute_data[label]
+            if values_type == two_values:
+                # print('[Label selected]', label)
+                nominal_binary_class.append(label)
+    return len(nominal_binary_class)
 
 
 def incorrectness_completeness_measure(y_true, y_prediction):

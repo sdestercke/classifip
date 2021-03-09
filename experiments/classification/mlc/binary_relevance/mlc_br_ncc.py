@@ -198,8 +198,8 @@ def re_sampling_with_pct_train(in_path, logger, nb_resampling, discretization, d
             data_training, nb_labels = init_dataset(in_path_train, None, False)
             data_test, _ = init_dataset(in_path_test, None, False)
             # discretization global data set
-            data_training.data = [row + ["T"] for row in data_training.data]
-            data_test.data = [row + ["V"] for row in data_test.data]
+            data_training.data = [row + ["T"] for row in data_training.data]  # T: Training
+            data_test.data = [row + ["V"] for row in data_test.data]  # V: Validation
             data_global = ArffFile()
             data_global.attribute_data = data_training.attribute_data.copy()
             data_global.attribute_types = data_training.attribute_types.copy()
