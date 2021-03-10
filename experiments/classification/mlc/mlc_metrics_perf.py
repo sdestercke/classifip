@@ -153,15 +153,16 @@ class MetricsPerformances:
             self.recovery_sub_level(sub_level, *all_metrics) if sub_level is not None \
             else all_metrics
 
-        # decompose the partial to full prediction
-        y_br_skeptical_full_set = expansion_partial_to_full_set_binary_vector(y_br_skeptical)
-
         # if enable to do the exact skeptical inference
         inc_ich_skep, inc_cph_skep, inc_jacc = -1, -1, -1
         if self.do_inference_exact:
             y_skeptical_exact_partial = transform_semi_partial_vector(y_skeptical_exact, nb_labels)
             inc_ich_skep, inc_cph_skep = incorrectness_completeness_measure(y_true, y_skeptical_exact_partial)
-            inc_jacc = compute_jaccard_similarity_score(y_br_skeptical_full_set, y_skeptical_exact)
+            # decompose the partial to full prediction
+            if nb_labels < 50: # @salmuz, bug to fix, memory leak to do that
+                y_br_skeptical_full_set = expansion_partial_to_full_set_binary_vector(y_br_skeptical)
+                inc_jacc = compute_jaccard_similarity_score(y_br_skeptical_full_set, y_skeptical_exact)
+
         ich_exact_skeptic[param_imprecision] += inc_ich_skep / nb_tests
         cph_exact_skeptic[param_imprecision] += inc_cph_skep / nb_tests
         jacc_exact_skeptic[param_imprecision] += inc_jacc / nb_tests
@@ -210,8 +211,11 @@ class MetricsPerformances:
             ich_reject[param_imprecision][epsilon] += inc_ich_reject / nb_tests
             cph_reject[param_imprecision][epsilon] += inc_cph_reject / nb_tests
 
-            y_reject_full_set = expansion_partial_to_full_set_binary_vector(y_reject)
-            inc_jacc_reject = compute_jaccard_similarity_score(y_br_skeptical, y_reject_full_set)
+            inc_jacc_reject = -1
+            if nb_labels < 50:  # @salmuz, bug to fix, memory leak to do that
+                y_reject_full_set = expansion_partial_to_full_set_binary_vector(y_reject)
+                inc_jacc_reject = compute_jaccard_similarity_score(y_br_skeptical, y_reject_full_set)
+
             jacc_reject[param_imprecision][epsilon] += inc_jacc_reject / nb_tests
 
     def generate_row_line(self, param_imprecision, time, k_fold, sub_level=None):
