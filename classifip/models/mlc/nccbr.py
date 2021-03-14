@@ -180,8 +180,17 @@ class NCCBR(MLCNCC):
                     upper_cond_prob_0 = upper_cond_prob_0 * ((1 - ncc_epsilon) * upper + ncc_epsilon / feature_dimension)
                     lower_cond_prob_0 = lower_cond_prob_0 * ((1 - ncc_epsilon) * lower + ncc_epsilon / feature_dimension)
 
-                resulting_score[j, 1] = upper_cond_prob_1 / (upper_cond_prob_1 + lower_cond_prob_0)
-                resulting_score[j, 0] = lower_cond_prob_1 / (lower_cond_prob_1 + upper_cond_prob_0)
+                try:
+                    resulting_score[j, 1] = upper_cond_prob_1 / (upper_cond_prob_1 + lower_cond_prob_0)
+                except ZeroDivisionError:
+                    resulting_score[j, 1] = 0.0
+
+                try:
+                    resulting_score[j, 0] = lower_cond_prob_1 / (lower_cond_prob_1 + upper_cond_prob_0)
+                except ZeroDivisionError:
+                    resulting_score[j, 1] = 0.0
+
+            resulting_score = np.nan_to_num(resulting_score, nan=1e-18)
             # ToDo: change representation to IntervalsProbability
             result = Scores(resulting_score, precision=precision)
             answers.append(result)

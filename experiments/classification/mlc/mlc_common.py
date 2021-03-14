@@ -7,7 +7,7 @@ from classifip.dataset import arff
 CONST_PARTIAL_VALUE = -1
 
 
-def init_dataset(in_path, remove_features, scaling):
+def init_dataset(in_path, remove_features, scaling, nb_labels=None):
     data_learning = arff.ArffFile()
     data_learning.load(in_path)
     if remove_features is not None:
@@ -16,7 +16,8 @@ def init_dataset(in_path, remove_features, scaling):
                 data_learning.remove_col(r_feature)
             except Exception as err:
                 print("Remove feature error: {0}".format(err))
-    nb_labels = get_nb_labels_class(data_learning)
+    if nb_labels is None:
+        nb_labels = get_nb_labels_class(data_learning)
     if scaling:
         normalize(data_learning, n_labels=nb_labels)
     return data_learning, nb_labels

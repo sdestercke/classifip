@@ -348,11 +348,11 @@ out_path = ".../Downloads/results_emotions.csv"
 experiments_binr_vs_imprecise(in_path=in_path,
                               out_path=out_path,
                               nb_process=1,
-                              missing_pct=0.4,
+                              missing_pct=0.0,
                               noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.2,
                               min_ncc_s_param=0.5, max_ncc_s_param=6, step_ncc_s_param=1,
                               epsilon_rejects=[0.05, 0.15, 0.25, 0.35, 0.45],
                               do_inference_exact=False,
                               remove_features=["image_name"],
                               is_resampling=True,
-                              nb_kFold=100)
+                              nb_kFold=50)
