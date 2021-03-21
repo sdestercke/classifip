@@ -8,7 +8,7 @@ from itertools import product
 
 sys.path.append("..")
 from mlc_manager import ManagerWorkers, __create_dynamic_class
-from mlc_common import init_dataset
+from mlc_common import init_dataset, save_partial_query_classification
 from mlc_metrics_perf import MetricsPerformances
 
 
@@ -84,7 +84,8 @@ def computing_training_testing_step(learn_data_set,
                                     ell_imprecision,
                                     sub_level,
                                     manager,
-                                    metrics):
+                                    metrics,
+                                    save_prediction=None):
     # Send training data model to every parallel process
     manager.addNewTraining(learn_data_set=learn_data_set,
                            nb_labels=nb_labels,
@@ -111,6 +112,9 @@ def computing_training_testing_step(learn_data_set,
         y_precise = prediction['precise']
         y_eq_1_precise_probs = prediction['y_eq_1_probabilities']
 
+        if save_prediction is not None:
+            save_prediction(y_true, y_br_skeptical, y_precise, y_eq_1_precise_probs)
+
         metrics.compute_metrics_performance(y_true, None,
                                             y_br_skeptical, y_precise,
                                             y_eq_1_precise_probs, nb_tests,
@@ -121,7 +125,7 @@ def computing_training_testing_step(learn_data_set,
 
 
 def cv10fold_br_vs_ibr(logger, splits_s, ell_imprecision, nb_labels, manager, metrics, sub_level,
-                       missing_pct, noise_label_pct, noise_label_type, noise_label_prob):
+                       missing_pct, noise_label_pct, noise_label_type, noise_label_prob, save_prediction):
     for idx_fold, (training, testing) in enumerate(splits_s):
         logger.info("Splits %s train %s", len(training.data), training.data[0][1:4])
         logger.info("Splits %s test %s", len(testing.data), testing.data[0][1:4])
@@ -135,7 +139,8 @@ def cv10fold_br_vs_ibr(logger, splits_s, ell_imprecision, nb_labels, manager, me
                                         ell_imprecision=ell_imprecision,
                                         sub_level=sub_level,
                                         manager=manager,
-                                        metrics=metrics)
+                                        metrics=metrics,
+                                        save_prediction=save_prediction)
         logger.debug("Partial-fold_step (ell, acc, ich_skep) (%s, %s, %s)",
                      str(ell_imprecision), metrics.score_hamming,
                      metrics.ich_iid_skeptic)
@@ -174,10 +179,12 @@ def cv10x10fold_br_vs_ibr(logger, manager, metrics, remove_features, scaling, nb
 
 def re_sampling_with_pct_train(logger, manager, metrics, nb_resampling, writer, file_csv,
                                min_ell_param, max_ell_param, step_ell_param,
-                               missing_pct, noise_label_pct, noise_label_type, noise_label_prob):
-    for pct_training in np.arange(10, 100, 10):
-        logger.info("Percentage of training set: %s.", pct_training)
-        for resampling in range(nb_resampling):
+                               missing_pct, noise_label_pct, noise_label_type,
+                               noise_label_prob, save_query):
+
+    for resampling in range(nb_resampling):
+        for pct_training in np.arange(10, 100, 10):
+            logger.info("Percentage/Resampling of training set: %s, %s.", pct_training, resampling)
             # Loading data set
             in_path_train = in_path % ("train", resampling + 1, int(pct_training))
             in_path_test = in_path % ("test", resampling + 1, int(pct_training))
@@ -191,9 +198,11 @@ def re_sampling_with_pct_train(logger, manager, metrics, nb_resampling, writer, 
             metrics.init_sub_level(re_pct)
             for ell_imprecision in np.arange(min_ell_param, max_ell_param, step_ell_param):
                 metrics.init_level_imprecision(str(ell_imprecision), re_pct)
+                save_prediction = save_query(pct_training, ell_imprecision, resampling)
                 # training and test a partition of sampling
                 cv10fold_br_vs_ibr(logger, splits_s, ell_imprecision, nb_labels, manager, metrics, re_pct,
-                                   missing_pct, noise_label_pct, noise_label_type, noise_label_prob)
+                                   missing_pct, noise_label_pct, noise_label_type, noise_label_prob,
+                                   save_prediction)
 
                 _partial_saving = metrics.generate_row_line(str(ell_imprecision),
                                                             resampling, 1, sub_level=re_pct)
@@ -267,6 +276,14 @@ def experiments_binr_vs_imprecise(in_path=None,
     file_csv = open(out_path, 'a')
     writer = csv.writer(file_csv)
 
+    # Create a CSV file for saving query predictions new instances
+    out_path_partial = out_path[:-4] + "partial.csv"
+    if not os.path.exists(out_path_partial):
+        with open(out_path_partial, 'w'): pass
+    fpartial_csv = open(out_path_partial, 'a')
+    wpartial = csv.writer(fpartial_csv)
+    save_query = save_partial_query_classification(fpartial_csv, wpartial)
+
     # instance class classifier
     manager = ManagerWorkers(nb_process=nb_process, fun_prediction=skeptical_prediction)
     manager.executeAsync(class_model="classifip.models.mlc.igdabr.IGDA_BR")
@@ -288,10 +305,11 @@ def experiments_binr_vs_imprecise(in_path=None,
     else:
         re_sampling_with_pct_train(logger, manager, metrics, nb_kFold, writer, file_csv,
                                    min_ell_param, max_ell_param, step_ell_param, missing_pct,
-                                   noise_label_pct, noise_label_type, noise_label_prob)
+                                   noise_label_pct, noise_label_type, noise_label_prob, save_query)
 
     manager.poisonPillTraining()
     file_csv.close()
+    fpartial_csv.close()
     logger.debug("Results Final: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
                  metrics.ich_iid_skeptic, metrics.cph_iid_skeptic,
                  metrics.score_hamming,
@@ -310,7 +328,7 @@ experiments_binr_vs_imprecise(in_path=in_path,
                               scaling=False,  # if sampling thus it already scaled
                               missing_pct=0.0,
                               noise_label_pct=0.0, noise_label_type=-1, noise_label_prob=0.2,
-                              min_ell_param=0.01, max_ell_param=1.02, step_ell_param=0.20,
+                              min_ell_param=0.01, max_ell_param=0.82, step_ell_param=0.20,
                               epsilon_rejects=[0.05, 0.15, 0.25, 0.35, 0.45],
                               remove_features=["image_name"],
                               is_resampling=True,

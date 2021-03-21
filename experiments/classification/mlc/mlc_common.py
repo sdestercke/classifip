@@ -299,3 +299,20 @@ def abstention_partial_hamming_measure(y_true, y_eq_1_probabilities, c_spe, c_pa
         y_par_score[str(c)] = PAR_score(y_pred_abstention, c)
 
     return y_sep_prediction, y_sep_score, y_par_prediction, y_par_score
+
+
+def save_partial_query_classification(fcsv, fwrite):
+    def wrapper_partial(pct, imprs, time):
+        def wrapper_data(y_true, y_br_skeptical, y_precise, y_eq_1_precise_probs):
+            _partial_saving = [pct, imprs, time]
+            _partial_saving.extend(y_true)
+            _partial_saving.extend(y_br_skeptical)
+            _partial_saving.extend(y_precise)
+            _partial_saving.extend(1 - y_eq_1_precise_probs)
+            _partial_saving.extend(y_eq_1_precise_probs)
+            fwrite.writerow(_partial_saving)
+            fcsv.flush()
+
+        return wrapper_data
+
+    return wrapper_partial
