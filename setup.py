@@ -38,7 +38,7 @@ setup(
            'CVXcanon==0.1.1',
            'cvxopt==1.2.3',
            'Orange3==3.24.0',
-           'python-constraint=1.4.0',
+           'python-constraint==1.4.0',
            'feather-format==0.4.0',
            'cvxpy==0.4.11',
            'xxhash==1.4.3',
