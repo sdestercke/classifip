@@ -29,6 +29,7 @@ setup(
     description='Classification with Imprecise Probability methods.',
     long_description=open('README.rst').read(),
     classifiers=classifiers.split('\n'),
+    setup_requires=['numpy==1.19.4'],
     install_requires=['cvxopt',
                       'scikit-learn==0.23.2',
                       'matplotlib==3.1.1',
@@ -40,7 +41,6 @@ setup(
                       'xxhash',
                       'qcqp==0.8.3',
                       'cvxpy==0.4.11',
-                      'scipy==1.2.3',
-                      'numpy==1.19.4'],
+                      'scipy==1.2.3'],
     data_files=datafiles
 )
