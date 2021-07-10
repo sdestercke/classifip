@@ -40,15 +40,10 @@ class NCCBR(MLCNCC):
             label_set_zero = learn_data_set.select_col_vals(label_value, ['0'])
             nb_count_one, nb_count_zero = len(label_set_one.data), len(label_set_zero.data)
             # The missing label is identified in the data set when the value of label is -1,
-            # so it does not take into account.
-            try:
-                self.marginal_props[label_index][0] = nb_count_zero
-                self.marginal_props[label_index][1] = nb_count_one
-                self.marginal_props[label_index]['all'] = nb_count_one + nb_count_zero
-            except ZeroDivisionError:
-                self.marginal_props[label_index][0] = 0
-                self.marginal_props[label_index][1] = 0
-                self.marginal_props[label_index]['all'] = 0
+            # so these values are not taken into account.
+            self.marginal_props[label_index][0] = nb_count_zero
+            self.marginal_props[label_index][1] = nb_count_one
+            self.marginal_props[label_index]['all'] = nb_count_one + nb_count_zero
 
             for feature in self.feature_names:
                 count_vector_one = []
@@ -69,12 +64,10 @@ class NCCBR(MLCNCC):
                              ncc_s_param):
         """
             ToDo: Code refactoring of NCC.__computing_laplace_smoothing method with this one.
-        :param marginal_props:
         :param idx_label_to_infer:
         :param value_label_to_infer:
         :param label_dimension:
         :param ncc_s_param:
-        :param with_imprecise_marginal:
         :return:
         """
 

@@ -518,7 +518,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         )
         qcqp_solver = QCQP(problem)
         qcqp_solver.suggest(RANDOM)
-        f_cd, v_cd = qcqp_solver.improve(COORD_DESCENT, num_iters=500)
+        f_cd, v_cd = qcqp_solver.improve(COORD_DESCENT, num_iters=150)
         self._logger.debug("Coordinate descent: objective %s, violation %s", f_cd, v_cd)
         solution = np.asarray(x.value).reshape((1, self._p))[0]
         self._logger.debug("Optimal value solution %s", solution)

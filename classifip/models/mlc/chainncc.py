@@ -91,7 +91,7 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                 optimal_lower_path[i] = '1'
                 lower_cum_max = lower_path_1
             else:
-                self._logger.info("Random-IB (lower_path_0, lower_path_1) (%s, %s)", lower_path_0, lower_path_1)
+                self._logger.debug("Random-IB (lower_path_0, lower_path_1) (%s, %s)", lower_path_0, lower_path_1)
                 optimal_lower_path[i] = np.random.choice(['0', '1'], 1)[0]
                 lower_cum_max = lower_path_1
                 # raise Exception("Not implemented yet __compute_opt_path_branching") @salmuz
@@ -105,7 +105,7 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                 optimal_upper_path[i] = '1'
                 upper_cum_min = upper_path_1
             else:
-                self._logger.info("Random-IB (upper_path_0, upper_path_1) (%s, %s)", upper_path_0, upper_path_1)
+                self._logger.debug("Random-IB (upper_path_0, upper_path_1) (%s, %s)", upper_path_0, upper_path_1)
                 optimal_upper_path[i] = np.random.choice(['0', '1'], 1)[0]
                 upper_cum_min = upper_path_1
 
@@ -139,8 +139,15 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                                                                      ncc_epsilon,
                                                                      idx_predicted_labels)
             # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
-            lower_cond_prob_1 = l_numerator_1 / (l_numerator_1 + u_denominator_0)
-            upper_cond_prob_1 = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+            try:
+                lower_cond_prob_1 = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+            except ZeroDivisionError:
+                lower_cond_prob_1 = 0
+            try:
+                upper_cond_prob_1 = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+            except ZeroDivisionError:
+                upper_cond_prob_1 = 0
+
         else:
             self._logger.debug("IB (idx_label, chaining, lower_path, upper_path) (%s, %s, %s, %s)",
                                idx_current_label, chain_predicted_labels, optimal_lower_path, optimal_upper_path)
@@ -154,7 +161,10 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                                                                      ncc_epsilon,
                                                                      idx_predicted_labels)
 
-            lower_cond_prob_1 = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+            try:
+                lower_cond_prob_1 = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+            except ZeroDivisionError:
+                lower_cond_prob_1 = 0
             self._logger.debug("IB (idx_label, opt_upper_path (%s, %s)",
                                idx_current_label, partial_opt_predicted_labels)
 
@@ -167,7 +177,10 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                                                                      ncc_s_param,
                                                                      ncc_epsilon,
                                                                      idx_predicted_labels)
-            upper_cond_prob_1 = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+            try:
+                upper_cond_prob_1 = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+            except ZeroDivisionError:
+                upper_cond_prob_1 = 0
             self._logger.debug("IB (idx_label, opt_lower_path (%s, %s)",
                                idx_current_label, partial_opt_predicted_labels)
             self._logger.debug("IB (idx_label, resulting_score (%s, %s)",

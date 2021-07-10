@@ -46,9 +46,10 @@ def saving_data_sets(data_learning, out_path, pct_test, file_train_name, file_te
         print("[new-SEEDs-TEST] ", pct_test, i_sampling, seed, flush=True)
 
 
-def create_dataset_by_percentage(in_path, out_path, pct_test, nb_samplings, dataset="emotions"):
+def create_dataset_by_percentage(in_path, out_path, pct_test, nb_samplings, dataset="emotions",
+                                 scaling=True, nb_labels=None):
     seeds = generate_seeds(nb_samplings)
-    data_learning, _ = init_dataset(in_path, remove_features=[], scaling=True)
+    data_learning, _ = init_dataset(in_path, remove_features=[], scaling=scaling, nb_labels=nb_labels)
     print("[SEEDs-GENERATION-PCT-TEST] ", pct_test, seeds, flush=True)
     for i in range(nb_samplings):
         str_pct_training = str(int(round((1 - pct_test) * 100)))
@@ -57,8 +58,9 @@ def create_dataset_by_percentage(in_path, out_path, pct_test, nb_samplings, data
 
 
 NB_SAMPLINGS = 50
-dataset = "flags"
+dataset = "medical"
 in_path = "/Users/salmuz/Downloads/datasets_mlc/" + dataset + ".arff"
 out_path = "/Users/salmuz/Downloads/"
 for pct in np.arange(0.1, 1, 0.1):
-    create_dataset_by_percentage(in_path, out_path, pct, NB_SAMPLINGS, dataset=dataset)
+    create_dataset_by_percentage(in_path, out_path, pct, NB_SAMPLINGS, dataset=dataset,
+                                 scaling=False, nb_labels=45)

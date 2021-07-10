@@ -67,14 +67,9 @@ class MLCNCC(metaclass=abc.ABCMeta):
             nb_count_one, nb_count_zero = len(label_set_one.data), len(label_set_zero.data)
             # if we works with missing label (label=-1: missing), the marginal values changes
             # (1) Computing label proportions
-            try:
-                self.marginal_props[label_index][0] = nb_count_zero
-                self.marginal_props[label_index][1] = nb_count_one
-                self.marginal_props[label_index]['all'] = nb_count_one + nb_count_zero
-            except ZeroDivisionError:
-                self.marginal_props[label_index][0] = 0
-                self.marginal_props[label_index][1] = 0
-                self.marginal_props[label_index]['all'] = 0
+            self.marginal_props[label_index][0] = nb_count_zero
+            self.marginal_props[label_index][1] = nb_count_one
+            self.marginal_props[label_index]['all'] = float(nb_count_one + nb_count_zero)
             # (2) Computing counting label|attributes
             for feature in self.feature_names:
                 count_vector_one, count_vector_zero = [], []
@@ -312,7 +307,7 @@ class MLCNCC(metaclass=abc.ABCMeta):
         return p_lower, p_upper
 
     def lower_upper_marginal_Y(self, idx_label_to_infer, value_label_to_infer, ncc_s_param):
-        # @salmuz missing apply Laplace Smoothing when n_label_data=0 and ncc_s_parm = 0
+        # @salmuz: missing apply Laplace Smoothing when n_label_data=0 and ncc_s_parm = 0
         count_label = self.marginal_props[idx_label_to_infer][value_label_to_infer]
         n_label_data = self.marginal_props[idx_label_to_infer]["all"]
         p_lower = count_label / (n_label_data + ncc_s_param)
@@ -328,7 +323,9 @@ class MLCNCC(metaclass=abc.ABCMeta):
             l_numerator_1, u_numerator_1 = self.lower_upper_marginal_Y(idx_label_to_infer, 1, ncc_s_param)
         else:
             all_bits_label = self.marginal_props[idx_label_to_infer]["all"]
-            prop_marginal_label_1 = self.marginal_props[idx_label_to_infer][1] / all_bits_label
+            # Applying Laplace Smoothing (where |C| = 2, binary case):
+            #       P(Y_i = idx_label_to_infer) = (n(idx_label_to_infer) + 1)/(n + |C|)
+            prop_marginal_label_1 = (self.marginal_props[idx_label_to_infer][1] + 1) / (all_bits_label + 2)
             u_denominator_0 = 1 - prop_marginal_label_1  # \overline P(Yj=0)
             l_denominator_0 = 1 - prop_marginal_label_1  # \underline P(Yj=0)
             u_numerator_1 = prop_marginal_label_1  # \overline P(Yj=1)

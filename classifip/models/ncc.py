@@ -146,10 +146,10 @@ class NCC(object):
                         feature_value_count = self.feature_count[count_string][f_val_index]
                         feature_dimension = len(self.feature_count[count_string])
                         lower, upper = NCC._computing_lower_and_upper(feature_value_count,
-                                                                       all_count_of_feature_by_clazz,
-                                                                       feature_dimension,
-                                                                       ncc_s_param,
-                                                                       laplace_smoothing)
+                                                                      all_count_of_feature_by_clazz,
+                                                                      feature_dimension,
+                                                                      ncc_s_param,
+                                                                      laplace_smoothing)
 
                         lower_cond_prob = lower_cond_prob * ((1 - ncc_epsilon) * lower + ncc_epsilon / feature_dimension)
                         upper_cond_prob = upper_cond_prob * ((1 - ncc_epsilon) * upper + ncc_epsilon / feature_dimension)
@@ -169,10 +169,10 @@ class NCC(object):
                             feature_value_count = self.feature_count[count_string][f_val_index]
                             feature_dimension = len(self.feature_count[count_string])
                             lower, upper = NCC._computing_lower_and_upper(feature_value_count,
-                                                                           all_count_of_feature_by_clazz,
-                                                                           feature_dimension,
-                                                                           ncc_s_param,
-                                                                           laplace_smoothing)
+                                                                          all_count_of_feature_by_clazz,
+                                                                          feature_dimension,
+                                                                          ncc_s_param,
+                                                                          laplace_smoothing)
                             restricting_idm = lambda bound: (1 - ncc_epsilon) * bound + ncc_epsilon / feature_dimension
                             lower_others_cond_prob = lower_others_cond_prob * restricting_idm(lower)
                             upper_others_cond_prob = upper_others_cond_prob * restricting_idm(upper)
