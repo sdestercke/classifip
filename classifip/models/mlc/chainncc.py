@@ -244,8 +244,15 @@ class MLChaining(MLCNCC, metaclass=abc.ABCMeta):
                                                                  ncc_epsilon,
                                                                  idx_predicted_labels)
         # calculating lower and upper probability [\underline P(Y_j=1), \overline P(Y_j=1)]
-        upper_cond_prob_1 = u_numerator_1 / (u_numerator_1 + l_denominator_0)
-        lower_cond_prob_1 = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+        try:
+            upper_cond_prob_1 = u_numerator_1 / (u_numerator_1 + l_denominator_0)
+        except ZeroDivisionError:
+            upper_cond_prob_1 = 0.0
+        try:
+            lower_cond_prob_1 = l_numerator_1 / (l_numerator_1 + u_denominator_0)
+        except ZeroDivisionError:
+            lower_cond_prob_1 = 0.0
+
         return lower_cond_prob_1, upper_cond_prob_1
 
     def __strategy_ternary_tree(self, new_instance, ncc_s_param, ncc_epsilon, is_dynamic_context):
