@@ -1,13 +1,43 @@
-import random, numpy as np
+import random, numpy as np, time
 import queue, os, multiprocessing, csv
 from functools import partial
 from classifip.utils import create_logger
-from itertools import permutations, combinations, product
+from itertools import permutations, combinations, product, compress
 from classifip.representations.intervalsProbability import IntervalsProbability
 from classifip.representations.voting import Scores
 from classifip.evaluation.measures import hamming_distance
 from mlc_common import distance_cardinal_set_inferences
 from classifip.utils import timeit
+
+
+def inference_naive(root, nb_labels):
+    all_output_space = list(product([0, 1], repeat=nb_labels))
+    solutions = []
+
+    # computing the global expectation
+    expectation_infimum_str, exp_cost_leaf_var = getlowerexpectationGeneration(root)
+    exec("global exec_expectation_inf\n"
+         "def exec_expectation_inf(c):\n\t" + exp_cost_leaf_var + "\n\treturn " + expectation_infimum_str)
+
+    # it only works for one test item for a moment
+    maximality_idx = np.ones(len(all_output_space), dtype=bool)
+    for i1, m1 in enumerate(all_output_space): # Complexity O(m^2))
+        for i2, m2 in enumerate(all_output_space):
+            if i1 != i2 and maximality_idx[i1] and maximality_idx[i2]:
+                m1_cost_vector, m2_cost_vector = [], []
+                for y in all_output_space:
+                    m1_cost_vector.append(hamming_distance(y, m1))
+                    m2_cost_vector.append(hamming_distance(y, m2))
+                l_cost_vector = np.array(m2_cost_vector) - np.array(m1_cost_vector)
+                l_exp = exec_expectation_inf(l_cost_vector)
+                # print("%s >_M %s  <=>  %s >? 0 " % (m1, m2, l_exp))
+                if l_exp > 0:
+                    maximality_idx[i2] = False
+    solution_exact = list(compress(all_output_space, maximality_idx))
+    print("Set solutions naive inference %s" % solution_exact)
+    solutions.append(solution_exact)
+
+    return solutions
 
 
 def print_binary_tree(root):
@@ -140,7 +170,7 @@ def marginal_probabilities_v1(root, nb_labels):
     return Scores(resulting_score)
 
 
-def inference_exact_inference(root, nb_labels):
+def inference_exact_procedure(root, nb_labels):
     indices_labels = list(range(nb_labels))
     all_output_space = list(product([0, 1], repeat=nb_labels))
     maximality_sets = dict.fromkeys(all_output_space, True)
@@ -230,26 +260,32 @@ def inference_exact_inference(root, nb_labels):
     inf_not_equal_labels(nb_labels, nb_labels)
 
     solution_exact = list(filter(lambda k: maximality_sets[k], maximality_sets.keys()))
-    # _logger.debug("set solutions improved exact inference %s", solution_exact)
+    print("Set solutions improved exact inference %s", solution_exact)
     return solution_exact
 
 
 def parallel_inferences(pid_tree, nb_labels, epsilon):
     pid = multiprocessing.current_process().name
     root = generation_independent_labels(nb_labels, epsilon=epsilon)
-    inference_exact = inference_exact_inference(root, nb_labels)
+
+    start_time = time.monotonic()
+    inference_exact = inference_exact_procedure(root, nb_labels)
+    time_exact_inference = time.monotonic() - start_time
+
+    start_time = time.monotonic()
+    inference_naive(root, nb_labels)
+    time_naive_inference = time.monotonic() - start_time
+
     set_marginal_probabilities = marginal_probabilities_v1(root, nb_labels)
     inference_outer = set_marginal_probabilities.multilab_dom()
     distance_cardinal = distance_cardinal_set_inferences(inference_outer, inference_exact, nb_labels)
-    # if len(inference_exact) > 1 and len(inference_exact) % 2 == 1:
-    #     print('Example Lemme 5 (%s, %s)' % (inference_exact, inference_outer))
-    #     print_binary_tree(root)
 
+    print("Times pid %s: (%s, %s) (exact vs naive)" % (pid, time_exact_inference, time_naive_inference))
     print("Pid (%s, %s) Exact versus Outer (%s, %s, %s)" %
           (pid, pid_tree, len(inference_exact), inference_outer, distance_cardinal), flush=True)
     if distance_cardinal < 0:
         raise Exception("Not possible %s, %s" % (inference_exact, inference_outer))
-    return distance_cardinal
+    return distance_cardinal, time_exact_inference, time_naive_inference
 
 
 def computing_outer_vs_exact_inference_random_tree(out_path,
@@ -277,13 +313,28 @@ def computing_outer_vs_exact_inference_random_tree(out_path,
     file_csv = open(out_path, 'a')
     writer = csv.writer(file_csv)
 
+    # Create a CSV file for saving time prediction
+    out_path_partial = out_path[:-4] + "_time.csv"
+    if not os.path.exists(out_path_partial):
+        with open(out_path_partial, 'w'): pass
+    f_time_csv = open(out_path_partial, 'a')
+    writer_time = csv.writer(f_time_csv)
+
     POOL = multiprocessing.Pool(processes=nb_process)
     for epsilon in np.arange(min_epsilon_param, max_epsilon_param, step_epsilon_param):
         target_function = partial(parallel_inferences, nb_labels=nb_labels, epsilon=epsilon)
         set_distance_cardinal = POOL.map(target_function, range(nb_repeats))
-        writer.writerow(np.hstack((epsilon, set_distance_cardinal)))
+        set_distance_cardinal = np.array(set_distance_cardinal)
+        # writing distance outer vs exact procedure
+        writer.writerow(np.hstack((epsilon, set_distance_cardinal[:, 0])))
         file_csv.flush()
-        logger.info("Partial-s-k_step (%s, %s)", str(epsilon), sum(set_distance_cardinal) / nb_repeats)
+        logger.info("Partial-s-k_step (%s, %s)", str(epsilon), sum(set_distance_cardinal[:, 0]) / nb_repeats)
+        # writing time naive vs exact procedure
+        writer_time.writerow(np.hstack((epsilon, "exact", set_distance_cardinal[:, 1])))
+        writer_time.writerow(np.hstack((epsilon, "naive", set_distance_cardinal[:, 2])))
+        f_time_csv.flush()
+        logger.info("Partial-avg-time (%s, %s)", str(epsilon),  np.mean(set_distance_cardinal[:, 1:3], axis=0))
+
     file_csv.close()
     logger.info("Results Final")
 
