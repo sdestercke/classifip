@@ -239,7 +239,6 @@ def abstention_partial_hamming_measure(y_true, y_eq_1_probabilities, c_spe, c_pa
             y = arg min \sum_{i:yi=0} pi + \sum_{i:yi=1} 1-pi + \sum_{i:yi=-1} c⋅m(m-i)/(2m-i)
                1 ≤ i ≤ m
 
-
         :param probabilities: marginal probabilities of m-labels P(Y_i=1)
         :param c: it is a constant of a linear function
         :return:

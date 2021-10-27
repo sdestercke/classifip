@@ -293,9 +293,9 @@ def computing_outer_vs_exact_inference_random_tree(out_path,
                                                    nb_repeats=100,
                                                    nb_process=1,
                                                    seed=None,
-                                                   min_epsilon_param=0.1,
+                                                   min_epsilon_param=0.05,
                                                    max_epsilon_param=0.5,
-                                                   step_epsilon_param=0.1):
+                                                   step_epsilon_param=0.05):
     assert os.path.exists(out_path), "File for putting results does not exist"
 
     logger = create_logger("computing_outer_vs_exact_inference_random_tree", True)
