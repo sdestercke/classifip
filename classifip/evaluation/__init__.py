@@ -24,8 +24,13 @@ def k_fold_cross_validation(data, K, randomise=False, random_seed=None, structur
     :rtype: list of :class:`~classifip.dataset.arff.ArffFile`
     
     ..todo::
-    
         * implement the structured k-fold validation
+
+    warning:
+        Making a clone of the datatr and datatst if you want save them in another list
+        because the clause yield of python send the address memory of variables (datatr, datatst),
+        so you will get a list filled with same elements of the last loop.
+
     """
     if randomise:
         import random

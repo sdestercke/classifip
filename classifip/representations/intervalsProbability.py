@@ -52,8 +52,8 @@ class IntervalsProbability(CredalSet):
     >>> intprob3.getmaximaldecision()
     array([ 1.,  1.,  0.])
     """
-    
-    def __init__(self,lproba):
+
+    def __init__(self, lproba, precision_decimal=None):
         """Instanciate probability interval bounds
         
         :param lproba: a 2xn array containing upper (1st row) and lower bounds
@@ -61,14 +61,18 @@ class IntervalsProbability(CredalSet):
         """
         if lproba.__class__.__name__ != 'ndarray':
             raise Exception('Expecting a numpy array as argument')
-        if lproba[:,1].size != 2:
+        if lproba[:, 1].size != 2:
             raise Exception('Array should contain two rows: top for upper prob, bottom for lower prob')
         if lproba.ndim != 2:
             raise Exception('Bad dimension of array: should contain 2 dimensions')
-        self.lproba=lproba
-        self.nbDecision=lproba[0].size
-        if np.all(lproba[0] >=lproba[1]) != 1:
-            raise Exception('Some upper bounds lower than lower bounds')
+        self.lproba = lproba
+        self.nbDecision = lproba[0].size
+        # approximation due to precision decimal greater than 16 decimals
+        if precision_decimal is not None:
+            lproba = np.around(lproba, decimals=precision_decimal)
+        if np.all(lproba[0] >= lproba[1]) != 1:
+            np.set_printoptions(precision=40, suppress=True)
+            raise Exception('Some upper bounds lower than lower bounds', lproba)
 
     def isproper(self):
         """Check if probability intervals induce a non-empty probability set. 

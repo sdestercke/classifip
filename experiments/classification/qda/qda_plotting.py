@@ -6,6 +6,16 @@ from classifip.dataset.uci_data_set import export_data_set
 from classifip.utils import plot_classification as pc
 from matplotlib.colors import ListedColormap
 
+
+def prediction(model, newClazz, clazz_by_index, query, criterion):
+    answer = model.evaluate(query, criterion=criterion)
+    if len(answer) > 1 or len(answer) == 0:
+        iClass = "-".join(str(clazz) for clazz in sorted(answer))
+        return newClazz[iClass]
+    else:
+        return clazz_by_index[answer[0]]
+
+
 def __test_imprecise_model(model, data, features=None, clazz=-1, hgrid=0.02, ell=2.0,
                            query=None, cmap_color=None, is_imprecise=True, criterion="maximality"):
     features = list([1, 3]) if features is None else features
@@ -17,7 +27,11 @@ def __test_imprecise_model(model, data, features=None, clazz=-1, hgrid=0.02, ell
         model.learn(X=X, y=y, ell=ell)
         print("Evaluation ones features", query_eval, model.evaluate(query_eval), flush=True)
         pc.plot2D_classification(model, query)
-        pc.plot2D_decision_boundary(model, h=hgrid, cmap_color=cmap_color, criterion=criterion)
+        pc.plot2D_decision_boundary(model,
+                                    h=hgrid,
+                                    cmap_color=cmap_color,
+                                    criterion=criterion,
+                                    fn_prediction=prediction)
         # same color for imprecise zone
         # newDic = dict()
         # newDic['Iris-setosa-Iris-versicolor'] = -1
@@ -33,6 +47,7 @@ def _test_IEuclideanDA(in_train=None, features=None):
     ieqa = EuclideanDiscriminant(DEBUG=True)
     data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
     __test_imprecise_model(ieqa, data, features, hgrid=0.02)
+
 
 def _test_INaiveDA(in_train=None, features=None):
     ieqa = NaiveDiscriminant(DEBUG=True)
@@ -68,13 +83,14 @@ def output_paper_zone_im_precise(is_imprecise=True,
                                  cmap_color=None):
     data = export_data_set('iris.data') if in_train is None else pd.read_csv(in_train)
     features = list([0, 1]) if features is None else features
-    model = __factory_model(model_type, DEBUG=True) if is_imprecise else None
+    model = __factory_model(model_type, DEBUG=True, solver_matlab=False) if is_imprecise else None
     __test_imprecise_model(model, data,
                            features=features, hgrid=hgrid, ell=ell,
                            query=None,
                            is_imprecise=is_imprecise,
                            cmap_color=plt.cm.gist_ncar if cmap_color is None else cmap_color,
                            criterion=criterion)
+
 
 # Simple testing methods
 # _test_IEuclideanDA()
@@ -83,6 +99,6 @@ def output_paper_zone_im_precise(is_imprecise=True,
 # _test_INaiveDA()
 # output_paper_result()
 cmap_light = ListedColormap(['#A7CDD0', '#B3E4C7', '#F2F1A7', '#E59C81', '#D2645D', '#D6DEF1', '#FBBDA6'])
-output_paper_zone_im_precise(model_type='inda', hgrid=0.05, ell=5, criterion="maximality", cmap_color=cmap_light)
+# output_paper_zone_im_precise(model_type='inda', hgrid=0.05, ell=5, criterion="maximality", cmap_color=cmap_light)
+output_paper_zone_im_precise(model_type="inda", is_imprecise=True, ell=50, hgrid=0.05, cmap_color=cmap_light)
 # output_paper_result()
-

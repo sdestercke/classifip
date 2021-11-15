@@ -57,8 +57,11 @@ def mcmc_conjugate_generalized_linear_model():
     in_path = "/Users/salmuz/Downloads/datasets/iris.csv"
     data = pd.read_csv(in_path, header=None)
     data.columns = ['x1', 'x2', 'x3', 'x4', 'y']
-    X = data.iloc[:, :-1].values
+    # data = data[data.y != 'Iris-virginica']
+    # X = data.iloc[:, :-1].values
+    X = data.iloc[:, [0, 1]].values
     y = data.y.apply(lambda x: 1 if x == 'Iris-versicolor' else 0)
+    import matplotlib.pyplot as plt
 
     fit_logit = logistic_log_likelihood(X, y)
     beta_hat = fit_logit.coef_[0]
@@ -68,7 +71,7 @@ def mcmc_conjugate_generalized_linear_model():
     # beta_hat.extend(fit_logit.coef_[0])
     # X = np.c_[np.ones(n), X]
 
-    ## Equation (2.10), Theorem 2.3
+    # Equation (2.10), Theorem 2.3
     delta = np.diag(np.power(np.exp(X @ beta_hat) / (np.power((1 + np.exp(X @ beta_hat)), 2)), 2))
     v = np.diag(np.power(1 + np.exp(X @ beta_hat), 2))
     i_fisher = (1 / a0) * np.linalg.inv(X.T @ delta @ v @ X)
@@ -83,11 +86,11 @@ def mcmc_conjugate_generalized_linear_model():
                                              X, y, a0, y0)
     # burn-in first 1000 samples
     accepted = accepted[1000:, ]
-    import matplotlib.pyplot as plt
+
     plt.plot(accepted[:, 0], label='b1')
     plt.plot(accepted[:, 1], label='b2')
-    plt.plot(accepted[:, 2], label='b3')
-    plt.plot(accepted[:, 3], label='b4')
+    # plt.plot(accepted[:, 2], label='b3')
+    # plt.plot(accepted[:, 3], label='b4')
     plt.legend()
     plt.show()
     # plot histogram of posterior distribution
@@ -96,12 +99,35 @@ def mcmc_conjugate_generalized_linear_model():
     plt.show()
     # plot correlation acf for each chain
     import statsmodels.api as sm
-    for i in np.arange(0, 4):
+    for i in np.arange(0, 2):
         sm.graphics.tsa.plot_acf(accepted[:, i], lags=40)
         plt.show()
     # mean posterior prediction
     print(accepted.mean(axis=0))
     print(beta_hat)
+
+    yhat = [1 if prob >= 0.5 else 0 for prob in logit(X, accepted.mean(axis=0))]
+    print("prediction", yhat)
+    print("grouth", y.T)
+    print("sss", sum(y == yhat) / len(yhat))
+
+    data.plot.scatter(x='x1',
+                      y='x2',
+                      c=['#a98d19' if _y == 1 else 'green' for _y in y])
+    plt.show()
+
+    def logistic_regression_deriv():
+        pass
+
+    def logistic_regression_Hess():
+        pass
+
+    result = optimize.minimize(logit, np.random.uniform(0, 1, len(data[0])),
+                               method='Newton-CG',
+                               jac=logistic_regression_deriv,
+                               hess=logistic_regression_Hess,
+                               args=(data, labels),
+                               options={'maxiter': 2000, 'disp': False})
 
 
 def mcmc_pymc3_logistic():
@@ -139,5 +165,5 @@ def mcmc_pymc3_logistic():
     plt.show()
 
 
-mcmc_pymc3_logistic()
-# mcmc_conjugate_generalized_linear_model()
+# mcmc_pymc3_logistic()
+mcmc_conjugate_generalized_linear_model()

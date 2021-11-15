@@ -70,16 +70,17 @@ def plot2D_classification(model, query=None, colors=None, markers=None):
     if n_col == 2:
         for clazz in _clazz:
             mean = model.get_mean_by_clazz(clazz)
-            prior_mean_lower = mean - model.get_ell()
-            prior_mean_upper = mean + model.get_ell()
-            plot_constraints(prior_mean_lower, prior_mean_upper, line_style="dashed")
+            # prior_mean_lower = mean - model.get_ell()
+            # prior_mean_upper = mean + model.get_ell()
+            # plot_constraints(prior_mean_lower, prior_mean_upper, line_style="dashed")
             post_mean_lower, post_mean_upper = model.get_bound_means(clazz)
             plot_constraints(post_mean_lower, post_mean_upper)
 
         if query is not None:
             ml_mean, ml_prob = model.fit_max_likelihood(query)
             plt.plot([query[0]], [query[1]], marker='h', markersize=5, color="black")
-            _, _bounds = model.evaluate(query)
+            model.evaluate(query)
+            _bounds = model.get_bound_cond_probability()
             for clazz in _clazz:
                 plt.plot([ml_mean[clazz][0]], [ml_mean[clazz][1]], marker='o', markersize=5, color=colors[clazz])
                 _, est_mean_lower = _bounds[clazz]['inf']
@@ -95,7 +96,7 @@ def plot2D_classification(model, query=None, colors=None, markers=None):
 
     elif n_col > 2:
         if query is not None:
-            inference, _ = model.evaluate(query)
+            inference = model.evaluate(query)
             X = np.vstack([X, query])
             y = np.append(y, inference[0])
 
@@ -114,24 +115,19 @@ def plot2D_classification(model, query=None, colors=None, markers=None):
     plt.show()
 
 
-def prediction(model, newClazz, clazz_by_index, query, criterion):
-    answer, _ = model.evaluate(query, criterion=criterion)
-    if len(answer) > 1 or len(answer) == 0:
-        iClass = "-".join(str(clazz) for clazz in sorted(answer))
-        return newClazz[iClass]
-    else:
-        return clazz_by_index[answer[0]]
-
-
 def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None, markers=None,
-                             criterion="maximality", savefig=False):
+                             criterion="maximality", savefig=False, fn_prediction=None):
+    if fn_prediction is None:
+        raise Exception("Not implemented prediction function!")
+
     markers = list(['+', '*', 'v', 'o', '-', '.', ',']) if markers is None else markers
     X, y = __check_data_available(model.get_data())
-    _clazz = model.get_clazz()
+    _clazz = sorted(model.get_clazz())
     _nb_clazz = len(_clazz)
     _, n_col = X.shape
 
-    if n_col > 2: raise Exception("Not implemented for n-dimension yet.")
+    if n_col > 2:
+        raise Exception("Not implemented for n-dimension yet.")
 
     x_min, x_max = X[:, 0].min() - .5, X[:, 0].max() + .5
     y_min, y_max = X[:, 1].min() - .5, X[:, 1].max() + .5
@@ -142,15 +138,14 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
     print("[DEBUG] How many queries:", len(yy.ravel()))
     for idx, query in enumerate(np.c_[xx.ravel(), yy.ravel()]):
         print("[Query] # current query:", idx)
-        z = np.append(z, prediction(model, newClazz, clazz_by_index, query, criterion))
+        z = np.append(z, fn_prediction(model, newClazz, clazz_by_index, query, criterion))
 
-    y_colors = [clazz_by_index[clazz] for clazz in y]
     z = np.array(z)
     z = z.reshape(xx.shape)
     cmap_color = plt.cm.viridis if cmap_color is None else plt.cm.get_cmap(cmap_color, _nb_clazz + len(newClazz))
     plt.contourf(xx, yy, z, alpha=0.8, cmap=cmap_color)
     for row in range(0, len(y)):
-        plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker=markers[clazz_by_index[y[row]]], edgecolor='k')
+        plt.scatter(X[row, 0], X[row, 1], c='black', s=40, marker=markers[clazz_by_index[y[row]]], edgecolor='k')
     if savefig:
         plt.savefig('model_plot.pdf', format='pdf', bbox_inches='tight')
     plt.show()
@@ -159,10 +154,11 @@ def plot2D_decision_boundary(model, h=.01, cmap_color=None, new_multi_clazz=None
 def plot2D_decision_boundary_det(X, y, h=.01, markers=None):
     markers = list(['+', '*', 'v', 'o', '-', '.', ',']) if markers is None else markers
     _, n_col = X.shape
-    _clazz = list(set(y))
+    _clazz = sorted(list(set(y)))
     _nb_clazz = len(_clazz)
 
-    if n_col > 2: raise Exception("Not implemented for n-dimension yet.")
+    if n_col > 2:
+        raise Exception("Not implemented for n-dimension yet.")
 
     import matplotlib.pyplot as plt
 
@@ -172,16 +168,17 @@ def plot2D_decision_boundary_det(X, y, h=.01, markers=None):
 
     z = np.array([])
     clazz_by_index = dict((clazz, idx) for idx, clazz in enumerate(_clazz, 1))
-    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDAD
-    lda = LDAD(solver="svd", store_covariance=True)
+    # @salmuz ToDo: modify this use base abstract classifier or precise version qda_precise.py
+    # from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as classifierLDA
+    from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as classifierQDA
+    # lda = classifierLDA(solver="svd", store_covariance=True)
+    lda = classifierQDA(store_covariance=True)
     lda.fit(X, y)
     for query in np.c_[xx.ravel(), yy.ravel()]:
         evaluate = lda.predict([query])
         z = np.append(z, clazz_by_index[evaluate[0]])
-    y_colors = [clazz_by_index[clazz] for clazz in y]
-    markers = dict((_clazz[idx], markers[idx]) for idx in range(0, _nb_clazz))
     z = z.reshape(xx.shape)
     plt.contourf(xx, yy, z, alpha=0.4)
     for row in range(0, len(y)):
-        plt.scatter(X[row, 0], X[row, 1], c=y_colors[row], s=40, marker=markers[y[row]], edgecolor='k')
+        plt.scatter(X[row, 0], X[row, 1], c='black', s=40, marker=markers[clazz_by_index[y[row]]], edgecolor='k')
     plt.show()

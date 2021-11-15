@@ -6,21 +6,30 @@ from numpy import linalg
 from scipy.stats import multivariate_normal
 from ..utils import create_logger, is_level_debug
 from classifip.representations.voting import Scores
+import cvxpy as cvx
+from qcqp import QCQP, RANDOM, COORD_DESCENT
 
+MATLAB_AVAILABLE = True
 try:
     import matlab.engine
 except Exception as e:
+    MATLAB_AVAILABLE = False
     print("MATLAB not installed in host.")
 
 
-def is_sdp_symmetric(x):
-    def is_pos_def(x):
-        return np.all(np.linalg.eigvals(x) > 0)
+def is_sdp_symmetric(X):
+    if X.shape[0] != X.shape[1]:
+        return False
+    # ToDo: If it is not symmetric, use in whole file: X'=0.5*(X+X.T)
+    if not np.allclose(X, X.T, atol=1e-8):
+        print("[is_sdp_symmetric] MATRIX IS NOT SYMMETRIC", flush=True)
+        return False
 
-    def check_symmetric(x, tol=1e-8):
-        return np.allclose(x, x.T, atol=tol)
-
-    return is_pos_def(x) and check_symmetric(x)
+    _eigen_values = np.linalg.eigvalsh(X)
+    _is_sdp = np.all(_eigen_values > -1e-8)
+    if not _is_sdp:
+        print("[is_sdp_symmetric] Eigenvalues negatives:", _eigen_values, flush=True)
+    return _is_sdp
 
 
 # First version maximality criterion
@@ -41,12 +50,15 @@ def inference_maximal_criterion(lower, upper, clazz):
     # O(l), l: number of pairwise comparison
     for pairwise in pairwise_comparison:
         if pairwise[0] not in down_min:
-            if pairwise[1] in top_max: top_max.pop(pairwise[1], None)
+            if pairwise[1] in top_max:
+                top_max.pop(pairwise[1], None)
             top_max[pairwise[0]] = 1
             down_min[pairwise[1]] = 0
         else:
             down_min[pairwise[1]] = 0
 
+    # O(l), l: adding indifferent elements
+    # e.g. (a, b, c) => a > c, b >< a, b >< c => maximality=(a,b)
     for pairwise in pairwise_indifferent:
         if pairwise[0] in top_max or pairwise[1] in top_max:
             if pairwise[0] not in down_min and pairwise[0] not in top_max:
@@ -60,16 +72,30 @@ def inference_maximal_criterion(lower, upper, clazz):
 
 
 class DiscriminantAnalysis(metaclass=abc.ABCMeta):
-    def __init__(self, init_matlab=False, add_path_matlab=None):
+    """
+        Classification multi-classes using a set of Gaussian distributions
+
+        TODO:
+            - Verify the supremum problem is really a convex problem
+            It is not enough to verify symmetric and eigenvalues (is_sdp_symmetric)
+    """
+
+    def __init__(self, solver_matlab=False, add_path_matlab=None):
         """
-        :param init_matlab: init engine matlab
+        :param solver_matlab: init engine matlab
         :param DEBUG: logger debug log for computation
         """
         # Starting matlab environment
-        if init_matlab:
-            self._eng = matlab.engine.start_matlab()
-            self._add_path_matlab = [] if add_path_matlab is None else add_path_matlab
-            for _in_path in self._add_path_matlab: self._eng.addpath(_in_path)
+        self.__solver_matlab = solver_matlab
+        if self.__solver_matlab:
+            if MATLAB_AVAILABLE:
+                self._eng = matlab.engine.start_matlab()
+                self._add_path_matlab = [] if add_path_matlab is None else add_path_matlab
+                for _in_path in self._add_path_matlab:
+                    self._eng.addpath(_in_path)
+            else:
+                print("MATLAB is not available!, it could use QCQP package !", flush=True)
+                self.__solver_matlab = False
         else:
             self._eng = None
         self._N, self._p = None, None
@@ -85,6 +111,8 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         self._mean_lower, self._mean_upper = None, None
         self.__nb_rebuild_opt = 0
         self._logger = None
+        # save the last computed conditional probabilities X|Y on instance x*
+        self._bound_cond_probabilities = None
 
     def get_data(self):
         return self._data
@@ -127,6 +155,11 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             det^{*} is the pseudo-determinant of Sigma, and
             Sigma^{+} is the generalized inverse
 
+        version manual in python:
+            _exp = -0.5 * ((query - mean).T @ inv_cov @ (query - mean))
+            _const = np.power(det_cov, -0.5) / np.power(2 * np.pi, self._p / 2)
+            return _const * np.exp(_exp)
+
         :param mean: mean of
         :param cov: covariance matrix (positive semi-definite or singular)
         :param query: event of multivariate Gaussian probability
@@ -168,7 +201,7 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
             X = learn_data_set[:, :-1]
             y = learn_data_set[:, -1]
         elif X is not None and y is not None:
-            self._logger.info("Loading training data set from (X,y) couples.")
+            self._logger.debug("Loading training data set from (X,y) couples.")
         else:
             raise Exception('Not training data set setting.')
 
@@ -197,26 +230,33 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         This method is ..
 
         :param query: new unlabeled instance
-        :param method: optimization method for computing optimal upper bound mean.
+        :param method: optimization method for computing the upper conditional probability
+                    either quadratic or nonlinear
         :param criterion: interval_dominance if criterion decision performs with Interval dominance,
                 otherwise maximality criterion
         :param log_probability: calculate the maximality decision with log probability
-        :return: tuple composed of set-valued categories and (lower,upper) bound probabilities.
+        :return: tuple composed from
+                     (1) set-valued predictions  and
+                     (2) (lower,upper) bound conditional probabilities  X|Y
+
+        Notations:
+                - inf: infimum   and   sup: supremum
         """
-        bounds = dict((clazz, dict()) for clazz in self._clazz)
-        precise_probas = dict()
+        self._bound_cond_probabilities = dict((clazz, dict()) for clazz in self._clazz)
+        estimated_bounds = dict((clazz, dict()) for clazz in self._clazz)
+        precise_probs = dict()
         eng_session = self._eng
 
         def __get_bounds(clazz, bound="inf"):
-            return bounds[clazz][bound] if bound in bounds[clazz] else None
+            return estimated_bounds[clazz][bound] if bound in estimated_bounds[clazz] else None
 
         def __put_bounds(probability, estimator, clazz, bound="inf"):
-            bounds[clazz][bound] = (probability, estimator)
+            estimated_bounds[clazz][bound] = (probability, estimator)
 
         def __probability(_self, query, clazz, inv, cov, mean_lower, mean_upper, bound="inf", log_p=False):
 
             if __get_bounds(clazz, bound) is None:
-                q = -1 * (query.T @ inv)
+                q = -1 * (query.T @ inv)  # because of transforming supremum to min quadratic program
                 _self._logger.debug("[BOUND_ESTIMATION:%s] Q matrix: %s", bound, inv)
                 _self._logger.debug("[BOUND_ESTIMATION:%s] q vector: %s", bound, q)
                 _self._logger.debug("[BOUND_ESTIMATION:%s] Lower Bound: %s", bound, mean_lower)
@@ -234,46 +274,51 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 mean_lower = self._mean_lower[clazz]
                 mean_upper = self._mean_upper[clazz]
                 cov, inv = self.get_cov_by_clazz(clazz)
-                p_sub, estimator = __probability(self, query, clazz, inv, cov,
-                                                 mean_lower, mean_upper,
-                                                 bound='sup', log_p=log_probability)
-                __put_bounds(p_sub, estimator, clazz, "sup")
-                precise_probas[clazz] = self.probability_density_gaussian(self._gp_mean[clazz],
-                                                                          cov, query,
-                                                                          log_p=log_probability)
+                __probability(self, query, clazz, inv, cov,
+                              mean_lower=mean_lower,
+                              mean_upper=mean_upper,
+                              bound='sup',
+                              log_p=log_probability)
+                precise_probs[clazz] = self.probability_density_gaussian(self._gp_mean[clazz],
+                                                                         cov, query,
+                                                                         log_p=log_probability)
 
             C = set(self._clazz)
             Z = set([])
             while len(C - Z) > 0:
-                max_clazz = max(precise_probas, key=precise_probas.get)
+                max_clazz = max(precise_probs, key=precise_probs.get)
                 mean_lower = self._mean_lower[max_clazz]
                 mean_upper = self._mean_upper[max_clazz]
                 cov, inv = self.get_cov_by_clazz(max_clazz)
                 p_inf, _ = __probability(self, query, max_clazz, inv, cov,
-                                         mean_lower, mean_upper,
-                                         bound='inf', log_p=log_probability)
+                                         mean_lower=mean_lower,
+                                         mean_upper=mean_upper,
+                                         bound='inf',
+                                         log_p=log_probability)
                 nopt_clazz = set([])
                 for clazz in C - {max_clazz}:
                     p_sup, _ = __get_bounds(clazz=clazz, bound="sup")
 
                     # if p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz] <= 0: # precise 10e-18 instead 0
-                    maximility = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
+                    maximality = ((p_inf * self._prior[max_clazz] - p_sup * self._prior[clazz]) <= 0)
                     if log_probability:
-                        maximility = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
+                        maximality = (np.log(self._prior[max_clazz]) + p_inf <= p_sup + np.log(self._prior[clazz]))
 
-                    self._logger.debug("Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
-                                       max_clazz, clazz, maximility)
-                    # (maximility:true) labels indifferent to maximal-label-choice for assessment maximility
-                    if maximility:
+                    self._logger.debug(
+                        "Query: (%s) preferred/indifferent to (%s) according to maximality decision (%s)",
+                        max_clazz, clazz, maximality)
+                    # (maximality:true) labels indifferent to maximal-label-choice for assessment maximality
+                    if maximality:
                         nopt_clazz.add(clazz)
                     else:
-                        precise_probas.pop(clazz, None)
-                del precise_probas[max_clazz]
+                        precise_probs.pop(clazz, None)
+                del precise_probs[max_clazz]
                 Z.add(max_clazz)
                 nopt_clazz.add(max_clazz)
                 C = nopt_clazz.copy()
 
-            return list(C), bounds
+            self._bound_cond_probabilities = estimated_bounds
+            return list(C)
 
         elif criterion == "interval_dominance" or criterion == "maximality_v1":
             if log_probability:
@@ -284,18 +329,33 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 mean_lower = self._mean_lower[clazz]
                 mean_upper = self._mean_upper[clazz]
                 cov, inv = self.get_cov_by_clazz(clazz)
-                p_inf, _ = __probability(self, query, clazz, inv, cov, mean_lower, mean_upper, bound='inf')
-                p_up, _ = __probability(self, query, clazz, inv, cov, mean_lower, mean_upper, bound='sup')
+                p_inf, _ = __probability(self, query, clazz, inv, cov,
+                                         mean_lower=mean_lower,
+                                         mean_upper=mean_upper,
+                                         bound='inf',
+                                         log_p=log_probability)
+                p_sup, _ = __probability(self, query, clazz, inv, cov,
+                                         mean_lower=mean_lower,
+                                         mean_upper=mean_upper,
+                                         bound='sup',
+                                         log_p=log_probability)
                 lower.append(p_inf * self._prior[clazz])
-                upper.append(p_up * self._prior[clazz])
+                upper.append(p_sup * self._prior[clazz])
 
+            self._bound_cond_probabilities = estimated_bounds
             if criterion == "interval_dominance":
                 score = Scores(np.c_[lower, upper])
-                return self._clazz[(score.nc_intervaldom_decision() > 0)], bounds
+                return self._clazz[(score.nc_intervaldom_decision() > 0)]
             else:
-                return inference_maximal_criterion(lower, upper, self._clazz), bounds
+                return inference_maximal_criterion(lower, upper, self._clazz)
         else:
             raise Exception("Decision criterion not implemented yet or another bug!!")
+
+    def get_bound_cond_probability(self):
+        return self._bound_cond_probabilities
+
+    def get_marginal_probabilities(self):
+        return self._prior
 
     def get_bound_means(self, clazz):
         return self._mean_lower[clazz], self._mean_upper[clazz]
@@ -305,17 +365,17 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         return len(self._data[self._data.y == clazz])
 
     def __mean_by_clazz(self, clazz):
-        return self._data[self._data.y == clazz].iloc[:, :-1].mean().as_matrix()
+        return self._data[self._data.y == clazz].iloc[:, :-1].mean().values  # old call: .as_matrix()
 
     def _cov_by_clazz(self, clazz):
         _sub_data = self._data[self._data.y == clazz].iloc[:, :-1]
         _n, _p = _sub_data.shape
         if _n > 1:
-            return _sub_data.cov().as_matrix()
+            return _sub_data.cov().values  # old call: .as_matrix()
         else:
-            ## Bug: Impossible to compute covariance of just ONE instance
-            ## assuming an identity covariance matrix
-            ## e.g. _sub_data.shape = (1, 8)
+            # Bug: Impossible to compute covariance of just ONE instance
+            # assuming an identity covariance matrix
+            # e.g. _sub_data.shape = (1, 8)
             raise Exception("it has only 1 sample in class, covariance is ill defined.")
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
@@ -356,7 +416,8 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 b = matrix(q)
 
                 def cOptFx(x=None, z=None):
-                    if x is None: return 0, matrix(0.0, (d, 1))
+                    if x is None:
+                        return 0, matrix(0.0, (d, 1))
                     f = (0.5 * (x.T * i_cov * x) + b.T * x)
                     Df = (i_cov * x + b)
                     if z is None: return f, Df.T
@@ -380,11 +441,16 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
 
             if solution['status'] != 'optimal':
                 self._logger.info("[Solution-not-Optimal] %s", solution)
-                raise Exception("Not exist solution optimal!!")
+                # raise Exception("Not exist solution optimal!!")
 
             return [v for v in solution['x']]
         else:
-            return self.quadprogbb(Q, q, mean_lower, mean_upper, self._eng, clazz)
+            self._logger.debug("Eigenvalues of inverse covariance matrix %s",
+                               np.round(np.linalg.eigvals(Q), decimals=16))
+            if self.__solver_matlab:
+                return self.quadprogbb(Q, q, mean_lower, mean_upper, self._eng, clazz)
+            else:
+                return self.nonconvex_qcqp(Q, q, mean_lower, mean_upper)
 
     def quadprogbb(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
         """ This method use a solver implemented in https://github.com/sburer/QuadProgBB
@@ -398,7 +464,8 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
                 max  1/2*x'*(-H)*x - f'*x
                 s.t.  ....(same)
         """
-        if eng_session is None: raise Exception("Environment matlab hadn't been initialized.")
+        if eng_session is None:
+            raise Exception("Environment matlab hadn't been initialized.")
         _debug = is_level_debug(self._logger)
         __out = None if _debug else io.StringIO()
         __err = io.StringIO()
@@ -436,7 +503,26 @@ class DiscriminantAnalysis(metaclass=abc.ABCMeta):
         return np.asarray(x).reshape((1, self._p))[0]
 
     def infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
-        return self.quadprogbb((-1 * Q), (-1 * q), mean_lower, mean_upper, eng_session, clazz)
+        if self.__solver_matlab:
+            return self.quadprogbb((-1 * Q), (-1 * q), mean_lower, mean_upper, eng_session, clazz)
+        else:
+            return self.nonconvex_qcqp((-1 * Q), (-1 * q), mean_lower, mean_upper)
+
+    def nonconvex_qcqp(self, Q, q, mean_lower, mean_upper):
+        x = cvx.Variable(self._p)
+        problem = cvx.Problem(
+            cvx.Minimize(
+                cvx.quad_form(x, 0.5 * Q) + q * x
+            ),
+            [x >= mean_lower, x <= mean_upper]
+        )
+        qcqp_solver = QCQP(problem)
+        qcqp_solver.suggest(RANDOM)
+        f_cd, v_cd = qcqp_solver.improve(COORD_DESCENT, num_iters=150)
+        self._logger.debug("Coordinate descent: objective %s, violation %s", f_cd, v_cd)
+        solution = np.asarray(x.value).reshape((1, self._p))[0]
+        self._logger.debug("Optimal value solution %s", solution)
+        return solution
 
 
 class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
@@ -445,8 +531,8 @@ class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
         imprecise gaussian distribution and conjugate exponential family.
     """
 
-    def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
-        super(EuclideanDiscriminant, self).__init__(init_matlab=False,
+    def __init__(self, solver_matlab=False, add_path_matlab=None, DEBUG=False):
+        super(EuclideanDiscriminant, self).__init__(solver_matlab=solver_matlab,
                                                     add_path_matlab=add_path_matlab)
         self._logger = create_logger("IEDA", DEBUG)
 
@@ -458,17 +544,17 @@ class EuclideanDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
 
     def supremum_estimation(self, Q, q, mean_lower, mean_upper, clazz, method="quadratic"):
         optimal = np.zeros(self._p)
-        x = (-1 * q)  # return true query value
-        inside_hypercube = True
+        cov, _ = self.get_cov_by_clazz(clazz)
+        x = (-1) * (q.T @ cov)  # return true query value
         for i in range(self._p):
-            if inside_hypercube and (x[i] < mean_lower[i] or x[i] > mean_upper[i]):
-                inside_hypercube = False
-            if pow(x[i] - mean_lower[i], 2) < pow(x[i] - mean_upper[i], 2):
+            if mean_lower[i] <= x[i] <= mean_upper[i]:
+                optimal[i] = x[i]
+            elif pow(x[i] - mean_lower[i], 2) < pow(x[i] - mean_upper[i], 2):
                 optimal[i] = mean_lower[i]
             else:
                 optimal[i] = mean_upper[i]
 
-        return x if inside_hypercube else optimal
+        return optimal
 
     def infimum_estimation(self, Q, q, mean_lower, mean_upper, eng_session, clazz):
         optimal = np.zeros(self._p)
@@ -487,12 +573,13 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
        conjugate exponential family.
     """
 
-    def __init__(self, init_matlab=True, add_path_matlab=None, DEBUG=False):
-        super(LinearDiscriminant, self).__init__(init_matlab=init_matlab,
+    def __init__(self, solver_matlab=True, add_path_matlab=None, DEBUG=False):
+        super(LinearDiscriminant, self).__init__(solver_matlab=solver_matlab,
                                                  add_path_matlab=add_path_matlab)
         self._is_compute_total_cov = False
         self._logger = create_logger("ILDA", DEBUG)
-        if DEBUG: solvers.options['show_progress'] = True
+        if DEBUG:
+            solvers.options['show_progress'] = True
 
     def learn(self, learn_data_set=None, ell=None, X=None, y=None):
         self._is_compute_total_cov = False
@@ -508,7 +595,7 @@ class LinearDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
             for clazz_gp in self._clazz:
                 try:
                     covClazz = super(LinearDiscriminant, self)._cov_by_clazz(clazz_gp)
-                except Exception as e: # if class does not have  1 instance, so matrix-covariance 0
+                except Exception as e:  # if class does not have  1 instance, so matrix-covariance 0
                     self._logger.info("Class %s with one instance, exception: %s", clazz_gp, e)
                     covClazz = 0
                 _nb_instances_by_clazz = self._nb_by_clazz(clazz_gp)
@@ -537,11 +624,12 @@ class QuadraticDiscriminant(DiscriminantAnalysis, metaclass=abc.ABCMeta):
        conjugate exponential family.
     """
 
-    def __init__(self, init_matlab=True, add_path_matlab=None, DEBUG=False):
-        super(QuadraticDiscriminant, self).__init__(init_matlab=init_matlab,
+    def __init__(self, solver_matlab=True, add_path_matlab=None, DEBUG=False):
+        super(QuadraticDiscriminant, self).__init__(solver_matlab=solver_matlab,
                                                     add_path_matlab=add_path_matlab)
         self._logger = create_logger("IQDA", DEBUG)
-        if DEBUG: solvers.options['show_progress'] = True
+        if DEBUG:
+            solvers.options['show_progress'] = True
 
 
 class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
@@ -550,18 +638,40 @@ class NaiveDiscriminant(EuclideanDiscriminant, metaclass=abc.ABCMeta):
         imprecise gaussian distribution and conjugate exponential family.
     """
 
-    def __init__(self, init_matlab=False, add_path_matlab=None, DEBUG=False):
-        super(NaiveDiscriminant, self).__init__(init_matlab=False, add_path_matlab=add_path_matlab)
+    def __init__(self, solver_matlab=False, add_path_matlab=None, DEBUG=False):
+        super(NaiveDiscriminant, self).__init__(solver_matlab=solver_matlab,
+                                                add_path_matlab=add_path_matlab)
         self._logger = create_logger("INDA", DEBUG)
 
     def get_cov_by_clazz(self, clazz):
         if clazz not in self._gp_cov:
             cov_clazz = self._cov_by_clazz(clazz)
-            diagonal = np.einsum('ii->i', cov_clazz)
-            save = diagonal.copy()
-            save[save == 0] = pow(10, -6)
-            cov_clazz[...] = 0
-            diagonal[...] = save
-            self._gp_cov[clazz] = cov_clazz
-            self._gp_icov[clazz] = linalg.inv(cov_clazz)
+            self._gp_cov[clazz], self._gp_icov[clazz] = \
+                NaiveDiscriminant.compute_diagonal_cov_and_inv(cov_clazz)
         return self._gp_cov[clazz], self._gp_icov[clazz]
+
+    @staticmethod
+    def compute_diagonal_cov_and_inv(cov_clazz):
+        diagonal = np.einsum('ii->i', cov_clazz)
+        save = diagonal.copy()
+        cov_clazz[...] = 0
+        diagonal[...] = save
+        if linalg.cond(cov_clazz) < 1 / sys.float_info.epsilon:
+            inverse_cov = linalg.inv(cov_clazz)
+            # self._dcov[clazz] = linalg.det(cov_clazz)
+        else:  # computing pseudo inverse to a singular covariance matrix
+            inverse_cov = linalg.pinv(cov_clazz)
+            # eig_values, _ = linalg.eig(cov_clazz)
+            # self._dcov[clazz] = np.product(eig_values[(eig_values > 1e-12)])
+        return cov_clazz.copy(), inverse_cov.copy()
+
+
+__MODEL_TYPES = {'ieda': EuclideanDiscriminant, 'ilda': LinearDiscriminant,
+                 'iqda': QuadraticDiscriminant, 'inda': NaiveDiscriminant}
+
+
+def _factory_igda_model(model_type, **kwargs):
+    try:
+        return __MODEL_TYPES[model_type.lower()](**kwargs)
+    except Exception as _:
+        raise Exception("Selected model does not exist")

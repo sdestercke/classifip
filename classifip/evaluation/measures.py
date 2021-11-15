@@ -137,3 +137,12 @@ def kendall_tau(y_true, y_predict, M):
                 D += 1
     return (C - D) / (M * (M - 1) / 2)
 
+
+def hamming_distance(m1, m2):
+    """
+        Hamming distance with two different arrays of values {0, 1}
+    :param m1:
+    :param m2:
+    :return:
+    """
+    return sum(c1 != c2 for c1, c2 in zip(m1, m2))

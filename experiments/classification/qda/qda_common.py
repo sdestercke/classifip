@@ -4,12 +4,17 @@ import random, numpy as np, pandas as pd, sys
 from sklearn.model_selection import KFold
 from collections import Counter
 from numpy import linalg
+import warnings
 
 INFIMUM, SUPREMUM = "inf", "sup"
 
 
 class BaseEstimator:
     def __init__(self, store_covariance=False):
+        warnings.warn(
+            "Deprecate version! new version is in the classifip package",
+            DeprecationWarning
+        )
         self._data, self._N, self._p = None, 0, 0
         self._clazz, self._nb_clazz = None, None
         self._means, self._prior = dict(), dict()

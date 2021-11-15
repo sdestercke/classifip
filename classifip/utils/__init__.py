@@ -4,7 +4,7 @@ from . import plot_classification
 def create_logger(name="default", DEBUG=False):
     import logging, sys
     logger = logging.getLogger(name)
-    if not logger.hasHandlers():
+    if len(logger.handlers) == 0:
         logger.setLevel(logging.DEBUG if DEBUG else logging.INFO)
         handler = logging.StreamHandler(sys.stdout)
         handler.flush = sys.stdout.flush
@@ -12,6 +12,26 @@ def create_logger(name="default", DEBUG=False):
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         logger.addHandler(handler)
+
+    # verify if root logging is turned on
+    # @salmuz-bug: generate duplicate line each time
+    root = logging.getLogger()
+    if root.hasHandlers():
+        # if: stopping logging handlers
+        for handler in root.handlers:
+            if isinstance(handler, logging.FileHandler):
+                handler.propagate = False
+        # if: remove root handlers
+        # while root.hasHandlers():
+        #    root.removeHandler(root.handlers[0])
+        # if: redirect current logging to sys.stout
+        # if len(root.handlers) == 0:
+        #     handler = logging.StreamHandler(sys.stdout)
+        #     handler.flush = sys.stdout.flush
+        #     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        #     handler.setFormatter(formatter)
+        #     root.addHandler(handler)
+
     return logger
 
 

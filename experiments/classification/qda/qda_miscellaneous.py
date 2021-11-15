@@ -20,7 +20,7 @@ def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, 
     if scaling: X = normalize_minmax(X)
     y = np.array(data.iloc[:, -1].tolist())
     seeds = generate_seeds(cv_n_fold) if seeds is None else seeds
-    model_impr = __factory_model(model_type_imprecise, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
+    model_impr = __factory_model(model_type_imprecise, solver_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
     model_prec = __factory_model_precise(model_type_precise, store_covariance=True)
     avg_imprecise, avg_precise, n_real_times = 0, 0, 0
     for time in range(cv_n_fold):
@@ -34,7 +34,7 @@ def computing_precise_vs_imprecise(in_path=None, ell_optimal=0.1, cv_n_fold=10, 
             n_real_tests, time_precise, time_imprecise = 0, 0, 0
             n_test, _ = X_cv_test.shape
             for i, test in enumerate(X_cv_test):
-                evaluate_imp, _ = model_impr.evaluate(test)
+                evaluate_imp = model_impr.evaluate(test)
                 evaluate = model_prec.predict([test])
                 if len(evaluate_imp) > 1:
                     n_real_tests += 1
@@ -68,7 +68,7 @@ def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=Non
     seeds = generate_seeds(k_repetition) if seeds is None else seeds
     logger.info('Training dataset %s with maximality version (%s) and model (%s), ell_optimal (%s) and seeds %s',
                 in_path, criterion, model_type, ell_optimal, seeds)
-    model = __factory_model(model_type, init_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
+    model = __factory_model(model_type, solver_matlab=True, add_path_matlab=lib_path_server, DEBUG=False)
     avg = np.array([])
     for k in range(k_repetition):
         logger.info("%s-fold repetition randomly, seed %s", k, seeds[k])
@@ -78,7 +78,7 @@ def computing_time_prediction(in_path=None, ell_optimal=0.1, lib_path_server=Non
         sum_time = 0
         for i, test in enumerate(X_test):
             start = time.time()
-            evaluate, _ = model.evaluate(test, criterion=criterion)
+            evaluate = model.evaluate(test, criterion=criterion)
             end = time.time()
             logger.info("Evaluate %s, Ground-truth %s, Time %s ", evaluate, y_test[i], (end - start))
             sum_time += (end - start)
